@@ -122,38 +122,52 @@ func (r *UnusedLocalVariable) ApplyFunction(c *rule.Context, fn *model.Function)
 // the body — i.e. referenced outside of the left-hand side of an assignment or
 // declaration. A name written but never read is therefore not in the set,
 // matching PHPMD's "only appears as assignment target" definition of unused.
-func identReads(body *ast.BlockStmt) map[string]bool {
-	reads := map[string]bool{}
-	// Collect identifiers that are pure write targets to exclude them.
+func collectAssignWrites(s *ast.AssignStmt, writeIdents map[*ast.Ident]bool) {
+	if s.Tok == token.ASSIGN || s.Tok == token.DEFINE {
+		for _, lhs := range s.Lhs {
+			if id, ok := lhs.(*ast.Ident); ok {
+				writeIdents[id] = true
+			}
+		}
+	}
+}
+
+func collectRangeWrites(s *ast.RangeStmt, writeIdents map[*ast.Ident]bool) {
+	if s.Tok == token.ASSIGN || s.Tok == token.DEFINE {
+		if id, ok := s.Key.(*ast.Ident); ok {
+			writeIdents[id] = true
+		}
+		if id, ok := s.Value.(*ast.Ident); ok {
+			writeIdents[id] = true
+		}
+	}
+}
+
+func collectWriteIdents(body *ast.BlockStmt) map[*ast.Ident]bool {
 	writeIdents := map[*ast.Ident]bool{}
 	ast.Inspect(body, func(n ast.Node) bool {
 		switch s := n.(type) {
 		case *ast.AssignStmt:
-			// LHS idents are writes (for =, :=). For op-assign (+=) the LHS is
-			// also read, so only treat = and := LHS as pure writes.
-			if s.Tok == token.ASSIGN || s.Tok == token.DEFINE {
-				for _, lhs := range s.Lhs {
-					if id, ok := lhs.(*ast.Ident); ok {
-						writeIdents[id] = true
-					}
-				}
-			}
+			collectAssignWrites(s, writeIdents)
 		case *ast.ValueSpec:
 			for _, id := range s.Names {
 				writeIdents[id] = true
 			}
 		case *ast.RangeStmt:
-			if s.Tok == token.ASSIGN || s.Tok == token.DEFINE {
-				if id, ok := s.Key.(*ast.Ident); ok {
-					writeIdents[id] = true
-				}
-				if id, ok := s.Value.(*ast.Ident); ok {
-					writeIdents[id] = true
-				}
-			}
+			collectRangeWrites(s, writeIdents)
 		}
 		return true
 	})
+	return writeIdents
+}
+
+// identReads returns the set of identifier names that are *read* somewhere in
+// the body — i.e. referenced outside of the left-hand side of an assignment or
+// declaration. A name written but never read is therefore not in the set,
+// matching PHPMD's "only appears as assignment target" definition of unused.
+func identReads(body *ast.BlockStmt) map[string]bool {
+	reads := map[string]bool{}
+	writeIdents := collectWriteIdents(body)
 	ast.Inspect(body, func(n ast.Node) bool {
 		id, ok := n.(*ast.Ident)
 		if !ok || id.Name == "_" {

@@ -7,6 +7,26 @@ import (
 	"go/token"
 )
 
+func ccnIncrement(n ast.Node) int {
+	switch s := n.(type) {
+	case *ast.IfStmt, *ast.ForStmt, *ast.RangeStmt:
+		return 1
+	case *ast.CaseClause:
+		if len(s.List) > 0 { // skip default
+			return 1
+		}
+	case *ast.CommClause:
+		if s.Comm != nil { // skip default in select
+			return 1
+		}
+	case *ast.BinaryExpr:
+		if s.Op == token.LAND || s.Op == token.LOR {
+			return 1
+		}
+	}
+	return 0
+}
+
 // CyclomaticComplexity computes the cyclomatic complexity (CCN) of a function
 // body. Mirrors pdepend's analyzer: a base of 1 plus one for each decision
 // point — if, for, range, case (per case clause, excluding default), and each
@@ -18,26 +38,7 @@ func CyclomaticComplexity(body *ast.BlockStmt) int {
 	}
 	ccn := 1
 	ast.Inspect(body, func(n ast.Node) bool {
-		switch s := n.(type) {
-		case *ast.IfStmt:
-			ccn++
-		case *ast.ForStmt:
-			ccn++
-		case *ast.RangeStmt:
-			ccn++
-		case *ast.CaseClause:
-			if len(s.List) > 0 { // skip default
-				ccn++
-			}
-		case *ast.CommClause:
-			if s.Comm != nil { // skip default in select
-				ccn++
-			}
-		case *ast.BinaryExpr:
-			if s.Op == token.LAND || s.Op == token.LOR {
-				ccn++
-			}
-		}
+		ccn += ccnIncrement(n)
 		return true
 	})
 	return ccn
@@ -61,7 +62,33 @@ func npathStmts(stmts []ast.Stmt) int {
 	return product
 }
 
+func returnStmtComplexity(n *ast.ReturnStmt) int {
+	c := 0
+	for _, r := range n.Results {
+		c += expressionComplexity(r)
+	}
+	if c == 0 {
+		return 1
+	}
+	return c
+}
+
+func npathSwitchOrSelect(s ast.Stmt) (int, bool) {
+	switch n := s.(type) {
+	case *ast.SwitchStmt:
+		return npathSwitch(n.Body, n.Tag), true
+	case *ast.TypeSwitchStmt:
+		return npathSwitch(n.Body, nil), true
+	case *ast.SelectStmt:
+		return npathSelect(n.Body), true
+	}
+	return 0, false
+}
+
 func npathStmt(s ast.Stmt) int {
+	if val, ok := npathSwitchOrSelect(s); ok {
+		return val
+	}
 	switch n := s.(type) {
 	case *ast.IfStmt:
 		return npathIf(n)
@@ -70,27 +97,12 @@ func npathStmt(s ast.Stmt) int {
 	case *ast.RangeStmt:
 		// pdepend visitForeachStatement: E(iterable) + 1 + NP(body).
 		return expressionComplexity(n.X) + 1 + npathStmts(n.Body.List)
-	case *ast.SwitchStmt:
-		return npathSwitch(n.Body, n.Tag)
-	case *ast.TypeSwitchStmt:
-		return npathSwitch(n.Body, nil)
-	case *ast.SelectStmt:
-		return npathSelect(n.Body)
 	case *ast.BlockStmt:
 		return npathStmts(n.List)
 	case *ast.LabeledStmt:
 		return npathStmt(n.Stmt)
 	case *ast.ReturnStmt:
-		// pdepend visitReturnStatement: factor is the boolean-op count of the
-		// returned expression(s); when that is zero the statement is neutral.
-		c := 0
-		for _, r := range n.Results {
-			c += expressionComplexity(r)
-		}
-		if c == 0 {
-			return 1
-		}
-		return c
+		return returnStmtComplexity(n)
 	default:
 		return 1
 	}
@@ -225,6 +237,26 @@ func splitLines(src []byte) [][]byte {
 	return lines
 }
 
+func isBlockCommentEnd(line []byte, i int) bool {
+	return line[i] == '*' && i+1 < len(line) && line[i+1] == '/'
+}
+
+func checkComment(line []byte, i int) (isLine, isBlockStart, skipNext bool) {
+	if line[i] == '/' && i+1 < len(line) {
+		if line[i+1] == '/' {
+			return true, false, false
+		}
+		if line[i+1] == '*' {
+			return false, true, true
+		}
+	}
+	return false, false, false
+}
+
+func isNonWhitespace(ch byte) bool {
+	return ch != ' ' && ch != '\t' && ch != '\r'
+}
+
 // lineHasCode reports whether a line contains any code outside comments, given
 // whether it begins inside a block comment, and returns the block-comment state
 // at the line's end.
@@ -232,23 +264,24 @@ func lineHasCode(line []byte, inBlock bool) (hasCode, blockAfter bool) {
 	for i := 0; i < len(line); i++ {
 		ch := line[i]
 		if inBlock {
-			if ch == '*' && i+1 < len(line) && line[i+1] == '/' {
+			if isBlockCommentEnd(line, i) {
 				inBlock = false
 				i++
 			}
 			continue
 		}
-		if ch == '/' && i+1 < len(line) {
-			if line[i+1] == '/' {
-				return hasCode, false // line comment: rest is ignored
-			}
-			if line[i+1] == '*' {
-				inBlock = true
-				i++
-				continue
-			}
+		isLine, isBlockStart, skipNext := checkComment(line, i)
+		if isLine {
+			return hasCode, false
 		}
-		if ch != ' ' && ch != '\t' && ch != '\r' {
+		if isBlockStart {
+			inBlock = true
+			if skipNext {
+				i++
+			}
+			continue
+		}
+		if isNonWhitespace(ch) {
 			hasCode = true
 		}
 	}

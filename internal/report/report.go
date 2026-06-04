@@ -28,27 +28,22 @@ type Renderer interface {
 	Render(w io.Writer, r *Report) error
 }
 
+var renderers = map[string]func() Renderer{
+	"text":       func() Renderer { return &TextRenderer{} },
+	"ansi":       func() Renderer { return &TextRenderer{Colored: true} },
+	"xml":        func() Renderer { return &XMLRenderer{} },
+	"json":       func() Renderer { return &JSONRenderer{} },
+	"github":     func() Renderer { return &GitHubRenderer{} },
+	"gitlab":     func() Renderer { return &GitLabRenderer{} },
+	"checkstyle": func() Renderer { return &CheckStyleRenderer{} },
+	"sarif":      func() Renderer { return &SARIFRenderer{} },
+	"html":       func() Renderer { return &HTMLRenderer{} },
+}
+
 // For returns the renderer for a PHPMD format identifier.
 func For(format string) (Renderer, bool) {
-	switch format {
-	case "text":
-		return &TextRenderer{}, true
-	case "ansi":
-		return &TextRenderer{Colored: true}, true
-	case "xml":
-		return &XMLRenderer{}, true
-	case "json":
-		return &JSONRenderer{}, true
-	case "github":
-		return &GitHubRenderer{}, true
-	case "gitlab":
-		return &GitLabRenderer{}, true
-	case "checkstyle":
-		return &CheckStyleRenderer{}, true
-	case "sarif":
-		return &SARIFRenderer{}, true
-	case "html":
-		return &HTMLRenderer{}, true
+	if ctor, ok := renderers[format]; ok {
+		return ctor(), true
 	}
 	return nil, false
 }

@@ -45,6 +45,31 @@ func Run(opts Options) (*report.Report, error) {
 	return rep, nil
 }
 
+func walkDirFunc(opts Options, add func(string)) fs.WalkDirFunc {
+	return func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if d.IsDir() {
+			if shouldSkipDir(d.Name()) {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		if !hasSuffix(path, opts.Suffixes) {
+			return nil
+		}
+		if opts.IgnoreTests && strings.HasSuffix(path, "_test.go") {
+			return nil
+		}
+		if isExcluded(path, opts.Exclude) {
+			return nil
+		}
+		add(path)
+		return nil
+	}
+}
+
 func discover(opts Options) ([]string, error) {
 	var out []string
 	seen := map[string]bool{}
@@ -65,28 +90,7 @@ func discover(opts Options) ([]string, error) {
 			add(p)
 			continue
 		}
-		err = filepath.WalkDir(p, func(path string, d fs.DirEntry, err error) error {
-			if err != nil {
-				return err
-			}
-			if d.IsDir() {
-				if shouldSkipDir(d.Name()) {
-					return filepath.SkipDir
-				}
-				return nil
-			}
-			if !hasSuffix(path, opts.Suffixes) {
-				return nil
-			}
-			if opts.IgnoreTests && strings.HasSuffix(path, "_test.go") {
-				return nil
-			}
-			if isExcluded(path, opts.Exclude) {
-				return nil
-			}
-			add(path)
-			return nil
-		})
+		err = filepath.WalkDir(p, walkDirFunc(opts, add))
 		if err != nil {
 			return nil, err
 		}

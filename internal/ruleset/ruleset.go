@@ -178,26 +178,29 @@ func (l *Loader) addRef(set *rule.RuleSet, xr xmlRule) error {
 	}
 	excluded := excludeSet(xr.Exclude)
 	for _, sr := range src.Rules {
-		if sr.Class == "" {
-			continue
-		}
-		if ruleName != "" {
-			if sr.Name != ruleName {
-				continue
-			}
-			if r := l.buildRule(src.Name, sr, &xr); r != nil {
-				l.appendRule(set, r)
-			}
-			continue
-		}
-		if excluded[sr.Name] {
-			continue
-		}
-		if r := l.buildRule(src.Name, sr, &sr); r != nil {
-			l.appendRule(set, r)
-		}
+		l.processRefRule(set, src.Name, sr, ruleName, excluded, &xr)
 	}
 	return nil
+}
+
+func (l *Loader) processRefRule(set *rule.RuleSet, srcName string, sr xmlRule, ruleName string, excluded map[string]bool, xr *xmlRule) {
+	if sr.Class == "" {
+		return
+	}
+	if ruleName != "" {
+		if sr.Name == ruleName {
+			if r := l.buildRule(srcName, sr, xr); r != nil {
+				l.appendRule(set, r)
+			}
+		}
+		return
+	}
+	if excluded[sr.Name] {
+		return
+	}
+	if r := l.buildRule(srcName, sr, &sr); r != nil {
+		l.appendRule(set, r)
+	}
 }
 
 // buildRule constructs a configured rule from a definition (def, which carries

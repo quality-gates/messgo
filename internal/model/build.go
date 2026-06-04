@@ -38,10 +38,14 @@ func ParseSource(path string, src []byte) (*File, error) {
 func (f *File) line(p token.Pos) int { return f.Fset.Position(p).Line }
 
 func (f *File) build() {
-	// First pass: collect type declarations (structs and interfaces).
 	classes := map[string]*Class{}
 	ifaces := map[string]*Interface{}
 
+	f.collectTypes(classes, ifaces)
+	f.collectFuncs(classes)
+}
+
+func (f *File) collectTypes(classes map[string]*Class, ifaces map[string]*Interface) {
 	for _, decl := range f.Syntax.Decls {
 		gen, ok := decl.(*ast.GenDecl)
 		if !ok || gen.Tok != token.TYPE {
@@ -52,41 +56,46 @@ func (f *File) build() {
 			if !ok {
 				continue
 			}
-			doc := docText(ts.Doc, gen.Doc)
-			switch t := ts.Type.(type) {
-			case *ast.StructType:
-				c := &Class{
-					Name:       ts.Name.Name,
-					Line:       f.line(ts.Pos()),
-					EndLine:    f.line(ts.End()),
-					Exported:   ts.Name.IsExported(),
-					File:       f,
-					Spec:       ts,
-					Struct:     t,
-					DocComment: doc,
-				}
-				f.collectFields(c, t)
-				classes[c.Name] = c
-				f.Classes = append(f.Classes, c)
-			case *ast.InterfaceType:
-				i := &Interface{
-					Name:       ts.Name.Name,
-					Line:       f.line(ts.Pos()),
-					EndLine:    f.line(ts.End()),
-					Exported:   ts.Name.IsExported(),
-					File:       f,
-					Spec:       ts,
-					Iface:      t,
-					DocComment: doc,
-				}
-				f.collectInterfaceMethods(i, t)
-				ifaces[i.Name] = i
-				f.Interfaces = append(f.Interfaces, i)
-			}
+			f.collectTypeSpec(ts, gen.Doc, classes, ifaces)
 		}
 	}
+}
 
-	// Second pass: functions and methods.
+func (f *File) collectTypeSpec(ts *ast.TypeSpec, docGroup *ast.CommentGroup, classes map[string]*Class, ifaces map[string]*Interface) {
+	doc := docText(ts.Doc, docGroup)
+	switch t := ts.Type.(type) {
+	case *ast.StructType:
+		c := &Class{
+			Name:       ts.Name.Name,
+			Line:       f.line(ts.Pos()),
+			EndLine:    f.line(ts.End()),
+			Exported:   ts.Name.IsExported(),
+			File:       f,
+			Spec:       ts,
+			Struct:     t,
+			DocComment: doc,
+		}
+		f.collectFields(c, t)
+		classes[c.Name] = c
+		f.Classes = append(f.Classes, c)
+	case *ast.InterfaceType:
+		i := &Interface{
+			Name:       ts.Name.Name,
+			Line:       f.line(ts.Pos()),
+			EndLine:    f.line(ts.End()),
+			Exported:   ts.Name.IsExported(),
+			File:       f,
+			Spec:       ts,
+			Iface:      t,
+			DocComment: doc,
+		}
+		f.collectInterfaceMethods(i, t)
+		ifaces[i.Name] = i
+		f.Interfaces = append(f.Interfaces, i)
+	}
+}
+
+func (f *File) collectFuncs(classes map[string]*Class) {
 	for _, decl := range f.Syntax.Decls {
 		fd, ok := decl.(*ast.FuncDecl)
 		if !ok {
@@ -262,16 +271,25 @@ func exprString(e ast.Expr) string {
 		return "[]" + exprString(t.Elt)
 	case *ast.MapType:
 		return "map[" + exprString(t.Key) + "]" + exprString(t.Value)
+	case *ast.Ellipsis:
+		return "..." + exprString(t.Elt)
+	case *ast.ChanType:
+		return "chan " + exprString(t.Value)
+	case *ast.ParenExpr:
+		return exprString(t.X)
+	default:
+		return exprStringOther(t)
+	}
+}
+
+func exprStringOther(e ast.Expr) string {
+	switch t := e.(type) {
 	case *ast.InterfaceType:
 		return "interface{}"
 	case *ast.StructType:
 		return "struct{}"
 	case *ast.FuncType:
 		return "func"
-	case *ast.Ellipsis:
-		return "..." + exprString(t.Elt)
-	case *ast.ChanType:
-		return "chan " + exprString(t.Value)
 	case *ast.IndexExpr:
 		return exprString(t.X) + "[" + exprString(t.Index) + "]"
 	case *ast.IndexListExpr:
@@ -280,8 +298,6 @@ func exprString(e ast.Expr) string {
 			parts[i] = exprString(ix)
 		}
 		return exprString(t.X) + "[" + strings.Join(parts, ",") + "]"
-	case *ast.ParenExpr:
-		return exprString(t.X)
 	}
 	return ""
 }

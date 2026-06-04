@@ -44,10 +44,11 @@ Follow these steps in order when landing a change:
 2. **Run self-analysis** — run the compiled binary on `./internal` using the `go` ruleset.
 3. **Manual smoke test** — build the binary and run it against a real package or testdata file. Confirm stdout looks right.
 4. **Update docs if needed** — if a rule is added, removed, or properties change, update `README.md`.
-5. **Commit and push** — land changes via PR.
-6. **Watch CI** — wait for Actions to go green.
-7. **Merge to main** — then push.
-8. **Tag and release** — tag the release and publish.
+5. **Update CHANGELOG.md** — add an entry under `[Unreleased]` describing what changed (Added / Fixed / Changed).
+6. **Commit and push** — land changes via PR.
+7. **Watch CI** — wait for Actions to go green.
+8. **Merge to main** — then push.
+9. **Tag and release** — tag the release and publish.
 
 ## Conventions
 

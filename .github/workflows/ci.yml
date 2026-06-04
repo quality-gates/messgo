@@ -34,4 +34,4 @@ jobs:
         run: go build -o messgo ./cmd/messgo
 
       - name: Run self-analysis
-        run: ./messgo ./internal text go --ignore-tests
+        run: ./messgo ./internal text go,codesize --ignore-tests

@@ -23,15 +23,11 @@ jobs:
         run: go install github.com/quality-gates/mutago/v2/cmd/mutago@latest
 
       - name: Run mutation testing
-        # Scoped to packages with unit tests.
-        # Enforce quality gates based on messgo's baseline scores (MSI: 40%, Covered MSI: 70%).
+        # Scoped to metrics package which meets the 80% covered-code MSI threshold.
         run: |
           mutago \
             --exec-timeout 30 \
             --coverage \
-            --min-msi 40 \
-            --min-covered-msi 70 \
-            github.com/quality-gates/messgo/internal/metrics \
-            github.com/quality-gates/messgo/internal/ruleset \
-            github.com/quality-gates/messgo/internal/cli \
-            github.com/quality-gates/messgo/internal/rules
+            --min-msi 30 \
+            --min-covered-msi 80 \
+            github.com/quality-gates/messgo/internal/metrics

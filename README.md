@@ -5,10 +5,9 @@ is written in Go *and* analyzes Go source code, applying phpmd's rule catalog,
 ruleset format, message templates, CLI surface, and report renderers — adapted
 faithfully to Go semantics.
 
-Where phpmd parses PHP via pdepend, messgo parses Go via the standard-library
-`go/ast`. Every phpmd concept maps onto a Go analog: a PHP *class* → a Go named
-struct type (plus its methods), a *property* → a struct field, a *method* /
-*function* → a Go method / function, *private* → *unexported*.
+Where phpmd parses PHP via pdepend, messgo parses Go via the standard-library `go/ast`.
+
+By default, messgo uses idiomatic Go principles (via the bundled `go` ruleset), but a full set of checks more closely emulating standard phpmd rules can be optionally enabled.
 
 ## Install / build
 

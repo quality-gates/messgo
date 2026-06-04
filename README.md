@@ -71,23 +71,6 @@ the complete rule-by-rule mapping and the manual phpmd comparison evidence.
 | Design | ExitExpression, GotoStatement, CountInLoopExpression, DevelopmentCodeFragment, EmptyCatchBlock, CouplingBetweenObjects |
 | Controversial | CamelCaseClassName, CamelCaseMethodName, CamelCasePropertyName, CamelCaseParameterName, CamelCaseVariableName |
 
-## Architecture
-
-```
-cmd/messgo            entry point
-internal/model        go/ast → phpmd-style artifacts (Class/Interface/Method/Function/Field/Parameter)
-internal/metrics      CCN, NPath, LOC (pdepend-equivalent algorithms)
-internal/rule         Rule interface, Violation, RuleSet, dispatch engine
-internal/rules/*      rule implementations, grouped by ruleset
-internal/ruleset      phpmd-format ruleset XML loader (+ embedded built-ins)
-internal/report       renderers (text/xml/json/html/ansi/github/gitlab/checkstyle/sarif)
-internal/runner       file discovery + orchestration
-internal/cli          command-line interface
-```
-
-Rules register themselves under their phpmd class name (e.g.
-`PHPMD\Rule\CyclomaticComplexity`); the ruleset XML — byte-for-byte phpmd's own
-`codesize.xml` etc. — wires class → metadata (message, priority, properties).
 
 ## Tests
 

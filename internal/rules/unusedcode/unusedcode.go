@@ -142,6 +142,15 @@ func identReads(body *ast.BlockStmt) map[string]bool {
 			for _, id := range s.Names {
 				writeIdents[id] = true
 			}
+		case *ast.RangeStmt:
+			if s.Tok == token.ASSIGN || s.Tok == token.DEFINE {
+				if id, ok := s.Key.(*ast.Ident); ok {
+					writeIdents[id] = true
+				}
+				if id, ok := s.Value.(*ast.Ident); ok {
+					writeIdents[id] = true
+				}
+			}
 		}
 		return true
 	})

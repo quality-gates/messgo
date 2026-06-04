@@ -104,6 +104,19 @@ func getActive() bool { return true }
 	)
 }
 
+func TestNamingRangeLoop(t *testing.T) {
+	src := `
+func loop() {
+	for i := range []int{1, 2} {
+		_ = i
+	}
+}
+`
+	hits := analyze(t, src, "naming")
+	mustNotHave(t, hits, "ShortVariable")
+}
+
+
 func TestUnusedCode(t *testing.T) {
 	src := `
 type widget struct {
@@ -135,6 +148,18 @@ func compute(a int, spare int) int {
 		}
 	}
 }
+
+func TestUnusedRangeLoopVariable(t *testing.T) {
+	src := `
+func loop() {
+	for i, v := range []int{1, 2} {
+	}
+}
+`
+	hits := analyze(t, src, "unusedcode")
+	mustHave(t, hits, "UnusedLocalVariable")
+}
+
 
 func TestDesign(t *testing.T) {
 	src := `

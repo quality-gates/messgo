@@ -12,6 +12,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 - Refactored 9 code hotspots (including `CyclomaticComplexity`, `npathStmt`, `lineHasCode`, `build`, `exprString`, `For`, `identReads`, `addRef`, and `discover`) to reduce their Cyclomatic Complexity below the configured threshold of 10.
 
 ### Added
+- GitHub Actions CI workflows for security checking (govulncheck), report card grade enforcement, mutation testing with mutago, and messgo self-analysis & testing.
 - Coverage-guided fuzz test (`FuzzAnalyze`) in `internal/rules/fuzz_test.go` to verify ruleset analysis stability under mutated source bytes.
 - Symlinks `GEMINI.md` and `AGENTS.md` pointing to developer guide `CLAUDE.md`.
 

@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+
+<ruleset name="Go Rules"
+         xmlns="http://pmd.sf.net/ruleset/1.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:noNamespaceSchemaLocation="http://pmd.sf.net/ruleset_xml_schema.xsd">
+
+    <description>
+PHPMD's default rules tuned for idiomatic Go. It pulls in every built-in
+ruleset, but quiets a few rules whose PHP defaults are a poor fit for Go:
+
+  * Naming/ShortVariable is dropped: short names (i, r, ok, fn, ...) are
+    idiomatic in Go, where scope is small.
+  * Naming/LongVariable's maximum is raised to 35, since Go favors descriptive
+    MixedCaps names over PHP's terser style.
+  * Design/ExitExpression is dropped because os.Exit in main() is idiomatic.
+  * Design/CountInLoopExpression is dropped because len() on a Go slice is
+    O(1), unlike PHP's count().
+    </description>
+
+    <rule ref="codesize"/>
+    <rule ref="unusedcode"/>
+    <rule ref="cleancode"/>
+    <rule ref="controversial"/>
+
+    <rule ref="naming">
+        <exclude name="ShortVariable"/>
+        <exclude name="LongVariable"/>
+    </rule>
+    <rule ref="naming/LongVariable">
+        <properties>
+            <property name="maximum" value="35"/>
+        </properties>
+    </rule>
+
+    <rule ref="design">
+        <exclude name="ExitExpression"/>
+        <exclude name="CountInLoopExpression"/>
+    </rule>
+</ruleset>

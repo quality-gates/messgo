@@ -61,7 +61,9 @@ func (p Properties) Float(key string, def float64) float64 {
 	return def
 }
 
-func (p Properties) Bool(key string, def bool) bool {
+type DefaultBool = bool
+
+func (p Properties) Bool(key string, def DefaultBool) bool {
 	if v, ok := p[key]; ok {
 		switch v {
 		case "true", "1", "yes", "on":
@@ -121,18 +123,18 @@ func (c *Context) report(beginLine, endLine int, class, method, function string,
 func (c *Context) ReportFunc(fn *model.Function, args ...any) {
 	if fn.IsMethod() {
 		c.report(fn.Line, fn.EndLine, fn.Receiver, fn.Name, "", args)
-	} else {
-		c.report(fn.Line, fn.EndLine, "", "", fn.Name, args)
+		return
 	}
+	c.report(fn.Line, fn.EndLine, "", "", fn.Name, args)
 }
 
 // ReportFuncAt is like ReportFunc but at a specific line span.
 func (c *Context) ReportFuncAt(fn *model.Function, beginLine, endLine int, args ...any) {
 	if fn.IsMethod() {
 		c.report(beginLine, endLine, fn.Receiver, fn.Name, "", args)
-	} else {
-		c.report(beginLine, endLine, "", "", fn.Name, args)
+		return
 	}
+	c.report(beginLine, endLine, "", "", fn.Name, args)
 }
 
 // ReportClass records a violation against a class.

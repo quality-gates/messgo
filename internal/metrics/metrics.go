@@ -257,10 +257,12 @@ func isNonWhitespace(ch byte) bool {
 	return ch != ' ' && ch != '\t' && ch != '\r'
 }
 
+type commentState = bool
+
 // lineHasCode reports whether a line contains any code outside comments, given
 // whether it begins inside a block comment, and returns the block-comment state
 // at the line's end.
-func lineHasCode(line []byte, inBlock bool) (hasCode, blockAfter bool) {
+func lineHasCode(line []byte, inBlock commentState) (hasCode, blockAfter commentState) {
 	for i := 0; i < len(line); i++ {
 		ch := line[i]
 		if inBlock {

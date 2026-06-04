@@ -12,8 +12,9 @@ import (
 func SplitToList(s string) []string {
 	var out []string
 	for _, p := range strings.Split(s, ",") {
-		if p = strings.TrimSpace(p); p != "" {
-			out = append(out, p)
+		trimmed := strings.TrimSpace(p)
+		if trimmed != "" {
+			out = append(out, trimmed)
 		}
 	}
 	return out

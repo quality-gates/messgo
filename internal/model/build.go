@@ -103,13 +103,13 @@ func (f *File) collectFuncs(classes map[string]*Class) {
 		}
 		fn := f.buildFunc(fd)
 		f.AllFuncs = append(f.AllFuncs, fn)
-		if fn.IsMethod() {
-			if c := classes[fn.Receiver]; c != nil {
-				c.Methods = append(c.Methods, fn)
-				fn.Class = c
-			}
-		} else {
+		if !fn.IsMethod() {
 			f.Functions = append(f.Functions, fn)
+			continue
+		}
+		if c := classes[fn.Receiver]; c != nil {
+			c.Methods = append(c.Methods, fn)
+			fn.Class = c
 		}
 	}
 }

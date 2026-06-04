@@ -13,6 +13,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 
 ### Added
 - GitHub Actions CI workflows for security checking (govulncheck), report card grade enforcement, mutation testing with mutago, and messgo self-analysis & testing.
+- Updated self-analysis step in CI to explicitly run `codesize` ruleset, and updated mutation testing to enforce `min-covered-msi` of 80% on the `internal/metrics` package.
 - Coverage-guided fuzz test (`FuzzAnalyze`) in `internal/rules/fuzz_test.go` to verify ruleset analysis stability under mutated source bytes.
 - Symlinks `GEMINI.md` and `AGENTS.md` pointing to developer guide `CLAUDE.md`.
 

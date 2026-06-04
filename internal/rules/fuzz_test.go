@@ -40,13 +40,13 @@ func f() {
 		if err != nil {
 			return
 		}
-		
+
 		loader := &ruleset.Loader{}
 		sets, err := loader.Load("codesize,naming,unusedcode,design,cleancode,controversial")
 		if err != nil {
 			t.Fatalf("failed to load rulesets: %v", err)
 		}
-		
+
 		_ = rule.Analyze(file, sets)
 	})
 }

@@ -116,7 +116,6 @@ func loop() {
 	mustNotHave(t, hits, "ShortVariable")
 }
 
-
 func TestUnusedCode(t *testing.T) {
 	src := `
 type widget struct {
@@ -159,7 +158,6 @@ func loop() {
 	hits := analyze(t, src, "unusedcode")
 	mustHave(t, hits, "UnusedLocalVariable")
 }
-
 
 func TestDesign(t *testing.T) {
 	src := `

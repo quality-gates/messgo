@@ -6,6 +6,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 
 ## [Unreleased]
 
+## [0.1.0] - 2026-06-05
+
 ### Fixed
 - Fixed loop variable detection for `RangeStmt` where range variables were not marked as loop counters (`IsLoop = false`), causing the `ShortVariable` rule to mistakenly flag short variables like `i` or `v` in range loops.
 - Fixed unused local variable detection where range loop variables were never marked as writes inside `identReads`, causing them to be treated as reads and preventing the `UnusedLocalVariable` rule from flagging unused range loop variables.

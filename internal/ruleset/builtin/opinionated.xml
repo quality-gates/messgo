@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+
+<ruleset name="Opinionated Rules"
+         xmlns="http://pmd.sf.net/ruleset/1.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:noNamespaceSchemaLocation="http://pmd.sf.net/ruleset_xml_schema.xsd">
+
+    <description>
+Opt-in checks that are deliberately NOT part of the default `go` ruleset
+because they conflict with idiomatic Go. They come straight from PHPMD's
+object-oriented, PHP-flavoured heritage, and flag patterns that are perfectly
+normal — often unavoidable — in Go.
+
+You can run these if you want a stricter, more opinionated style, but they are
+not part of "idiomatic Go":
+
+  * CleanCode/ElseExpression flags every `else` branch. Go uses `else` freely;
+    early returns are encouraged but not required, and `gofmt`/`go vet`/golint
+    do not object to `else`.
+  * CleanCode/BooleanArgumentFlag flags every boolean parameter. Go's own
+    standard library is full of them (e.g. strconv, io, signal), so this is an
+    OO Single-Responsibility opinion rather than a Go convention.
+  * UnusedCode/UnusedFormalParameter flags unread parameters. In Go, parameters
+    are routinely kept to satisfy an interface, an http.HandlerFunc signature,
+    sort.Interface, or a callback shape — the compiler deliberately allows
+    unused parameters for exactly this reason.
+
+Run with:  messgo &lt;paths&gt; &lt;format&gt; opinionated
+Or combine: messgo &lt;paths&gt; &lt;format&gt; go,opinionated
+    </description>
+
+    <rule ref="cleancode/ElseExpression"/>
+    <rule ref="cleancode/BooleanArgumentFlag"/>
+    <rule ref="unusedcode/UnusedFormalParameter"/>
+</ruleset>

@@ -137,17 +137,23 @@ phpmd-format ruleset XML file.
 
 | Ruleset | What it checks |
 | :--- | :--- |
-| **`go`** | **Recommended default.** Pulls in all rulesets below, but tunes a few rules whose PHP defaults misfire on idiomatic Go (drops `ShortVariable`, `Design/ExitExpression`, `Design/CountInLoopExpression`, and raises `LongVariable`'s maximum). On this codebase `go` reports ~19 findings versus ~441 at raw PHP defaults. |
+| **`go`** | **Recommended default.** Pulls in all rulesets below, but tunes the rules whose PHP defaults misfire on idiomatic Go: drops `ShortVariable`, `Design/ExitExpression`, `Design/CountInLoopExpression`, `CleanCode/ElseExpression`, `CleanCode/BooleanArgumentFlag`, and `UnusedCode/UnusedFormalParameter`, and raises `LongVariable`'s maximum. On this codebase `go` reports ~19 findings versus ~441 at raw PHP defaults. |
 | `codesize` | CyclomaticComplexity, NPathComplexity, ExcessiveMethodLength, ExcessiveClassLength, ExcessiveParameterList, ExcessivePublicCount, TooManyFields, TooManyMethods, TooManyPublicMethods, ExcessiveClassComplexity |
 | `naming` | ShortClassName, LongClassName, ShortVariable, LongVariable, ShortMethodName, ConstantNamingConventions, BooleanGetMethodName, ConstructorWithNameAsEnclosingClass |
 | `unusedcode` | UnusedPrivateField, UnusedLocalVariable, UnusedPrivateMethod, UnusedFormalParameter |
 | `cleancode` | BooleanArgumentFlag, ElseExpression, IfStatementAssignment, DuplicatedArrayKey |
 | `design` | ExitExpression, GotoStatement, CountInLoopExpression, DevelopmentCodeFragment, EmptyCatchBlock, CouplingBetweenObjects |
 | `controversial` | CamelCaseClassName, CamelCaseMethodName, CamelCasePropertyName, CamelCaseParameterName, CamelCaseVariableName |
+| `opinionated` | **Opt-in, not part of idiomatic Go.** Bundles the three rules the `go` ruleset deliberately drops because they fight Go conventions: `ElseExpression` (`else` is idiomatic), `BooleanArgumentFlag` (bool params fill Go's stdlib), and `UnusedFormalParameter` (unused params are required to satisfy interfaces and handler signatures). Run them if you want a stricter, more PHP-flavoured style. |
 
 Rules with a direct Go analog reproduce phpmd's behavior and message templates
 exactly; rules that are intrinsically PHP-specific are either adapted to the
 nearest Go idiom or omitted (Go's compiler already enforces several of them).
+
+The `opinionated` ruleset is the home for checks that come from phpmd's
+PHP/OO heritage but are *not* idiomatic Go. They stay available — run
+`messgo ./... text opinionated`, or `go,opinionated` to combine — but the
+default `go` ruleset leaves them off so a clean run reflects idiomatic Go.
 
 ### Custom rulesets
 

@@ -127,6 +127,120 @@ func identOf(e ast.Expr) *ast.Ident {
 	return id
 }
 
+// MutatedGlobalNames returns the set of package-level variable names that are
+// mutated somewhere across the given files (the files of a single package).
+// A variable is "mutated" if it is reassigned (`=`, `+=`, ...), incremented or
+// decremented, has a field/element written through it (`g.f = x`, `g[k] = v`),
+// or has its address taken (`&g`). Short variable declarations (`:=`) introduce
+// locals and are ignored, as are the variables' own initializers (which are
+// declarations, not assignments). The result is intersected with the names
+// actually declared as package-level vars, so locals never appear.
+//
+// Detection is AST-based and deliberately errs toward visibility: a local that
+// shadows a global name (via `var`) may cause the global to be reported, which
+// is preferable to hiding a genuinely mutable global.
+func MutatedGlobalNames(files []*ast.File) map[string]bool {
+	globals := topLevelVarNames(files)
+	mutated := map[string]bool{}
+	if len(globals) == 0 {
+		return mutated
+	}
+	for _, f := range files {
+		collectMutations(f, globals, mutated)
+	}
+	return mutated
+}
+
+// collectMutations records, into mutated, every name in globals that is mutated
+// anywhere in f.
+func collectMutations(f *ast.File, globals, mutated map[string]bool) {
+	mark := func(e ast.Expr) {
+		if id := rootIdent(e); id != nil && globals[id.Name] {
+			mutated[id.Name] = true
+		}
+	}
+	ast.Inspect(f, func(n ast.Node) bool {
+		markMutation(n, mark)
+		return true
+	})
+}
+
+// markMutation calls mark on the lvalue(s) of any node that mutates a variable:
+// assignment (excluding ":=", which introduces locals), increment/decrement,
+// address-of, and a range clause that assigns into existing variables.
+func markMutation(n ast.Node, mark func(ast.Expr)) {
+	switch s := n.(type) {
+	case *ast.AssignStmt:
+		if s.Tok == token.DEFINE {
+			return
+		}
+		for _, lhs := range s.Lhs {
+			mark(lhs)
+		}
+	case *ast.IncDecStmt:
+		mark(s.X)
+	case *ast.UnaryExpr:
+		if s.Op == token.AND {
+			mark(s.X)
+		}
+	case *ast.RangeStmt:
+		if s.Tok == token.ASSIGN {
+			mark(s.Key)
+			mark(s.Value)
+		}
+	}
+}
+
+// topLevelVarNames collects the names declared in package-level `var`
+// declarations across the files. The blank identifier is skipped.
+func topLevelVarNames(files []*ast.File) map[string]bool {
+	names := map[string]bool{}
+	for _, f := range files {
+		for _, decl := range f.Decls {
+			gd, ok := decl.(*ast.GenDecl)
+			if !ok || gd.Tok != token.VAR {
+				continue
+			}
+			for _, spec := range gd.Specs {
+				vs, ok := spec.(*ast.ValueSpec)
+				if !ok {
+					continue
+				}
+				for _, name := range vs.Names {
+					if name.Name != "_" {
+						names[name.Name] = true
+					}
+				}
+			}
+		}
+	}
+	return names
+}
+
+// rootIdent peels selector, index, star and paren wrappers off an lvalue to its
+// leading identifier: x, x.f, x[i], *x, (x) all reduce to x. Returns nil if the
+// expression is not rooted at an identifier.
+func rootIdent(e ast.Expr) *ast.Ident {
+	for {
+		switch t := e.(type) {
+		case *ast.Ident:
+			return t
+		case *ast.SelectorExpr:
+			e = t.X
+		case *ast.IndexExpr:
+			e = t.X
+		case *ast.IndexListExpr:
+			e = t.X
+		case *ast.StarExpr:
+			e = t.X
+		case *ast.ParenExpr:
+			e = t.X
+		default:
+			return nil
+		}
+	}
+}
+
 // FindCalls returns all call expressions in a node whose callee renders to one
 // of the given function names (matched against the textual call expression,
 // e.g. "fmt.Println" or "panic").

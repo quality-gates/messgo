@@ -144,7 +144,7 @@ phpmd-format ruleset XML file.
 | `cleancode` | BooleanArgumentFlag, ElseExpression, IfStatementAssignment, DuplicatedArrayKey |
 | `design` | ExitExpression, GotoStatement, CountInLoopExpression, DevelopmentCodeFragment, EmptyCatchBlock, CouplingBetweenObjects, GlobalVariable |
 | `controversial` | CamelCaseClassName, CamelCaseMethodName, CamelCasePropertyName, CamelCaseParameterName, CamelCaseVariableName |
-| `opinionated` | **Opt-in, not part of idiomatic Go.** Bundles the rules the `go` ruleset deliberately drops because they fight Go conventions: `ElseExpression` (`else` is idiomatic), `BooleanArgumentFlag` (bool params fill Go's stdlib), `UnusedFormalParameter` (unused params are required to satisfy interfaces and handler signatures), and `GlobalVariable` (mutable package-level variables — though sentinel errors, compiled regexps, and registries are idiomatic). Run them if you want a stricter, more PHP-flavoured style. |
+| `opinionated` | **Opt-in, not part of idiomatic Go.** Bundles the rules the `go` ruleset deliberately drops because they fight Go conventions: `ElseExpression` (`else` is idiomatic), `BooleanArgumentFlag` (bool params fill Go's stdlib), `UnusedFormalParameter` (unused params are required to satisfy interfaces and handler signatures), and `GlobalVariable` (mutable package-level state). Run them if you want a stricter, more PHP-flavoured style. |
 
 Rules with a direct Go analog reproduce phpmd's behavior and message templates
 exactly; rules that are intrinsically PHP-specific are either adapted to the
@@ -154,6 +154,13 @@ The `opinionated` ruleset is the home for checks that come from phpmd's
 PHP/OO heritage but are *not* idiomatic Go. They stay available — run
 `messgo ./... text opinionated`, or `go,opinionated` to combine — but the
 default `go` ruleset leaves them off so a clean run reflects idiomatic Go.
+
+`GlobalVariable` is **mutation-aware**: by default it reports only package-level
+variables that are actually mutated somewhere in the package (reassigned,
+incremented, written through, or address-taken), analysed across all files of
+the package. Effectively-constant globals — sentinel errors, compiled regexps,
+lookup tables — stay silent so the genuinely risky shared state isn't drowned
+out. Set its `report-immutable=true` property to also surface read-only globals.
 
 ### Custom rulesets
 

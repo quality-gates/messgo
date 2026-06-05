@@ -2,6 +2,7 @@
 package runner
 
 import (
+	"go/ast"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -11,6 +12,7 @@ import (
 	"github.com/quality-gates/messgo/internal/model"
 	"github.com/quality-gates/messgo/internal/report"
 	"github.com/quality-gates/messgo/internal/rule"
+	"github.com/quality-gates/messgo/internal/util"
 )
 
 // Options configures a run.
@@ -32,17 +34,50 @@ func Run(opts Options) (*report.Report, error) {
 		return nil, err
 	}
 	rep := &report.Report{}
+	parsed := parseFiles(files, rep)
+	annotatePackages(parsed)
+	for _, file := range parsed {
+		vs := rule.Analyze(file, opts.RuleSets)
+		rep.Violations = append(rep.Violations, vs...)
+	}
+	rule.SortViolations(rep.Violations)
+	return rep, nil
+}
+
+// parseFiles parses every path, recording parse failures on the report and
+// returning the files that parsed successfully.
+func parseFiles(files []string, rep *report.Report) []*model.File {
+	var parsed []*model.File
 	for _, path := range files {
 		file, err := model.Parse(path)
 		if err != nil {
 			rep.Errors = append(rep.Errors, report.ProcessingError{File: path, Message: err.Error()})
 			continue
 		}
-		vs := rule.Analyze(file, opts.RuleSets)
-		rep.Violations = append(rep.Violations, vs...)
+		parsed = append(parsed, file)
 	}
-	rule.SortViolations(rep.Violations)
-	return rep, nil
+	return parsed
+}
+
+// annotatePackages groups files by directory (a Go package lives in one
+// directory) and records, on every file, the set of package-level variables
+// mutated anywhere in that package — enabling cross-file analysis.
+func annotatePackages(parsed []*model.File) {
+	byDir := map[string][]*model.File{}
+	for _, f := range parsed {
+		dir := filepath.Dir(f.Path)
+		byDir[dir] = append(byDir[dir], f)
+	}
+	for _, group := range byDir {
+		asts := make([]*ast.File, len(group))
+		for i, f := range group {
+			asts[i] = f.Syntax
+		}
+		mutated := util.MutatedGlobalNames(asts)
+		for _, f := range group {
+			f.MutatedGlobals = mutated
+		}
+	}
 }
 
 func walkDirFunc(opts Options, add func(string)) fs.WalkDirFunc {

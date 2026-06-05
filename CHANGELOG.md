@@ -15,6 +15,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 - Restructured `README.md` into a clear, linear getting-started flow (build → run → read output → exit codes), using messgo's own CI self-analysis command as the introductory example.
 
 ### Added
+- Documented `go install github.com/quality-gates/messgo/cmd/messgo@latest` as the recommended install method in `README.md`.
 - Documented `.worktrees/` as the location for git worktrees (gitignored) in `CLAUDE.md`.
 - GitHub Actions CI workflows for security checking (govulncheck), report card grade enforcement, mutation testing with mutago, and messgo self-analysis & testing.
 - Updated self-analysis step in CI to explicitly run `codesize` ruleset, and updated mutation testing to enforce `min-covered-msi` of 80% on the `internal/metrics` package.

@@ -12,7 +12,15 @@ rules can be optionally enabled.
 
 ## Getting started
 
-### 1. Build the binary
+### 1. Install the binary
+
+Install with `go install` to put `messgo` on your `PATH`:
+
+```bash
+go install github.com/quality-gates/messgo/cmd/messgo@latest
+```
+
+Or build it from a checkout of this repo:
 
 ```bash
 go build -o messgo ./cmd/messgo

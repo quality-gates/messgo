@@ -6,6 +6,11 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-06-05
+
+### Fixed
+- Corrected the embedded version string (reported by `--version` and in machine-readable output) from `1.0.0` to match the released tag.
+
 ## [0.1.0] - 2026-06-05
 
 ### Fixed

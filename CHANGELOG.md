@@ -11,7 +11,12 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 - Fixed unused local variable detection where range loop variables were never marked as writes inside `identReads`, causing them to be treated as reads and preventing the `UnusedLocalVariable` rule from flagging unused range loop variables.
 - Refactored 9 code hotspots (including `CyclomaticComplexity`, `npathStmt`, `lineHasCode`, `build`, `exprString`, `For`, `identReads`, `addRef`, and `discover`) to reduce their Cyclomatic Complexity below the configured threshold of 10.
 
+### Changed
+- Restructured `README.md` into a clear, linear getting-started flow (build → run → read output → exit codes), using messgo's own CI self-analysis command as the introductory example.
+
 ### Added
+- Documented `go install github.com/quality-gates/messgo/cmd/messgo@latest` as the recommended install method in `README.md`.
+- Documented `.worktrees/` as the location for git worktrees (gitignored) in `CLAUDE.md`.
 - GitHub Actions CI workflows for security checking (govulncheck), report card grade enforcement, mutation testing with mutago, and messgo self-analysis & testing.
 - Updated self-analysis step in CI to explicitly run `codesize` ruleset, and updated mutation testing to enforce `min-covered-msi` of 80% on the `internal/metrics` package.
 - Coverage-guided fuzz test (`FuzzAnalyze`) in `internal/rules/fuzz_test.go` to verify ruleset analysis stability under mutated source bytes.

@@ -20,6 +20,39 @@ func init() {
 	rule.Register("PHPMD\\Rule\\Design\\DevelopmentCodeFragment", func() rule.Rule { return &DevelopmentCodeFragment{Base: rule.NewBase()} })
 	rule.Register("PHPMD\\Rule\\Design\\EmptyCatchBlock", func() rule.Rule { return &EmptyCatchBlock{Base: rule.NewBase()} })
 	rule.Register("PHPMD\\Rule\\Design\\CouplingBetweenObjects", func() rule.Rule { return &CouplingBetweenObjects{Base: rule.NewBase()} })
+	rule.Register("PHPMD\\Rule\\Design\\GlobalVariable", func() rule.Rule { return &GlobalVariable{Base: rule.NewBase()} })
+}
+
+// ----- GlobalVariable -----------------------------------------------------
+//
+// Flags mutable package-level variables (top-level `var` declarations). Global
+// mutable state hurts testability and is unsafe under concurrency. Only the
+// file's top-level declarations are inspected, so local variables inside
+// functions are never flagged; constants (`const`) are not variables and are
+// likewise ignored. The blank identifier (`var _ = ...`, a common compile-time
+// assertion idiom) is skipped.
+type GlobalVariable struct{ *rule.Base }
+
+func (r *GlobalVariable) ApplyFile(c *rule.Context) {
+	for _, decl := range c.File.Syntax.Decls {
+		gd, ok := decl.(*ast.GenDecl)
+		if !ok || gd.Tok != token.VAR {
+			continue
+		}
+		for _, spec := range gd.Specs {
+			vs, ok := spec.(*ast.ValueSpec)
+			if !ok {
+				continue
+			}
+			for _, name := range vs.Names {
+				if name.Name == "_" {
+					continue
+				}
+				line := c.File.Fset.Position(name.Pos()).Line
+				c.Report(line, line, name.Name)
+			}
+		}
+	}
 }
 
 // ----- ExitExpression -----------------------------------------------------

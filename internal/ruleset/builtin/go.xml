@@ -21,9 +21,11 @@ ruleset, but quiets a few rules whose PHP defaults are a poor fit for Go:
     Go's own standard library.
   * UnusedCode/UnusedFormalParameter is dropped: unused parameters are routinely
     required to satisfy interfaces and standard signatures (e.g. http.HandlerFunc).
+  * Design/GlobalVariable is dropped: some package-level variables are idiomatic
+    in Go (sentinel errors, compiled regexps, registries).
 
-These three dropped rules are bundled in the opt-in `opinionated` ruleset for
-anyone who wants the stricter, more PHP-flavoured style. See opinionated.xml.
+These dropped rules are bundled in the opt-in `opinionated` ruleset for anyone
+who wants the stricter, more PHP-flavoured style. See opinionated.xml.
     </description>
 
     <rule ref="codesize"/>
@@ -49,5 +51,6 @@ anyone who wants the stricter, more PHP-flavoured style. See opinionated.xml.
     <rule ref="design">
         <exclude name="ExitExpression"/>
         <exclude name="CountInLoopExpression"/>
+        <exclude name="GlobalVariable"/>
     </rule>
 </ruleset>

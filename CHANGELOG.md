@@ -6,6 +6,11 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 
 ## [Unreleased]
 
+## [0.1.4] - 2026-06-05
+
+### Added
+- New `Design/GlobalVariable` rule (messgo-native, no PHPMD analog) that detects mutable package-level variables — global shared state that hurts testability and concurrency safety. It inspects only top-level declarations, so local variables are never flagged; constants and the blank identifier (`var _ = ...`) are ignored. Available via the `design` and `opinionated` rulesets; it is excluded from the default `go` ruleset because some package-level variables are idiomatic in Go (sentinel errors, compiled regexps, registries).
+
 ## [0.1.3] - 2026-06-05
 
 ### Added

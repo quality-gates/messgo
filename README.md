@@ -137,14 +137,14 @@ phpmd-format ruleset XML file.
 
 | Ruleset | What it checks |
 | :--- | :--- |
-| **`go`** | **Recommended default.** Pulls in all rulesets below, but tunes the rules whose PHP defaults misfire on idiomatic Go: drops `ShortVariable`, `Design/ExitExpression`, `Design/CountInLoopExpression`, `CleanCode/ElseExpression`, `CleanCode/BooleanArgumentFlag`, and `UnusedCode/UnusedFormalParameter`, and raises `LongVariable`'s maximum. On this codebase `go` reports ~19 findings versus ~441 at raw PHP defaults. |
+| **`go`** | **Recommended default.** Pulls in all rulesets below, but tunes the rules whose PHP defaults misfire on idiomatic Go: drops `ShortVariable`, `Design/ExitExpression`, `Design/CountInLoopExpression`, `Design/GlobalVariable`, `CleanCode/ElseExpression`, `CleanCode/BooleanArgumentFlag`, and `UnusedCode/UnusedFormalParameter`, and raises `LongVariable`'s maximum. On this codebase `go` reports ~19 findings versus ~441 at raw PHP defaults. |
 | `codesize` | CyclomaticComplexity, NPathComplexity, ExcessiveMethodLength, ExcessiveClassLength, ExcessiveParameterList, ExcessivePublicCount, TooManyFields, TooManyMethods, TooManyPublicMethods, ExcessiveClassComplexity |
 | `naming` | ShortClassName, LongClassName, ShortVariable, LongVariable, ShortMethodName, ConstantNamingConventions, BooleanGetMethodName, ConstructorWithNameAsEnclosingClass |
 | `unusedcode` | UnusedPrivateField, UnusedLocalVariable, UnusedPrivateMethod, UnusedFormalParameter |
 | `cleancode` | BooleanArgumentFlag, ElseExpression, IfStatementAssignment, DuplicatedArrayKey |
-| `design` | ExitExpression, GotoStatement, CountInLoopExpression, DevelopmentCodeFragment, EmptyCatchBlock, CouplingBetweenObjects |
+| `design` | ExitExpression, GotoStatement, CountInLoopExpression, DevelopmentCodeFragment, EmptyCatchBlock, CouplingBetweenObjects, GlobalVariable |
 | `controversial` | CamelCaseClassName, CamelCaseMethodName, CamelCasePropertyName, CamelCaseParameterName, CamelCaseVariableName |
-| `opinionated` | **Opt-in, not part of idiomatic Go.** Bundles the three rules the `go` ruleset deliberately drops because they fight Go conventions: `ElseExpression` (`else` is idiomatic), `BooleanArgumentFlag` (bool params fill Go's stdlib), and `UnusedFormalParameter` (unused params are required to satisfy interfaces and handler signatures). Run them if you want a stricter, more PHP-flavoured style. |
+| `opinionated` | **Opt-in, not part of idiomatic Go.** Bundles the rules the `go` ruleset deliberately drops because they fight Go conventions: `ElseExpression` (`else` is idiomatic), `BooleanArgumentFlag` (bool params fill Go's stdlib), `UnusedFormalParameter` (unused params are required to satisfy interfaces and handler signatures), and `GlobalVariable` (mutable package-level variables — though sentinel errors, compiled regexps, and registries are idiomatic). Run them if you want a stricter, more PHP-flavoured style. |
 
 Rules with a direct Go analog reproduce phpmd's behavior and message templates
 exactly; rules that are intrinsically PHP-specific are either adapted to the

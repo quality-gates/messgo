@@ -6,6 +6,14 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 
 ## [Unreleased]
 
+## [0.1.5] - 2026-06-05
+
+### Changed
+- `Design/GlobalVariable` is now **mutation-aware** and reports far less noise. By default it flags only package-level variables that are actually mutated (reassigned, incremented/decremented, written through via `g.f`/`g[k]`, or address-taken); effectively-constant globals such as sentinel errors, compiled regexps, and lookup tables are no longer reported. The new `report-immutable` property (default `false`) re-enables flagging read-only package-level variables.
+
+### Added
+- Cross-file (package-wide) analysis: messgo now groups a package's files before running rules, so `Design/GlobalVariable` correctly classifies a variable declared in one file but mutated in another. Added `util.MutatedGlobalNames` and a `MutatedGlobals` field on `model.File` populated by the runner.
+
 ## [0.1.4] - 2026-06-05
 
 ### Added

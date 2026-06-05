@@ -5,6 +5,8 @@
 package rules_test
 
 import (
+	"os"
+	"path/filepath"
 	"sort"
 	"testing"
 
@@ -181,25 +183,18 @@ loop:
 	)
 }
 
-// TestGlobalVariable pins down exactly which declarations the GlobalVariable
-// rule flags. It asserts on the set of reported variable names (not line
-// numbers), so it is robust to fixture layout while still being precise about
-// the edge cases: grouped blocks, multi-name specs, type-only vars, constants,
-// locals, and the blank identifier.
-func TestGlobalVariable(t *testing.T) {
-	src := `
-var GlobalCounter = 0
+// globalVarFixture exercises every classification the GlobalVariable rule must
+// make. The mutated vars are written in different ways (reassign, ++, element
+// write, address-of); the const-like vars are only ever read; constants, the
+// blank identifier, locals, params and shadowing must never be flagged.
+const globalVarFixture = `
+var counter = 0
+var registry = map[string]int{}
+var current *node
+var sink int
 
-var width, height int
-
-var (
-	enabled = true
-	name    string
-)
-
-var buffer []byte
-
-var _ = sideEffect()
+var ErrThing = mkErr()
+var table = []int{1, 2, 3}
 
 const MaxRetries = 3
 
@@ -208,22 +203,35 @@ const (
 	beta  = 2
 )
 
+var _ = setup()
+
 func work(n int) int {
-	var local = n
-	sum := local
-	const inner = 5
-	return sum + inner
+	counter++
+	registry["k"] = n
+	current = nil
+	p := &sink
+	local := table[0]
+	_ = p
+	return local + counter
 }
 
-func sideEffect() int { return 0 }
+type node struct{}
+
+func mkErr() error { return nil }
+func setup() int   { return 0 }
 `
-	f, err := model.ParseSource("fixture.go", []byte("package fixture\n"+src))
+
+// flaggedGlobals runs the GlobalVariable rule over the fixture with the given
+// ruleset and returns the set of variable names it reports.
+func flaggedGlobals(t *testing.T, rulesetID string) map[string]bool {
+	t.Helper()
+	f, err := model.ParseSource("fixture.go", []byte("package fixture\n"+globalVarFixture))
 	if err != nil {
 		t.Fatalf("parse: %v", err)
 	}
-	sets, err := (&ruleset.Loader{}).Load("design")
+	sets, err := (&ruleset.Loader{}).Load(rulesetID)
 	if err != nil {
-		t.Fatalf("load: %v", err)
+		t.Fatalf("load %q: %v", rulesetID, err)
 	}
 	got := map[string]bool{}
 	for _, v := range rule.Analyze(f, sets) {
@@ -231,22 +239,73 @@ func sideEffect() int { return 0 }
 			got[v.Args[0].(string)] = true
 		}
 	}
+	return got
+}
 
-	// Every package-level variable must be flagged, once per name.
-	want := []string{"GlobalCounter", "width", "height", "enabled", "name", "buffer"}
-	for _, w := range want {
+// neverFlagged are declarations that must not be reported under any setting:
+// constants, the blank identifier, locals, and a parameter.
+var neverFlagged = []string{"MaxRetries", "alpha", "beta", "_", "local", "p", "n"}
+
+// TestGlobalVariableDefaultFlagsOnlyMutated verifies the default behavior:
+// only package-level variables that are actually mutated are reported, so
+// effectively-constant globals (sentinel errors, lookup tables) stay quiet.
+func TestGlobalVariableDefaultFlagsOnlyMutated(t *testing.T) {
+	got := flaggedGlobals(t, "design")
+
+	// Mutated in various ways: reassigned, ++, element write, address taken.
+	wantMutated := []string{"counter", "registry", "current", "sink"}
+	for _, w := range wantMutated {
 		if !got[w] {
-			t.Errorf("GlobalVariable should flag package var %q; got %v", w, got)
+			t.Errorf("expected mutated global %q to be flagged; got %v", w, got)
 		}
 	}
-	// Constants, the blank identifier, and locals must never be flagged.
-	for _, bad := range []string{"MaxRetries", "alpha", "beta", "_", "local", "sum", "inner"} {
+	// Read-only globals must stay silent by default.
+	for _, immutable := range []string{"ErrThing", "table"} {
+		if got[immutable] {
+			t.Errorf("read-only global %q should not be flagged by default; got %v", immutable, got)
+		}
+	}
+	for _, bad := range neverFlagged {
 		if got[bad] {
-			t.Errorf("GlobalVariable wrongly flagged %q (constant/blank/local)", bad)
+			t.Errorf("non-global %q wrongly flagged; got %v", bad, got)
 		}
 	}
-	if len(got) != len(want) {
-		t.Errorf("GlobalVariable flagged %d names, want %d: %v", len(got), len(want), got)
+	if len(got) != len(wantMutated) {
+		t.Errorf("flagged %d globals, want %d: %v", len(got), len(wantMutated), got)
+	}
+}
+
+// TestGlobalVariableReportImmutable verifies that report-immutable=true also
+// surfaces read-only package-level variables, while still never flagging
+// constants, the blank identifier, or locals.
+func TestGlobalVariableReportImmutable(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "ruleset.xml")
+	xml := `<?xml version="1.0"?>
+<ruleset name="t">
+  <rule ref="design/GlobalVariable">
+    <properties><property name="report-immutable" value="true"/></properties>
+  </rule>
+</ruleset>`
+	if err := os.WriteFile(path, []byte(xml), 0o644); err != nil {
+		t.Fatalf("write ruleset: %v", err)
+	}
+
+	got := flaggedGlobals(t, path)
+
+	wantAll := []string{"counter", "registry", "current", "sink", "ErrThing", "table"}
+	for _, w := range wantAll {
+		if !got[w] {
+			t.Errorf("with report-immutable, expected %q to be flagged; got %v", w, got)
+		}
+	}
+	for _, bad := range neverFlagged {
+		if got[bad] {
+			t.Errorf("non-global %q wrongly flagged; got %v", bad, got)
+		}
+	}
+	if len(got) != len(wantAll) {
+		t.Errorf("flagged %d globals, want %d: %v", len(got), len(wantAll), got)
 	}
 }
 

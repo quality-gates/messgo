@@ -26,15 +26,49 @@ func init() {
 // ----- GlobalVariable -----------------------------------------------------
 //
 // Flags mutable package-level variables (top-level `var` declarations). Global
-// mutable state hurts testability and is unsafe under concurrency. Only the
-// file's top-level declarations are inspected, so local variables inside
-// functions are never flagged; constants (`const`) are not variables and are
-// likewise ignored. The blank identifier (`var _ = ...`, a common compile-time
-// assertion idiom) is skipped.
+// mutable state hurts testability and is unsafe under concurrency.
+//
+// By default only variables that are actually mutated somewhere in the package
+// are reported — reassigned, incremented/decremented, written through
+// (`g.f = x`, `g[k] = v`), or having their address taken. Package-level
+// variables that are only ever read after initialization (sentinel errors,
+// compiled regexps, lookup tables) are effectively constant and stay silent, so
+// the genuinely risky shared state is not drowned out. Set the `report-immutable`
+// property to also flag those read-only globals.
+//
+// Mutation analysis is package-wide: a variable declared in one file but
+// reassigned in another is correctly reported. Only the file's top-level
+// declarations are inspected for what to report, so locals are never flagged;
+// constants and the blank identifier (`var _ = ...`) are ignored.
 type GlobalVariable struct{ *rule.Base }
 
 func (r *GlobalVariable) ApplyFile(c *rule.Context) {
-	for _, decl := range c.File.Syntax.Decls {
+	mutated := c.File.MutatedGlobals
+	if mutated == nil {
+		// Analyzed in isolation (e.g. a single file): fall back to scanning
+		// just this file for mutations.
+		mutated = util.MutatedGlobalNames([]*ast.File{c.File.Syntax})
+	}
+	reportImmutable := c.Props().Bool("report-immutable", false)
+	for _, g := range packageVars(c.File.Syntax) {
+		if mutated[g.name] || reportImmutable {
+			line := c.File.Fset.Position(g.pos).Line
+			c.Report(line, line, g.name)
+		}
+	}
+}
+
+type pkgVar struct {
+	name string
+	pos  token.Pos
+}
+
+// packageVars returns every package-level variable declared in the file (one
+// entry per name), skipping the blank identifier. Constants and locals are not
+// package-level vars and are excluded by construction.
+func packageVars(f *ast.File) []pkgVar {
+	var out []pkgVar
+	for _, decl := range f.Decls {
 		gd, ok := decl.(*ast.GenDecl)
 		if !ok || gd.Tok != token.VAR {
 			continue
@@ -45,14 +79,13 @@ func (r *GlobalVariable) ApplyFile(c *rule.Context) {
 				continue
 			}
 			for _, name := range vs.Names {
-				if name.Name == "_" {
-					continue
+				if name.Name != "_" {
+					out = append(out, pkgVar{name.Name, name.Pos()})
 				}
-				line := c.File.Fset.Position(name.Pos()).Line
-				c.Report(line, line, name.Name)
 			}
 		}
 	}
+	return out
 }
 
 // ----- ExitExpression -----------------------------------------------------

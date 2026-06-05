@@ -34,6 +34,12 @@ type File struct {
 	Functions  []*Function
 	// AllFuncs includes both free functions and methods, in source order.
 	AllFuncs []*Function
+	// MutatedGlobals holds the package-level variable names that are mutated
+	// anywhere in this file's package. It is populated by the runner once all
+	// of a package's files are parsed, enabling cross-file analysis. It is nil
+	// when a file is analyzed in isolation (rules then fall back to single-file
+	// analysis).
+	MutatedGlobals map[string]bool
 }
 
 // Parameter is a formal parameter of a function or method.

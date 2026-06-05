@@ -298,18 +298,30 @@ A messgo-native rule (no PHPMD analog). Mutable package-level variables are
 global shared state: they make functions harder to test in isolation, hide
 dependencies, and are unsafe to read and write concurrently. Prefer passing
 values explicitly, using constants for fixed data, or encapsulating state in a
-struct. Note that some package-level variables are idiomatic in Go (sentinel
-errors, compiled regexps, registries), which is why this rule is not part of
-the default `go` ruleset.
+struct.
+
+By default the rule reports only variables that are actually mutated somewhere
+in the package (reassigned, incremented, written through, or address-taken).
+The analysis is package-wide, so a variable declared in one file but mutated in
+another is still reported. Read-only package-level variables — sentinel errors,
+compiled regexps, lookup tables — are effectively constant and stay silent so
+the risky state is not drowned out. Set report-immutable=true to also flag
+those. Note that some package-level variables are idiomatic in Go, which is why
+this rule is not part of the default `go` ruleset.
             ]]>
         </description>
         <priority>2</priority>
-        <properties />
+        <properties>
+            <property name="report-immutable" value="false"
+                      description="Also report package-level variables that are never mutated (effectively constant)." />
+        </properties>
         <example>
             <![CDATA[
 package config
 
-var Timeout = 30 // mutable global; prefer a constant or explicit parameter
+var counter = 0 // reported: reassigned elsewhere in the package
+
+func tick() { counter++ }
             ]]>
         </example>
     </rule>

@@ -73,6 +73,30 @@ func TestGoRulesetExcludesAndOverrides(t *testing.T) {
 	}
 }
 
+func TestOverlappingRulesetsDedupe(t *testing.T) {
+	// "go" already imports "codesize", so "go,codesize" must not run any
+	// rule twice (which previously emitted every codesize violation twice).
+	sets, err := (&Loader{}).Load("go,codesize")
+	if err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	counts := map[string]int{}
+	for _, set := range sets {
+		for _, r := range set.Rules {
+			counts[r.Name()]++
+		}
+	}
+	for name, n := range counts {
+		if n != 1 {
+			t.Errorf("rule %s appears %d times across rulesets, want 1", name, n)
+		}
+	}
+	// codesize rules must still be present (dedupe keeps the first copy).
+	if counts["CyclomaticComplexity"] != 1 {
+		t.Errorf("CyclomaticComplexity present %d times, want 1", counts["CyclomaticComplexity"])
+	}
+}
+
 func TestMessageTemplatePreserved(t *testing.T) {
 	set := loadOne(t, "codesize")
 	r := ruleByName(set, "CyclomaticComplexity")

@@ -6,6 +6,14 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 
 ## [Unreleased]
 
+## [0.1.3] - 2026-06-05
+
+### Added
+- New opt-in `opinionated` ruleset that bundles the checks deliberately excluded from the default `go` ruleset for conflicting with idiomatic Go: `ElseExpression`, `BooleanArgumentFlag`, and `UnusedFormalParameter`. Run it explicitly (`messgo ./... text opinionated`, or `go,opinionated` to combine) for a stricter, more PHP-flavoured style.
+
+### Changed
+- The default `go` ruleset no longer enables `CleanCode/ElseExpression` (`else` is idiomatic in Go), `CleanCode/BooleanArgumentFlag` (boolean parameters are common in Go's standard library), or `UnusedCode/UnusedFormalParameter` (unused parameters are routinely required to satisfy interfaces and standard signatures such as `http.HandlerFunc`). These rules remain available via their original rulesets and the new `opinionated` ruleset.
+
 ## [0.1.2] - 2026-06-05
 
 ### Fixed

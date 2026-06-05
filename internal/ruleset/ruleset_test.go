@@ -97,6 +97,29 @@ func TestOverlappingRulesetsDedupe(t *testing.T) {
 	}
 }
 
+func TestOpinionatedRulesNotInDefaultGo(t *testing.T) {
+	// These rules conflict with idiomatic Go and live only in the opt-in
+	// "opinionated" ruleset, not the default "go" ruleset.
+	moved := []string{"ElseExpression", "BooleanArgumentFlag", "UnusedFormalParameter"}
+
+	goSet := loadOne(t, "go")
+	for _, name := range moved {
+		if ruleByName(goSet, name) != nil {
+			t.Errorf("go ruleset should not include %s (it is opinionated, not idiomatic Go)", name)
+		}
+	}
+
+	opinionated := loadOne(t, "opinionated")
+	for _, name := range moved {
+		if ruleByName(opinionated, name) == nil {
+			t.Errorf("opinionated ruleset should include %s", name)
+		}
+	}
+	if got := len(opinionated.Rules); got != len(moved) {
+		t.Errorf("opinionated ruleset has %d rules, want %d", got, len(moved))
+	}
+}
+
 func TestMessageTemplatePreserved(t *testing.T) {
 	set := loadOne(t, "codesize")
 	r := ruleByName(set, "CyclomaticComplexity")

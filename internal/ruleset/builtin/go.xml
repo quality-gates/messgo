@@ -16,11 +16,24 @@ ruleset, but quiets a few rules whose PHP defaults are a poor fit for Go:
   * Design/ExitExpression is dropped because os.Exit in main() is idiomatic.
   * Design/CountInLoopExpression is dropped because len() on a Go slice is
     O(1), unlike PHP's count().
+  * CleanCode/ElseExpression is dropped: `else` is idiomatic in Go.
+  * CleanCode/BooleanArgumentFlag is dropped: boolean parameters are common in
+    Go's own standard library.
+  * UnusedCode/UnusedFormalParameter is dropped: unused parameters are routinely
+    required to satisfy interfaces and standard signatures (e.g. http.HandlerFunc).
+
+These three dropped rules are bundled in the opt-in `opinionated` ruleset for
+anyone who wants the stricter, more PHP-flavoured style. See opinionated.xml.
     </description>
 
     <rule ref="codesize"/>
-    <rule ref="unusedcode"/>
-    <rule ref="cleancode"/>
+    <rule ref="unusedcode">
+        <exclude name="UnusedFormalParameter"/>
+    </rule>
+    <rule ref="cleancode">
+        <exclude name="ElseExpression"/>
+        <exclude name="BooleanArgumentFlag"/>
+    </rule>
     <rule ref="controversial"/>
 
     <rule ref="naming">

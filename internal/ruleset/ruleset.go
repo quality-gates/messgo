@@ -35,11 +35,12 @@ var builtinNames = map[string]string{
 	"naming":        "builtin/naming.xml",
 	"unusedcode":    "builtin/unusedcode.xml",
 	"go":            "builtin/go.xml",
+	"opinionated":   "builtin/opinionated.xml",
 }
 
 // BuiltinNames returns the sorted list of built-in ruleset identifiers.
 func BuiltinNames() []string {
-	return []string{"cleancode", "codesize", "controversial", "design", "go", "naming", "unusedcode"}
+	return []string{"cleancode", "codesize", "controversial", "design", "go", "naming", "opinionated", "unusedcode"}
 }
 
 // xml structures -----------------------------------------------------------

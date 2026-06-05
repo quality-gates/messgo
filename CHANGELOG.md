@@ -6,6 +6,9 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 
 ## [Unreleased]
 
+### Added
+- Unit tests for the previously untested `internal/model` parser, covering package/class/interface/field/embed extraction, free-function vs. method classification (receiver, receiver name, owning class, `AllFuncs`), interface method signatures, parse-error handling, and `exprString` type rendering. Raises the package from 0% to ~78% statement coverage. No production code changes.
+
 ## [0.1.7] - 2026-06-05
 
 ### Changed

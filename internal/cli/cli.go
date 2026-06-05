@@ -22,7 +22,7 @@ const (
 	ExitViolation = 2
 )
 
-const version = "0.1.5"
+const version = "0.1.6"
 
 type options struct {
 	paths            string
@@ -33,12 +33,20 @@ type options struct {
 	reportFile       string
 	suffixes         string
 	exclude          string
+	ruleFilter       ruleFilter
 	strict           bool
 	color            bool
 	verbose          bool
 	ignoreErrors     bool
 	ignoreViolations bool
 	ignoreTests      bool
+}
+
+// ruleFilter selects a subset of rules by name: --enable/--only (whitelist)
+// and --disable (blacklist), each a comma-separated list.
+type ruleFilter struct {
+	enable  string
+	disable string
 }
 
 // Main runs the CLI and returns a process exit code.
@@ -76,6 +84,7 @@ func run(opt options, stdout, stderr io.Writer) int {
 		fmt.Fprintln(stderr, "error:", err)
 		return ExitError
 	}
+	ruleset.FilterRules(sets, splitList(opt.ruleFilter.enable), splitList(opt.ruleFilter.disable))
 	rep, err := runner.Run(runner.Options{
 		Paths:       splitList(opt.paths),
 		RuleSets:    sets,
@@ -122,6 +131,9 @@ func parseArgs(args []string) (options, []string, error) {
 		"--reportfile": &opt.reportFile,
 		"--suffixes":   &opt.suffixes,
 		"--exclude":    &opt.exclude,
+		"--enable":     &opt.ruleFilter.enable,
+		"--only":       &opt.ruleFilter.enable, // alias for --enable
+		"--disable":    &opt.ruleFilter.disable,
 	}
 	intFlags := map[string]*int{
 		"--minimumpriority": &opt.minPriority,
@@ -255,6 +267,8 @@ Options:
   --reportfile <file>            Write the report to a file.
   --suffixes <list>              File extensions to scan (default: go).
   --exclude <list>               Path substrings to exclude.
+  --enable, --only <list>        Run only these rules (comma-separated names).
+  --disable <list>               Skip these rules (comma-separated names).
   --ignore-tests                 Skip *_test.go files.
   --strict                       Also report suppressed violations.
   --color                        Colorize text output.

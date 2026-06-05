@@ -84,6 +84,54 @@ func TestJSONFormat(t *testing.T) {
 	}
 }
 
+// twoViolationFixture trips both ExcessiveParameterList (codesize) and
+// ElseExpression (cleancode).
+const twoViolationFixture = "package p\n" +
+	"func f(a, b, c, d, e, f2, g, h, i, j, k int) int {\n" +
+	"\tif a > 0 {\n\t\treturn 1\n\t} else {\n\t\treturn 2\n\t}\n}\n"
+
+func TestEnableOnlySubset(t *testing.T) {
+	path := writeFixture(t, twoViolationFixture)
+	for _, flag := range []string{"--only", "--enable"} {
+		code, out, _ := runMain(t, path, "text", "codesize,cleancode", flag, "ExcessiveParameterList")
+		if code != ExitViolation {
+			t.Fatalf("%s: exit = %d, want %d", flag, code, ExitViolation)
+		}
+		if !strings.Contains(out, "ExcessiveParameterList") {
+			t.Errorf("%s: expected ExcessiveParameterList in output: %q", flag, out)
+		}
+		if strings.Contains(out, "ElseExpression") {
+			t.Errorf("%s: ElseExpression should be filtered out: %q", flag, out)
+		}
+	}
+}
+
+func TestDisableRule(t *testing.T) {
+	path := writeFixture(t, twoViolationFixture)
+	code, out, _ := runMain(t, path, "text", "codesize,cleancode", "--disable", "ElseExpression")
+	if code != ExitViolation {
+		t.Fatalf("exit = %d, want %d", code, ExitViolation)
+	}
+	if strings.Contains(out, "ElseExpression") {
+		t.Errorf("disabled rule still present: %q", out)
+	}
+	if !strings.Contains(out, "ExcessiveParameterList") {
+		t.Errorf("non-disabled rule missing: %q", out)
+	}
+}
+
+func TestEnableMultipleCommaSeparated(t *testing.T) {
+	path := writeFixture(t, twoViolationFixture)
+	code, out, _ := runMain(t, path, "text", "codesize,cleancode",
+		"--only", "ExcessiveParameterList,ElseExpression")
+	if code != ExitViolation {
+		t.Fatalf("exit = %d, want %d", code, ExitViolation)
+	}
+	if !strings.Contains(out, "ExcessiveParameterList") || !strings.Contains(out, "ElseExpression") {
+		t.Errorf("both enabled rules should appear: %q", out)
+	}
+}
+
 func TestMinimumPriorityFilter(t *testing.T) {
 	// codesize rules are priority 3; --minimumpriority 2 keeps only prio<=2,
 	// so nothing should fire.

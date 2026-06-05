@@ -6,6 +6,11 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 
 ## [Unreleased]
 
+## [0.1.6] - 2026-06-05
+
+### Added
+- `--enable` / `--only` and `--disable` CLI flags to run a subset of individual rules by name (comma-separated), filtered within the loaded ruleset(s). `--only` keeps just the listed rules; `--disable` drops them; the two can be combined (whitelist, then subtract). Example: `messgo ./... text codesize,design --only CyclomaticComplexity,GlobalVariable`.
+
 ## [0.1.5] - 2026-06-05
 
 ### Changed

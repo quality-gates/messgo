@@ -6,6 +6,11 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 
 ## [Unreleased]
 
+## [0.1.2] - 2026-06-05
+
+### Fixed
+- Fixed duplicate violations when overlapping rulesets were requested (e.g. `go,codesize`, where the `go` ruleset already imports `codesize`). Rules are now deduplicated by name across rulesets, keeping the first occurrence, so each violation is reported once.
+
 ## [0.1.1] - 2026-06-05
 
 ### Fixed

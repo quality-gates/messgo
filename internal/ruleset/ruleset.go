@@ -110,7 +110,29 @@ func (l *Loader) Load(spec string) ([]*rule.RuleSet, error) {
 		}
 		sets = append(sets, set)
 	}
+	dedupeRules(sets)
 	return sets, nil
+}
+
+// dedupeRules drops rules whose name has already appeared in an earlier set,
+// so overlapping ruleset specs (e.g. "go,codesize", where "go" already
+// imports "codesize") do not run the same rule twice and emit duplicate
+// violations. The first occurrence wins, preserving any tuning the earlier
+// ruleset applied.
+func dedupeRules(sets []*rule.RuleSet) {
+	seen := map[string]bool{}
+	for _, set := range sets {
+		kept := set.Rules[:0]
+		for _, r := range set.Rules {
+			name := rule.BaseOf(r).RuleName
+			if seen[name] {
+				continue
+			}
+			seen[name] = true
+			kept = append(kept, r)
+		}
+		set.Rules = kept
+	}
 }
 
 func (l *Loader) read(part string) ([]byte, string, error) {

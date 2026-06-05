@@ -6,6 +6,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 
 ## [Unreleased]
 
+## [0.1.7] - 2026-06-05
+
 ### Changed
 - `RenderMessage` and `CompileRegex` now reuse package-level compiled regexps instead of recompiling on every call. `RenderMessage` runs once per reported violation, so this removes a per-violation regex compilation from the hot path. Behaviour is unchanged.
 

@@ -9,7 +9,7 @@ import (
 )
 
 // Version is the messgo version reported in machine-readable output.
-const Version = "1.0.0"
+const Version = "0.1.1"
 
 // ProcessingError is a file that could not be parsed.
 type ProcessingError struct {

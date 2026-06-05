@@ -55,6 +55,7 @@ Follow these steps in order when landing a change:
 - Exit codes match phpmd exactly (0 success, 1 error, 2 violations).
 - **Edit files one at a time using Read then Edit.** Avoid bulk string-replacement tools across multiple directories.
 - Keep complexity metrics (Cyclomatic Complexity, NPath) of messgo's own functions below their configured limits.
+- **Git worktrees go in `.worktrees/`** (gitignored). Create new worktrees there, e.g. `git worktree add .worktrees/my-feature`.
 
 ## Testing posture
 

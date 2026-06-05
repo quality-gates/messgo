@@ -115,6 +115,45 @@ func (l *Loader) Load(spec string) ([]*rule.RuleSet, error) {
 	return sets, nil
 }
 
+// FilterRules narrows the loaded rule sets by rule name, in place. When enable
+// is non-empty, only rules whose name appears in it are kept (a whitelist —
+// the CLI's --enable/--only). Any rule whose name appears in disable is then
+// removed (a blacklist — the CLI's --disable). Names are matched exactly and
+// case-sensitively; names that match no loaded rule are simply ignored. An
+// empty enable list means "keep everything" before disable is applied.
+func FilterRules(sets []*rule.RuleSet, enable, disable []string) {
+	if len(enable) == 0 && len(disable) == 0 {
+		return
+	}
+	enabled := toSet(enable)
+	disabled := toSet(disable)
+	for _, set := range sets {
+		kept := set.Rules[:0]
+		for _, r := range set.Rules {
+			name := r.Name()
+			if len(enabled) > 0 && !enabled[name] {
+				continue
+			}
+			if disabled[name] {
+				continue
+			}
+			kept = append(kept, r)
+		}
+		set.Rules = kept
+	}
+}
+
+func toSet(names []string) map[string]bool {
+	if len(names) == 0 {
+		return nil
+	}
+	set := make(map[string]bool, len(names))
+	for _, n := range names {
+		set[n] = true
+	}
+	return set
+}
+
 // dedupeRules drops rules whose name has already appeared in an earlier set,
 // so overlapping ruleset specs (e.g. "go,codesize", where "go" already
 // imports "codesize") do not run the same rule twice and emit duplicate

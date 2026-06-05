@@ -110,7 +110,16 @@ step fails the job automatically — no extra scripting needed.
 messgo ./... text codesize                                   # one ruleset, all packages
 messgo ./internal,./cmd json naming,unusedcode               # multiple paths and rulesets
 messgo main.go xml codesize,design,cleancode --minimumpriority 2
+messgo ./... text codesize,design --only CyclomaticComplexity,GlobalVariable  # just these rules
+messgo ./... text go --disable LongVariable                  # everything in go except one rule
 ```
+
+`--only` (alias `--enable`) and `--disable` filter by **rule name** within the
+ruleset(s) you load. `--only` keeps just the listed rules; `--disable` drops
+them; combine them to whitelist-then-subtract. Rule names are the ones shown in
+output (e.g. `CyclomaticComplexity`, `ElseExpression`). Note `--only` selects
+from rules already in the chosen ruleset — it won't pull in a rule the ruleset
+doesn't include.
 
 ### Options
 
@@ -121,6 +130,8 @@ messgo main.go xml codesize,design,cleancode --minimumpriority 2
 | `--reportfile <file>` | Write the report to a file instead of stdout. |
 | `--suffixes <list>` | File extensions to scan (default: `go`). |
 | `--exclude <list>` | Path substrings to exclude. |
+| `--enable`, `--only <list>` | Run **only** these rules (comma-separated rule names), selected from the loaded ruleset(s). |
+| `--disable <list>` | Skip these rules (comma-separated rule names). |
 | `--ignore-tests` | Skip `*_test.go` files. |
 | `--strict` | Also report suppressed violations. |
 | `--color` | Colorize text output. |

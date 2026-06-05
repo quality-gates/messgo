@@ -120,6 +120,75 @@ func TestOpinionatedRulesNotInDefaultGo(t *testing.T) {
 	}
 }
 
+func ruleNames(sets []*rule.RuleSet) map[string]bool {
+	names := map[string]bool{}
+	for _, set := range sets {
+		for _, r := range set.Rules {
+			names[r.Name()] = true
+		}
+	}
+	return names
+}
+
+func TestFilterRules(t *testing.T) {
+	load := func(t *testing.T) []*rule.RuleSet {
+		sets, err := (&Loader{}).Load("codesize")
+		if err != nil {
+			t.Fatalf("load: %v", err)
+		}
+		return sets
+	}
+
+	t.Run("enable keeps only the whitelist", func(t *testing.T) {
+		sets := load(t)
+		FilterRules(sets, []string{"CyclomaticComplexity", "NPathComplexity"}, nil)
+		got := ruleNames(sets)
+		if len(got) != 2 || !got["CyclomaticComplexity"] || !got["NPathComplexity"] {
+			t.Errorf("enable filter = %v, want only the two named rules", got)
+		}
+	})
+
+	t.Run("disable removes the blacklist", func(t *testing.T) {
+		sets := load(t)
+		before := len(ruleNames(sets))
+		FilterRules(sets, nil, []string{"CyclomaticComplexity"})
+		got := ruleNames(sets)
+		if got["CyclomaticComplexity"] {
+			t.Error("disabled rule still present")
+		}
+		if len(got) != before-1 {
+			t.Errorf("disable removed %d rules, want 1", before-len(got))
+		}
+	})
+
+	t.Run("enable then disable", func(t *testing.T) {
+		sets := load(t)
+		FilterRules(sets, []string{"CyclomaticComplexity", "NPathComplexity"}, []string{"NPathComplexity"})
+		got := ruleNames(sets)
+		if len(got) != 1 || !got["CyclomaticComplexity"] {
+			t.Errorf("enable+disable = %v, want only CyclomaticComplexity", got)
+		}
+	})
+
+	t.Run("unknown names are ignored", func(t *testing.T) {
+		sets := load(t)
+		before := len(ruleNames(sets))
+		FilterRules(sets, nil, []string{"NoSuchRule"})
+		if got := len(ruleNames(sets)); got != before {
+			t.Errorf("unknown disable changed rule count: %d -> %d", before, got)
+		}
+	})
+
+	t.Run("empty filters are a no-op", func(t *testing.T) {
+		sets := load(t)
+		before := len(ruleNames(sets))
+		FilterRules(sets, nil, nil)
+		if got := len(ruleNames(sets)); got != before {
+			t.Errorf("no-op filter changed rule count: %d -> %d", before, got)
+		}
+	})
+}
+
 func TestMessageTemplatePreserved(t *testing.T) {
 	set := loadOne(t, "codesize")
 	r := ruleByName(set, "CyclomaticComplexity")

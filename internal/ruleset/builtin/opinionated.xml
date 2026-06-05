@@ -24,6 +24,10 @@ not part of "idiomatic Go":
     are routinely kept to satisfy an interface, an http.HandlerFunc signature,
     sort.Interface, or a callback shape — the compiler deliberately allows
     unused parameters for exactly this reason.
+  * Design/GlobalVariable flags mutable package-level variables. Global mutable
+    state hurts testability and concurrency safety, but some package-level
+    variables are idiomatic in Go (sentinel errors, compiled regexps,
+    registries), so this is left out of the default `go` ruleset.
 
 Run with:  messgo &lt;paths&gt; &lt;format&gt; opinionated
 Or combine: messgo &lt;paths&gt; &lt;format&gt; go,opinionated
@@ -32,4 +36,5 @@ Or combine: messgo &lt;paths&gt; &lt;format&gt; go,opinionated
     <rule ref="cleancode/ElseExpression"/>
     <rule ref="cleancode/BooleanArgumentFlag"/>
     <rule ref="unusedcode/UnusedFormalParameter"/>
+    <rule ref="design/GlobalVariable"/>
 </ruleset>

@@ -181,6 +181,75 @@ loop:
 	)
 }
 
+// TestGlobalVariable pins down exactly which declarations the GlobalVariable
+// rule flags. It asserts on the set of reported variable names (not line
+// numbers), so it is robust to fixture layout while still being precise about
+// the edge cases: grouped blocks, multi-name specs, type-only vars, constants,
+// locals, and the blank identifier.
+func TestGlobalVariable(t *testing.T) {
+	src := `
+var GlobalCounter = 0
+
+var width, height int
+
+var (
+	enabled = true
+	name    string
+)
+
+var buffer []byte
+
+var _ = sideEffect()
+
+const MaxRetries = 3
+
+const (
+	alpha = 1
+	beta  = 2
+)
+
+func work(n int) int {
+	var local = n
+	sum := local
+	const inner = 5
+	return sum + inner
+}
+
+func sideEffect() int { return 0 }
+`
+	f, err := model.ParseSource("fixture.go", []byte("package fixture\n"+src))
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+	sets, err := (&ruleset.Loader{}).Load("design")
+	if err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	got := map[string]bool{}
+	for _, v := range rule.Analyze(f, sets) {
+		if v.Rule.Name() == "GlobalVariable" {
+			got[v.Args[0].(string)] = true
+		}
+	}
+
+	// Every package-level variable must be flagged, once per name.
+	want := []string{"GlobalCounter", "width", "height", "enabled", "name", "buffer"}
+	for _, w := range want {
+		if !got[w] {
+			t.Errorf("GlobalVariable should flag package var %q; got %v", w, got)
+		}
+	}
+	// Constants, the blank identifier, and locals must never be flagged.
+	for _, bad := range []string{"MaxRetries", "alpha", "beta", "_", "local", "sum", "inner"} {
+		if got[bad] {
+			t.Errorf("GlobalVariable wrongly flagged %q (constant/blank/local)", bad)
+		}
+	}
+	if len(got) != len(want) {
+		t.Errorf("GlobalVariable flagged %d names, want %d: %v", len(got), len(want), got)
+	}
+}
+
 func TestCleanCode(t *testing.T) {
 	src := `
 func process(enable bool) {

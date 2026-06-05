@@ -100,7 +100,7 @@ func TestOverlappingRulesetsDedupe(t *testing.T) {
 func TestOpinionatedRulesNotInDefaultGo(t *testing.T) {
 	// These rules conflict with idiomatic Go and live only in the opt-in
 	// "opinionated" ruleset, not the default "go" ruleset.
-	moved := []string{"ElseExpression", "BooleanArgumentFlag", "UnusedFormalParameter"}
+	moved := []string{"ElseExpression", "BooleanArgumentFlag", "UnusedFormalParameter", "GlobalVariable"}
 
 	goSet := loadOne(t, "go")
 	for _, name := range moved {

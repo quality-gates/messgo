@@ -286,4 +286,31 @@ class Foo {
             ]]>
         </example>
     </rule>
+
+    <rule name="GlobalVariable"
+          since="0.1.4"
+          message="Avoid using the mutable global variable {0}."
+          class="PHPMD\Rule\Design\GlobalVariable"
+          externalInfoUrl="https://github.com/quality-gates/messgo">
+        <description>
+            <![CDATA[
+A messgo-native rule (no PHPMD analog). Mutable package-level variables are
+global shared state: they make functions harder to test in isolation, hide
+dependencies, and are unsafe to read and write concurrently. Prefer passing
+values explicitly, using constants for fixed data, or encapsulating state in a
+struct. Note that some package-level variables are idiomatic in Go (sentinel
+errors, compiled regexps, registries), which is why this rule is not part of
+the default `go` ruleset.
+            ]]>
+        </description>
+        <priority>2</priority>
+        <properties />
+        <example>
+            <![CDATA[
+package config
+
+var Timeout = 30 // mutable global; prefer a constant or explicit parameter
+            ]]>
+        </example>
+    </rule>
 </ruleset>

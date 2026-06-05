@@ -177,11 +177,17 @@ type FileRule interface {
 	ApplyFile(c *Context)
 }
 
+// placeholderRe matches {0}, {1}, ... message placeholders. Compiled once at
+// package load because RenderMessage runs for every reported violation.
+var placeholderRe = regexp.MustCompile(`\{(\d+)\}`)
+
+// phpmdRegexRe matches PHPMD's delimited "(pattern)flags" property encoding.
+var phpmdRegexRe = regexp.MustCompile(`^\((.*)\)([imsxu]*)$`)
+
 // RenderMessage substitutes {0}, {1}, ... placeholders in a PHPMD message
 // template with the provided args.
 func RenderMessage(tmpl string, args []any) string {
-	re := regexp.MustCompile(`\{(\d+)\}`)
-	return re.ReplaceAllStringFunc(tmpl, func(m string) string {
+	return placeholderRe.ReplaceAllStringFunc(tmpl, func(m string) string {
 		idx, _ := strconv.Atoi(m[1 : len(m)-1])
 		if idx >= 0 && idx < len(args) {
 			return toStr(args[idx])
@@ -229,7 +235,7 @@ func CompileRegex(pat string) *regexp.Regexp {
 	// PHPMD encodes regexes as a delimited pattern plus trailing flags, e.g.
 	// "(^(set|get|is|has|with))i". Translate to Go's (?i) inline-flag form.
 	body, flags := pat, ""
-	if m := regexp.MustCompile(`^\((.*)\)([imsxu]*)$`).FindStringSubmatch(pat); m != nil {
+	if m := phpmdRegexRe.FindStringSubmatch(pat); m != nil {
 		body, flags = m[1], strings.ReplaceAll(m[2], "u", "")
 	}
 	if flags != "" {

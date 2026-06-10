@@ -309,6 +309,160 @@ func TestGlobalVariableReportImmutable(t *testing.T) {
 	}
 }
 
+// lcomViolations runs the given ruleset over a fixture and returns the
+// LackOfCohesionOfMethods violations, keyed by class name with the reported
+// LCOM4 value, so tests assert on behavior (which classes fire, with what
+// value) rather than line numbers.
+func lcomViolations(t *testing.T, src, rulesetID string) map[string]int {
+	t.Helper()
+	f, err := model.ParseSource("fixture.go", []byte("package fixture\n"+src))
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+	sets, err := (&ruleset.Loader{}).Load(rulesetID)
+	if err != nil {
+		t.Fatalf("load %q: %v", rulesetID, err)
+	}
+	got := map[string]int{}
+	for _, v := range rule.Analyze(f, sets) {
+		if v.Rule.Name() == "LackOfCohesionOfMethods" {
+			got[v.Args[0].(string)] = v.Args[1].(int)
+		}
+	}
+	return got
+}
+
+// lcomDisjointFixture is the canonical LCOM4 violation: two clusters of
+// methods that each work on their own field and never touch the other's.
+const lcomDisjointFixture = `
+type server struct {
+	conns map[string]int
+	stats map[string]int
+}
+
+func (s *server) accept(addr string) { s.conns[addr] = 1 }
+
+func (s *server) closeAll() int {
+	total := 0
+	for range s.conns {
+		total++
+	}
+	return total
+}
+
+func (s *server) record(k string) { s.stats[k]++ }
+
+func (s *server) snapshot() int {
+	n := 0
+	for _, v := range s.stats {
+		n += v
+	}
+	return n
+}
+`
+
+func TestLackOfCohesionFlagsDisjointMethodGroups(t *testing.T) {
+	got := lcomViolations(t, lcomDisjointFixture, "design")
+	if got["server"] != 2 {
+		t.Errorf("expected server to be flagged with LCOM4 = 2; got %v", got)
+	}
+	// The rule is part of the default go ruleset too.
+	hits := analyze(t, lcomDisjointFixture, "go")
+	mustHave(t, hits, "LackOfCohesionOfMethods")
+}
+
+// TestLackOfCohesionCohesiveClass verifies the no-fire cases: a class whose
+// disjoint field groups are bridged by a method using both, a class bridged by
+// an intra-class call, and a class with a single communicating method.
+func TestLackOfCohesionCohesiveClass(t *testing.T) {
+	src := lcomDisjointFixture + `
+func (s *server) report() int { return len(s.conns) + s.snapshot() }
+
+type queue struct {
+	items []int
+	limit int
+}
+
+func (q *queue) push(v int) {
+	q.items = append(q.items, v)
+}
+
+func (q *queue) full() bool { return len(q.items) >= q.limit }
+
+func (q *queue) setLimit(l int) { q.limit = l + 0 }
+
+type single struct{ x int }
+
+func (s *single) double() int { return s.x * 2 }
+`
+	hits := analyze(t, src, "design")
+	mustNotHave(t, hits, "LackOfCohesionOfMethods")
+}
+
+// TestLackOfCohesionIgnoresDataCarriers verifies that trivial getters/setters
+// and stateless helpers are not counted: a plain data carrier must not score
+// LCOM4 = number of fields.
+func TestLackOfCohesionIgnoresDataCarriers(t *testing.T) {
+	src := `
+type config struct {
+	host string
+	port int
+	tls  bool
+}
+
+func (c *config) Host() string     { return c.host }
+func (c *config) SetHost(h string) { c.host = h }
+func (c *config) Port() int        { return c.port }
+func (c *config) SetPort(p int)    { c.port = p }
+func (c *config) TLS() bool        { return c.tls }
+func (c *config) fresh() *config   { return &config{} }
+`
+	hits := analyze(t, src, "design")
+	mustNotHave(t, hits, "LackOfCohesionOfMethods")
+}
+
+// TestLackOfCohesionAccessorCallCountsAsFieldUse: a method reaching a field
+// only through that field's getter still joins the field's group, so the
+// class below is one connected component, not two.
+func TestLackOfCohesionAccessorCallCountsAsFieldUse(t *testing.T) {
+	src := `
+type meter struct {
+	count int
+	limit int
+}
+
+func (m *meter) Count() int { return m.count }
+
+func (m *meter) bump(n int) { m.count += n }
+
+func (m *meter) over() bool { return m.Count() > m.limit }
+
+func (m *meter) widen(l int) { m.limit = l * 2 }
+`
+	hits := analyze(t, src, "design")
+	mustNotHave(t, hits, "LackOfCohesionOfMethods")
+}
+
+// TestLackOfCohesionMaximumProperty verifies the threshold is configurable:
+// with maximum=2 the two-group fixture is acceptable.
+func TestLackOfCohesionMaximumProperty(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "ruleset.xml")
+	xml := `<?xml version="1.0"?>
+<ruleset name="t">
+  <rule ref="design/LackOfCohesionOfMethods">
+    <properties><property name="maximum" value="2"/></properties>
+  </rule>
+</ruleset>`
+	if err := os.WriteFile(path, []byte(xml), 0o644); err != nil {
+		t.Fatalf("write ruleset: %v", err)
+	}
+	got := lcomViolations(t, lcomDisjointFixture, path)
+	if len(got) != 0 {
+		t.Errorf("with maximum=2, expected no violations; got %v", got)
+	}
+}
+
 func TestCleanCode(t *testing.T) {
 	src := `
 func process(enable bool) {

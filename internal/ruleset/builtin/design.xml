@@ -325,4 +325,49 @@ func tick() { counter++ }
             ]]>
         </example>
     </rule>
+
+    <rule name="LackOfCohesionOfMethods"
+          since="0.1.9"
+          message="The class {0} has a lack of cohesion of methods (LCOM4) value of {1}. Its methods form {1} groups that share no state; consider splitting it to keep the value at {2}."
+          class="PHPMD\Rule\Design\LackOfCohesionOfMethods"
+          externalInfoUrl="https://github.com/quality-gates/messgo">
+        <description>
+            <![CDATA[
+A messgo-native rule (no PHPMD analog). Computes the LCOM4 cohesion metric for
+a struct type: its methods form a graph, with an edge between two methods when
+they use a common struct field or when one calls the other through the
+receiver. LCOM4 is the number of connected components of that graph. A value
+above 1 means the type contains disjoint groups of methods that share no state
+at all — it bundles unrelated responsibilities and is a candidate for being
+split into one type per group.
+
+Two refinements keep the metric honest on idiomatic Go. Methods that use no
+fields and neither call nor are called by another method (pure helpers,
+interface stubs) are ignored. Trivial accessors — a body that only returns one
+field, or only assigns a plain value to one field — are ignored too, and a
+call to one counts as a use of the wrapped field; without this, a plain data
+carrier with one getter per field would score LCOM4 = number of fields.
+            ]]>
+        </description>
+        <priority>2</priority>
+        <properties>
+            <property name="maximum" value="1"
+                      description="Maximum acceptable LCOM4 value (number of unrelated method groups)." />
+        </properties>
+        <example>
+            <![CDATA[
+type server struct {
+    conns map[string]net.Conn // used only by the connection methods
+    stats map[string]int      // used only by the metrics methods
+}
+
+func (s *server) Accept(c net.Conn) { s.conns[c.RemoteAddr().String()] = c }
+func (s *server) CloseAll() error   { /* ranges over s.conns */ return nil }
+func (s *server) Record(k string)   { s.stats[k]++ }
+func (s *server) Snapshot() map[string]int { /* copies s.stats */ return nil }
+// LCOM4 = 2: {Accept, CloseAll} and {Record, Snapshot} share no state,
+// so server is really a connection registry plus an unrelated stats counter.
+            ]]>
+        </example>
+    </rule>
 </ruleset>

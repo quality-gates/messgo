@@ -21,6 +21,7 @@ func init() {
 	rule.Register("PHPMD\\Rule\\Design\\EmptyCatchBlock", func() rule.Rule { return &EmptyCatchBlock{Base: rule.NewBase()} })
 	rule.Register("PHPMD\\Rule\\Design\\CouplingBetweenObjects", func() rule.Rule { return &CouplingBetweenObjects{Base: rule.NewBase()} })
 	rule.Register("PHPMD\\Rule\\Design\\GlobalVariable", func() rule.Rule { return &GlobalVariable{Base: rule.NewBase()} })
+	rule.Register("PHPMD\\Rule\\Design\\LackOfCohesionOfMethods", func() rule.Rule { return &LackOfCohesionOfMethods{Base: rule.NewBase()} })
 }
 
 // ----- GlobalVariable -----------------------------------------------------
@@ -278,6 +279,239 @@ func baseTypeName(t string) string {
 		t = t[i+1:]
 	}
 	return strings.TrimLeft(t, "*")
+}
+
+// ----- LackOfCohesionOfMethods ----------------------------------------------
+//
+// Computes the LCOM4 cohesion metric for a class: methods are nodes of a
+// graph, with an edge between two methods when they use a common struct field
+// or when one calls the other through the receiver. The metric is the number
+// of connected components; a value above 1 means the class contains disjoint
+// method groups that share no state, i.e. it bundles unrelated
+// responsibilities and is a candidate for splitting.
+//
+// Two refinements keep the metric honest on idiomatic Go:
+//
+//   - Methods that use no fields and neither call nor are called by another
+//     method (pure helpers, interface stubs) are left out of the count.
+//   - Trivial accessors — a body that only returns one field, or only assigns
+//     a plain value to one field — are not graph nodes. They carry no behavior
+//     of their own, so counting them flags plain data carriers (a struct with
+//     one getter per field scores LCOM4 = number of fields). A call to an
+//     accessor instead counts as a use of the underlying field.
+//
+// Analysis is per file, matching how methods are attached to their class
+// elsewhere in messgo.
+
+type LackOfCohesionOfMethods struct{ *rule.Base }
+
+func (r *LackOfCohesionOfMethods) ApplyClass(c *rule.Context, class *model.Class) {
+	threshold := c.Props().Int("maximum", 1)
+	if lcom := lcom4(class); lcom > threshold {
+		c.ReportClass(class, class.Name, lcom, threshold)
+	}
+}
+
+// lcom4 returns the number of connected components among the class's
+// communicating methods (those that touch a field or participate in an
+// intra-class call). A class with no such methods is trivially cohesive (1).
+func lcom4(class *model.Class) int {
+	fields := fieldNameSet(class)
+	methodIdx, accessorOf := indexMethods(class, fields)
+	g := newCohesionGraph(len(class.Methods))
+	for i, m := range class.Methods {
+		if accessorOf[m.Name] != "" {
+			continue
+		}
+		usedFields, calledMethods := receiverUses(m, fields, methodIdx)
+		for _, f := range usedFields {
+			g.addFieldUse(i, f)
+		}
+		for _, callee := range calledMethods {
+			if f := accessorOf[callee]; f != "" {
+				g.addFieldUse(i, f)
+			} else {
+				g.addCall(i, methodIdx[callee])
+			}
+		}
+	}
+	return g.components()
+}
+
+func fieldNameSet(class *model.Class) map[string]bool {
+	fields := map[string]bool{}
+	for _, f := range class.Fields {
+		fields[f.Name] = true
+	}
+	return fields
+}
+
+// indexMethods maps each method name to its position in class.Methods, and
+// each trivial accessor's name to the field it wraps.
+func indexMethods(class *model.Class, fields map[string]bool) (methodIdx map[string]int, accessorOf map[string]string) {
+	methodIdx = map[string]int{}
+	accessorOf = map[string]string{}
+	for i, m := range class.Methods {
+		methodIdx[m.Name] = i
+		if f := accessorFieldOf(m, fields); f != "" {
+			accessorOf[m.Name] = f
+		}
+	}
+	return methodIdx, accessorOf
+}
+
+// accessorFieldOf returns the field a trivial getter or setter wraps: the
+// method's whole body is `return r.field`, or `r.field = v` with a plain
+// identifier or literal v. Anything more (computation, validation, touching a
+// second field) makes the method a real behavior carrier and returns "".
+func accessorFieldOf(m *model.Function, fields map[string]bool) string {
+	if m.Body == nil || len(m.Body.List) != 1 {
+		return ""
+	}
+	switch s := m.Body.List[0].(type) {
+	case *ast.ReturnStmt:
+		if len(s.Results) == 1 {
+			return fieldSelectorName(s.Results[0], m.RecvName, fields)
+		}
+	case *ast.AssignStmt:
+		return setterFieldOf(s, m.RecvName, fields)
+	}
+	return ""
+}
+
+// setterFieldOf returns the field assigned by a trivial setter statement
+// (`r.field = v` with a plain identifier or literal v), or "".
+func setterFieldOf(s *ast.AssignStmt, recvName string, fields map[string]bool) string {
+	if s.Tok == token.ASSIGN && len(s.Lhs) == 1 && len(s.Rhs) == 1 && isPlainValue(s.Rhs[0]) {
+		return fieldSelectorName(s.Lhs[0], recvName, fields)
+	}
+	return ""
+}
+
+// isPlainValue reports whether e is a bare identifier or literal.
+func isPlainValue(e ast.Expr) bool {
+	switch e.(type) {
+	case *ast.Ident, *ast.BasicLit:
+		return true
+	}
+	return false
+}
+
+// fieldSelectorName returns the field name if e is `<recvName>.<field>`.
+func fieldSelectorName(e ast.Expr, recvName string, fields map[string]bool) string {
+	sel, ok := e.(*ast.SelectorExpr)
+	if !ok {
+		return ""
+	}
+	id, ok := sel.X.(*ast.Ident)
+	if ok && id.Name == recvName && fields[sel.Sel.Name] {
+		return sel.Sel.Name
+	}
+	return ""
+}
+
+// receiverUses scans a method body for selector expressions rooted at the
+// receiver variable and splits them into used field names and called sibling
+// method names. Field and method names cannot collide in Go, so the
+// classification is unambiguous; a method value reference (`f := r.m`) counts
+// the same as a call, since it ties the methods together just as strongly.
+func receiverUses(m *model.Function, fields map[string]bool, methods map[string]int) (usedFields, calledMethods []string) {
+	if m.Body == nil || m.RecvName == "" || m.RecvName == "_" {
+		return nil, nil
+	}
+	seen := map[string]bool{}
+	ast.Inspect(m.Body, func(n ast.Node) bool {
+		name := receiverSelector(n, m.RecvName)
+		if name == "" || seen[name] {
+			return true
+		}
+		_, isMethod := methods[name]
+		switch {
+		case fields[name]:
+			seen[name] = true
+			usedFields = append(usedFields, name)
+		case isMethod:
+			seen[name] = true
+			calledMethods = append(calledMethods, name)
+		}
+		return true
+	})
+	return usedFields, calledMethods
+}
+
+// receiverSelector returns the selected name if n is a selector expression on
+// the given receiver variable, else "".
+func receiverSelector(n ast.Node, recvName string) string {
+	sel, ok := n.(*ast.SelectorExpr)
+	if !ok {
+		return ""
+	}
+	if id, ok := sel.X.(*ast.Ident); ok && id.Name == recvName {
+		return sel.Sel.Name
+	}
+	return ""
+}
+
+// cohesionGraph is a union-find over a class's methods. Methods become
+// "active" (counted) once they use a field or sit on either end of a call.
+type cohesionGraph struct {
+	parent     []int
+	active     []bool
+	fieldOwner map[string]int // field name -> first method seen using it
+}
+
+func newCohesionGraph(n int) *cohesionGraph {
+	g := &cohesionGraph{
+		parent:     make([]int, n),
+		active:     make([]bool, n),
+		fieldOwner: map[string]int{},
+	}
+	for i := range g.parent {
+		g.parent[i] = i
+	}
+	return g
+}
+
+func (g *cohesionGraph) addFieldUse(method int, field string) {
+	g.active[method] = true
+	if owner, ok := g.fieldOwner[field]; ok {
+		g.union(method, owner)
+		return
+	}
+	g.fieldOwner[field] = method
+}
+
+func (g *cohesionGraph) addCall(caller, callee int) {
+	g.active[caller], g.active[callee] = true, true
+	g.union(caller, callee)
+}
+
+func (g *cohesionGraph) union(a, b int) {
+	g.parent[g.find(a)] = g.find(b)
+}
+
+// find returns the union-find root of x, halving paths as it goes.
+func (g *cohesionGraph) find(x int) int {
+	for g.parent[x] != x {
+		g.parent[x] = g.parent[g.parent[x]]
+		x = g.parent[x]
+	}
+	return x
+}
+
+// components counts distinct roots among active methods; a class with no
+// active methods is trivially cohesive (1).
+func (g *cohesionGraph) components() int {
+	roots := map[int]bool{}
+	for i, on := range g.active {
+		if on {
+			roots[g.find(i)] = true
+		}
+	}
+	if len(roots) == 0 {
+		return 1
+	}
+	return len(roots)
 }
 
 var builtinTypes = map[string]bool{

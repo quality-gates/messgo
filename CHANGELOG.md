@@ -6,6 +6,11 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 
 ## [Unreleased]
 
+## [0.1.9] - 2026-06-10
+
+### Added
+- New `Design/LackOfCohesionOfMethods` rule (messgo-native, no PHPMD analog) computing the **LCOM4** cohesion metric per struct type: methods are linked when they use a common field or call one another through the receiver, and the metric is the number of disconnected method groups. A value above the `maximum` property (default 1) is reported — the type bundles unrelated responsibilities and could be split, one type per group. Methods that touch no state (pure helpers, interface stubs) and trivial getters/setters are excluded so plain data carriers and idiomatic Go helpers don't false-positive; a call to a getter counts as a use of the wrapped field. Included in the default `go` ruleset.
+
 ## [0.1.8] - 2026-06-05
 
 ### Added

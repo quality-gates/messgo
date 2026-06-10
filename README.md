@@ -153,7 +153,7 @@ phpmd-format ruleset XML file.
 | `naming` | ShortClassName, LongClassName, ShortVariable, LongVariable, ShortMethodName, ConstantNamingConventions, BooleanGetMethodName, ConstructorWithNameAsEnclosingClass |
 | `unusedcode` | UnusedPrivateField, UnusedLocalVariable, UnusedPrivateMethod, UnusedFormalParameter |
 | `cleancode` | BooleanArgumentFlag, ElseExpression, IfStatementAssignment, DuplicatedArrayKey |
-| `design` | ExitExpression, GotoStatement, CountInLoopExpression, DevelopmentCodeFragment, EmptyCatchBlock, CouplingBetweenObjects, GlobalVariable |
+| `design` | ExitExpression, GotoStatement, CountInLoopExpression, DevelopmentCodeFragment, EmptyCatchBlock, CouplingBetweenObjects, GlobalVariable, LackOfCohesionOfMethods |
 | `controversial` | CamelCaseClassName, CamelCaseMethodName, CamelCasePropertyName, CamelCaseParameterName, CamelCaseVariableName |
 | `opinionated` | **Opt-in, not part of idiomatic Go.** Bundles the rules the `go` ruleset deliberately drops because they fight Go conventions: `ElseExpression` (`else` is idiomatic), `BooleanArgumentFlag` (bool params fill Go's stdlib), `UnusedFormalParameter` (unused params are required to satisfy interfaces and handler signatures), and `GlobalVariable` (mutable package-level state). Run them if you want a stricter, more PHP-flavoured style. |
 
@@ -172,6 +172,16 @@ incremented, written through, or address-taken), analysed across all files of
 the package. Effectively-constant globals — sentinel errors, compiled regexps,
 lookup tables — stay silent so the genuinely risky shared state isn't drowned
 out. Set its `report-immutable=true` property to also surface read-only globals.
+
+`LackOfCohesionOfMethods` computes the **LCOM4** cohesion metric per struct
+type: methods are linked when they use a common field or call one another
+through the receiver, and the metric is the number of disconnected method
+groups that result. A value above the `maximum` property (default 1) means the
+type bundles unrelated responsibilities and could be split, one type per group.
+To stay quiet on idiomatic Go, methods that touch no state (pure helpers,
+interface stubs) are ignored, as are trivial getters/setters — so a plain data
+carrier with one accessor per field does not score LCOM4 = number of fields. A
+call to a getter counts as a use of the field it wraps.
 
 ### Custom rulesets
 

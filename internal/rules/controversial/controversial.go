@@ -49,8 +49,7 @@ func (r *CamelCaseMethodName) check(c *rule.Context, fn *model.Function) {
 		c.ReportFunc(fn, fn.Name)
 	}
 }
-func (r *CamelCaseMethodName) ApplyMethod(c *rule.Context, fn *model.Function)   { r.check(c, fn) }
-func (r *CamelCaseMethodName) ApplyFunction(c *rule.Context, fn *model.Function) { r.check(c, fn) }
+func (r *CamelCaseMethodName) ApplyFunc(c *rule.Context, fn *model.Function) { r.check(c, fn) }
 
 // ----- CamelCasePropertyName ----------------------------------------------
 
@@ -75,8 +74,7 @@ func (r *CamelCaseParameterName) check(c *rule.Context, fn *model.Function) {
 		}
 	}
 }
-func (r *CamelCaseParameterName) ApplyMethod(c *rule.Context, fn *model.Function)   { r.check(c, fn) }
-func (r *CamelCaseParameterName) ApplyFunction(c *rule.Context, fn *model.Function) { r.check(c, fn) }
+func (r *CamelCaseParameterName) ApplyFunc(c *rule.Context, fn *model.Function) { r.check(c, fn) }
 
 // ----- CamelCaseVariableName ----------------------------------------------
 
@@ -95,5 +93,4 @@ func (r *CamelCaseVariableName) check(c *rule.Context, fn *model.Function) {
 		c.Report(v.Line, v.Line, v.Name)
 	}
 }
-func (r *CamelCaseVariableName) ApplyMethod(c *rule.Context, fn *model.Function)   { r.check(c, fn) }
-func (r *CamelCaseVariableName) ApplyFunction(c *rule.Context, fn *model.Function) { r.check(c, fn) }
+func (r *CamelCaseVariableName) ApplyFunc(c *rule.Context, fn *model.Function) { r.check(c, fn) }

@@ -1,0 +1,7 @@
+{
+  "database": "dolt",
+  "backend": "dolt",
+  "dolt_mode": "embedded",
+  "dolt_database": "messgo",
+  "project_id": "95481020-c05b-420b-a428-02f59775616f"
+}

@@ -6,6 +6,9 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 
 ## [Unreleased]
 
+### Changed
+- Collapsed the rule engine's separate `MethodRule` and `FunctionRule` interfaces (and the `applyMethodRule` helper) into a single `FuncRule` with one `ApplyFunc(ctx, fn)` seam. The model already unifies free functions and methods as `*model.Function`, so the engine now iterates the unified function list once and rules that only care about methods guard on `fn.IsMethod()` inline. This removes 20+ identical `ApplyMethod`/`ApplyFunction` pass-through pairs across the rule packages. No behavioural change.
+
 ## [0.1.9] - 2026-06-10
 
 ### Added

@@ -161,14 +161,12 @@ type InterfaceRule interface {
 	ApplyInterface(c *Context, iface *model.Interface)
 }
 
-type MethodRule interface {
+// FuncRule applies to every function-level artifact: free functions, methods,
+// and interface methods. The model unifies these as *model.Function, so a rule
+// that only cares about methods guards on fn.IsMethod() in its own body.
+type FuncRule interface {
 	Rule
-	ApplyMethod(c *Context, fn *model.Function)
-}
-
-type FunctionRule interface {
-	Rule
-	ApplyFunction(c *Context, fn *model.Function)
+	ApplyFunc(c *Context, fn *model.Function)
 }
 
 // FileRule applies once per file (for rules that scan raw syntax).

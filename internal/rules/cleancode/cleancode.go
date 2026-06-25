@@ -42,8 +42,7 @@ func (r *BooleanArgumentFlag) check(c *rule.Context, fn *model.Function) {
 		}
 	}
 }
-func (r *BooleanArgumentFlag) ApplyMethod(c *rule.Context, fn *model.Function)   { r.check(c, fn) }
-func (r *BooleanArgumentFlag) ApplyFunction(c *rule.Context, fn *model.Function) { r.check(c, fn) }
+func (r *BooleanArgumentFlag) ApplyFunc(c *rule.Context, fn *model.Function) { r.check(c, fn) }
 
 // ----- ElseExpression -----------------------------------------------------
 
@@ -66,8 +65,7 @@ func (r *ElseExpression) check(c *rule.Context, fn *model.Function) {
 		return true
 	})
 }
-func (r *ElseExpression) ApplyMethod(c *rule.Context, fn *model.Function)   { r.check(c, fn) }
-func (r *ElseExpression) ApplyFunction(c *rule.Context, fn *model.Function) { r.check(c, fn) }
+func (r *ElseExpression) ApplyFunc(c *rule.Context, fn *model.Function) { r.check(c, fn) }
 
 // ----- IfStatementAssignment ----------------------------------------------
 //
@@ -92,8 +90,7 @@ func (r *IfStatementAssignment) check(c *rule.Context, fn *model.Function) {
 		return true
 	})
 }
-func (r *IfStatementAssignment) ApplyMethod(c *rule.Context, fn *model.Function)   { r.check(c, fn) }
-func (r *IfStatementAssignment) ApplyFunction(c *rule.Context, fn *model.Function) { r.check(c, fn) }
+func (r *IfStatementAssignment) ApplyFunc(c *rule.Context, fn *model.Function) { r.check(c, fn) }
 
 // ----- DuplicatedArrayKey -------------------------------------------------
 //
@@ -153,5 +150,4 @@ func displayKey(e ast.Expr) string {
 	}
 	return ""
 }
-func (r *DuplicatedArrayKey) ApplyMethod(c *rule.Context, fn *model.Function)   { r.check(c, fn) }
-func (r *DuplicatedArrayKey) ApplyFunction(c *rule.Context, fn *model.Function) { r.check(c, fn) }
+func (r *DuplicatedArrayKey) ApplyFunc(c *rule.Context, fn *model.Function) { r.check(c, fn) }

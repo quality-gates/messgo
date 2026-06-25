@@ -17,11 +17,11 @@ func init() {
 	rule.Register("PHPMD\\Rule\\Design\\ExitExpression", func() rule.Rule { return &ExitExpression{Base: rule.NewBase()} })
 	rule.Register("PHPMD\\Rule\\Design\\GotoStatement", func() rule.Rule { return &GotoStatement{Base: rule.NewBase()} })
 	rule.Register("PHPMD\\Rule\\Design\\CountInLoopExpression", func() rule.Rule { return &CountInLoopExpression{Base: rule.NewBase()} })
-	rule.Register("PHPMD\\Rule\\Design\\DevelopmentCodeFragment", func() rule.Rule { return &DevelopmentCodeFragment{Base: rule.NewBase()} })
+	rule.Register("PHPMD\\Rule\\Design\\DevelopmentCodeFragment", newDevelopmentCodeFragment)
 	rule.Register("PHPMD\\Rule\\Design\\EmptyCatchBlock", func() rule.Rule { return &EmptyCatchBlock{Base: rule.NewBase()} })
-	rule.Register("PHPMD\\Rule\\Design\\CouplingBetweenObjects", func() rule.Rule { return &CouplingBetweenObjects{Base: rule.NewBase()} })
-	rule.Register("PHPMD\\Rule\\Design\\GlobalVariable", func() rule.Rule { return &GlobalVariable{Base: rule.NewBase()} })
-	rule.Register("PHPMD\\Rule\\Design\\LackOfCohesionOfMethods", func() rule.Rule { return &LackOfCohesionOfMethods{Base: rule.NewBase()} })
+	rule.Register("PHPMD\\Rule\\Design\\CouplingBetweenObjects", newCouplingBetweenObjects)
+	rule.Register("PHPMD\\Rule\\Design\\GlobalVariable", newGlobalVariable)
+	rule.Register("PHPMD\\Rule\\Design\\LackOfCohesionOfMethods", newLackOfCohesionOfMethods)
 }
 
 // ----- GlobalVariable -----------------------------------------------------
@@ -41,7 +41,19 @@ func init() {
 // reassigned in another is correctly reported. Only the file's top-level
 // declarations are inspected for what to report, so locals are never flagged;
 // constants and the blank identifier (`var _ = ...`) are ignored.
-type GlobalVariable struct{ *rule.Base }
+type GlobalVariable struct {
+	*rule.Base
+	reportImmutable bool
+}
+
+func newGlobalVariable() rule.Rule {
+	return &GlobalVariable{Base: rule.NewBase()}
+}
+
+func (r *GlobalVariable) Configure(props rule.Properties) error {
+	r.reportImmutable = props.Bool("report-immutable", false)
+	return nil
+}
 
 func (r *GlobalVariable) ApplyFile(c *rule.Context) {
 	mutated := c.File.MutatedGlobals
@@ -50,9 +62,8 @@ func (r *GlobalVariable) ApplyFile(c *rule.Context) {
 		// just this file for mutations.
 		mutated = util.MutatedGlobalNames([]*ast.File{c.File.Syntax})
 	}
-	reportImmutable := c.Props().Bool("report-immutable", false)
 	for _, g := range packageVars(c.File.Syntax) {
-		if mutated[g.name] || reportImmutable {
+		if mutated[g.name] || r.reportImmutable {
 			line := c.File.Fset.Position(g.pos).Line
 			c.Report(line, line, g.name)
 		}
@@ -165,22 +176,33 @@ func (r *CountInLoopExpression) ApplyFunc(c *rule.Context, fn *model.Function) {
 
 // ----- DevelopmentCodeFragment --------------------------------------------
 
-type DevelopmentCodeFragment struct{ *rule.Base }
+type DevelopmentCodeFragment struct {
+	*rule.Base
+	unwantedFunctions map[string]bool
+}
+
+func newDevelopmentCodeFragment() rule.Rule {
+	return &DevelopmentCodeFragment{Base: rule.NewBase()}
+}
+
+func (r *DevelopmentCodeFragment) Configure(props rule.Properties) error {
+	r.unwantedFunctions = map[string]bool{}
+	for _, f := range util.SplitToList(props.String("unwanted-functions", "println,print")) {
+		r.unwantedFunctions[strings.ToLower(strings.TrimSpace(f))] = true
+	}
+	return nil
+}
 
 func (r *DevelopmentCodeFragment) check(c *rule.Context, fn *model.Function) {
 	if fn.Body == nil {
 		return
-	}
-	unwanted := map[string]bool{}
-	for _, f := range util.SplitToList(c.Props().String("unwanted-functions", "println,print")) {
-		unwanted[strings.ToLower(strings.TrimSpace(f))] = true
 	}
 	image := fn.Name
 	if fn.IsMethod() {
 		image = fn.Receiver + "::" + fn.Name
 	}
 	for _, call := range util.Calls(fn.Body, fn.File.Fset) {
-		if unwanted[strings.ToLower(call.Name)] {
+		if r.unwantedFunctions[strings.ToLower(call.Name)] {
 			c.ReportFuncAt(fn, call.Line, call.Line, string(fn.NodeType()), image, call.Name)
 		}
 	}
@@ -236,10 +258,28 @@ func (r *EmptyCatchBlock) ApplyFunc(c *rule.Context, fn *model.Function) { r.che
 // through its field types and method signatures — the Go analog of pdepend's
 // CBO metric.
 
-type CouplingBetweenObjects struct{ *rule.Base }
+func designClassNameMeasurement(class *model.Class, value int) rule.ThresholdMeasurement {
+	return rule.ThresholdMeasurement{Value: value, Args: []any{class.Name}}
+}
 
-func (r *CouplingBetweenObjects) ApplyClass(c *rule.Context, class *model.Class) {
-	threshold := c.Props().Int("maximum", 13)
+type CouplingBetweenObjects struct {
+	*rule.Base
+	*rule.ThresholdRule
+}
+
+func newCouplingBetweenObjects() rule.Rule {
+	r := &CouplingBetweenObjects{Base: rule.NewBase()}
+	r.ThresholdRule = rule.NewThresholdRule(rule.ThresholdDeclaration{
+		Property:    "maximum",
+		Default:     13,
+		Boundary:    rule.AtOrAbove,
+		NodeKind:    rule.ThresholdClass,
+		ClassMetric: r.measure,
+	})
+	return r
+}
+
+func (r *CouplingBetweenObjects) measure(_ *rule.Context, class *model.Class) (rule.ThresholdMeasurement, bool) {
 	types := map[string]bool{}
 	collect := func(t string) {
 		if name := baseTypeName(t); name != "" && !builtinTypes[name] {
@@ -258,9 +298,7 @@ func (r *CouplingBetweenObjects) ApplyClass(c *rule.Context, class *model.Class)
 		}
 	}
 	cbo := len(types)
-	if cbo >= threshold {
-		c.ReportClass(class, class.Name, cbo, threshold)
-	}
+	return designClassNameMeasurement(class, cbo), true
 }
 
 // baseTypeName strips pointer/slice/map decorations to the leading type name.
@@ -298,13 +336,25 @@ func baseTypeName(t string) string {
 // Analysis is per file, matching how methods are attached to their class
 // elsewhere in messgo.
 
-type LackOfCohesionOfMethods struct{ *rule.Base }
+type LackOfCohesionOfMethods struct {
+	*rule.Base
+	*rule.ThresholdRule
+}
 
-func (r *LackOfCohesionOfMethods) ApplyClass(c *rule.Context, class *model.Class) {
-	threshold := c.Props().Int("maximum", 1)
-	if lcom := lcom4(class); lcom > threshold {
-		c.ReportClass(class, class.Name, lcom, threshold)
-	}
+func newLackOfCohesionOfMethods() rule.Rule {
+	r := &LackOfCohesionOfMethods{Base: rule.NewBase()}
+	r.ThresholdRule = rule.NewThresholdRule(rule.ThresholdDeclaration{
+		Property:    "maximum",
+		Default:     1,
+		Boundary:    rule.Above,
+		NodeKind:    rule.ThresholdClass,
+		ClassMetric: r.measure,
+	})
+	return r
+}
+
+func (r *LackOfCohesionOfMethods) measure(_ *rule.Context, class *model.Class) (rule.ThresholdMeasurement, bool) {
+	return designClassNameMeasurement(class, lcom4(class)), true
 }
 
 // lcom4 returns the number of connected components among the class's

@@ -1,8 +1,11 @@
 package ruleset
 
 import (
+	"os"
+	"path/filepath"
 	"testing"
 
+	"github.com/quality-gates/messgo/internal/model"
 	"github.com/quality-gates/messgo/internal/rule"
 )
 
@@ -199,4 +202,82 @@ func TestMessageTemplatePreserved(t *testing.T) {
 	if r.Message() != want {
 		t.Errorf("message = %q, want %q", r.Message(), want)
 	}
+}
+
+type loaderThresholdRule struct {
+	*rule.Base
+	*rule.ThresholdRule
+}
+
+func newLoaderThresholdRule() rule.Rule {
+	r := &loaderThresholdRule{Base: rule.NewBase()}
+	r.ThresholdRule = rule.NewThresholdRule(rule.ThresholdDeclaration{
+		Property: "limit",
+		Default:  10,
+		Boundary: rule.AtOrAbove,
+		NodeKind: rule.ThresholdFunction,
+		FuncMetric: func(_ *rule.Context, fn *model.Function) (rule.ThresholdMeasurement, bool) {
+			return rule.ThresholdMeasurement{
+				Value: len(fn.Params),
+				Args:  []any{string(fn.NodeType()), fn.Name},
+			}, true
+		},
+	})
+	return r
+}
+
+func TestLoaderConfiguresThresholdRulesAtLoadTime(t *testing.T) {
+	rule.Register("Messgo\\Test\\Threshold", newLoaderThresholdRule)
+	path := filepath.Join(t.TempDir(), "ruleset.xml")
+	xml := `<?xml version="1.0"?>
+<ruleset name="test">
+  <rule name="LoaderThreshold" message="{0} {1} has value {2} over {3}" class="Messgo\Test\Threshold">
+    <properties>
+      <property name="limit" value="2"/>
+    </properties>
+  </rule>
+</ruleset>`
+	if err := os.WriteFile(path, []byte(xml), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	set := loadOne(t, path)
+	violations := rule.Analyze(thresholdLoaderFile(2), []*rule.RuleSet{set})
+
+	if len(violations) != 1 {
+		t.Fatalf("expected one violation from loaded threshold config, got %d", len(violations))
+	}
+	if got, want := violations[0].Description, "function sample has value 2 over 2"; got != want {
+		t.Fatalf("description = %q, want %q", got, want)
+	}
+}
+
+func TestLoaderRejectsInvalidThresholdConfig(t *testing.T) {
+	rule.Register("Messgo\\Test\\InvalidThreshold", newLoaderThresholdRule)
+	path := filepath.Join(t.TempDir(), "ruleset.xml")
+	xml := `<?xml version="1.0"?>
+<ruleset name="test">
+  <rule name="LoaderThreshold" message="{0} {1} has value {2} over {3}" class="Messgo\Test\InvalidThreshold">
+    <properties>
+      <property name="limit" value="bogus"/>
+    </properties>
+  </rule>
+</ruleset>`
+	if err := os.WriteFile(path, []byte(xml), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := (&Loader{}).Load(path); err == nil {
+		t.Fatal("expected invalid threshold config to fail at load time")
+	}
+}
+
+func thresholdLoaderFile(paramCount int) *model.File {
+	fn := &model.Function{Name: "sample", Line: 1, EndLine: 1}
+	for range paramCount {
+		fn.Params = append(fn.Params, &model.Parameter{})
+	}
+	file := &model.File{Path: "fixture.go", Package: "fixture", AllFuncs: []*model.Function{fn}}
+	fn.File = file
+	return file
 }

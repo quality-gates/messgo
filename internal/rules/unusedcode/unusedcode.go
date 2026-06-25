@@ -14,7 +14,7 @@ import (
 
 func init() {
 	rule.Register("PHPMD\\Rule\\UnusedPrivateField", func() rule.Rule { return &UnusedPrivateField{Base: rule.NewBase()} })
-	rule.Register("PHPMD\\Rule\\UnusedLocalVariable", func() rule.Rule { return &UnusedLocalVariable{Base: rule.NewBase()} })
+	rule.Register("PHPMD\\Rule\\UnusedLocalVariable", newUnusedLocalVariable)
 	rule.Register("PHPMD\\Rule\\UnusedPrivateMethod", func() rule.Rule { return &UnusedPrivateMethod{Base: rule.NewBase()} })
 	rule.Register("PHPMD\\Rule\\UnusedFormalParameter", func() rule.Rule { return &UnusedFormalParameter{Base: rule.NewBase()} })
 }
@@ -96,18 +96,29 @@ func (r *UnusedFormalParameter) ApplyFunc(c *rule.Context, fn *model.Function) {
 
 // ----- UnusedLocalVariable ------------------------------------------------
 
-type UnusedLocalVariable struct{ *rule.Base }
+type UnusedLocalVariable struct {
+	*rule.Base
+	exceptions []string
+}
+
+func newUnusedLocalVariable() rule.Rule {
+	return &UnusedLocalVariable{Base: rule.NewBase()}
+}
+
+func (r *UnusedLocalVariable) Configure(props rule.Properties) error {
+	r.exceptions = util.SplitToList(props.String("exceptions", ""))
+	return nil
+}
 
 func (r *UnusedLocalVariable) check(c *rule.Context, fn *model.Function) {
 	if fn.Body == nil {
 		return
 	}
-	exceptions := util.SplitToList(c.Props().String("exceptions", ""))
 	locals := util.LocalVariables(fn.Body, fn.File.Fset)
 	reads := identReads(fn.Body)
 	reported := map[string]bool{}
 	for _, v := range locals {
-		if reads[v.Name] || reported[v.Name] || util.Contains(exceptions, v.Name) {
+		if reads[v.Name] || reported[v.Name] || util.Contains(r.exceptions, v.Name) {
 			continue
 		}
 		reported[v.Name] = true

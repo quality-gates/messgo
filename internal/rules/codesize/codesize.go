@@ -2,22 +2,24 @@
 package codesize
 
 import (
+	"regexp"
+
 	"github.com/quality-gates/messgo/internal/metrics"
 	"github.com/quality-gates/messgo/internal/model"
 	"github.com/quality-gates/messgo/internal/rule"
 )
 
 func init() {
-	rule.Register("PHPMD\\Rule\\CyclomaticComplexity", func() rule.Rule { return &CyclomaticComplexity{Base: rule.NewBase()} })
-	rule.Register("PHPMD\\Rule\\Design\\NpathComplexity", func() rule.Rule { return &NPathComplexity{Base: rule.NewBase()} })
-	rule.Register("PHPMD\\Rule\\Design\\LongMethod", func() rule.Rule { return &LongMethod{Base: rule.NewBase()} })
-	rule.Register("PHPMD\\Rule\\Design\\LongClass", func() rule.Rule { return &LongClass{Base: rule.NewBase()} })
-	rule.Register("PHPMD\\Rule\\Design\\LongParameterList", func() rule.Rule { return &LongParameterList{Base: rule.NewBase()} })
-	rule.Register("PHPMD\\Rule\\ExcessivePublicCount", func() rule.Rule { return &ExcessivePublicCount{Base: rule.NewBase()} })
-	rule.Register("PHPMD\\Rule\\Design\\TooManyFields", func() rule.Rule { return &TooManyFields{Base: rule.NewBase()} })
-	rule.Register("PHPMD\\Rule\\Design\\TooManyMethods", func() rule.Rule { return &TooManyMethods{Base: rule.NewBase()} })
-	rule.Register("PHPMD\\Rule\\Design\\TooManyPublicMethods", func() rule.Rule { return &TooManyPublicMethods{Base: rule.NewBase()} })
-	rule.Register("PHPMD\\Rule\\Design\\WeightedMethodCount", func() rule.Rule { return &WeightedMethodCount{Base: rule.NewBase()} })
+	rule.Register("PHPMD\\Rule\\CyclomaticComplexity", newCyclomaticComplexity)
+	rule.Register("PHPMD\\Rule\\Design\\NpathComplexity", newNPathComplexity)
+	rule.Register("PHPMD\\Rule\\Design\\LongMethod", newLongMethod)
+	rule.Register("PHPMD\\Rule\\Design\\LongClass", newLongClass)
+	rule.Register("PHPMD\\Rule\\Design\\LongParameterList", newLongParameterList)
+	rule.Register("PHPMD\\Rule\\ExcessivePublicCount", newExcessivePublicCount)
+	rule.Register("PHPMD\\Rule\\Design\\TooManyFields", newTooManyFields)
+	rule.Register("PHPMD\\Rule\\Design\\TooManyMethods", newTooManyMethods)
+	rule.Register("PHPMD\\Rule\\Design\\TooManyPublicMethods", newTooManyPublicMethods)
+	rule.Register("PHPMD\\Rule\\Design\\WeightedMethodCount", newWeightedMethodCount)
 }
 
 // ----- helpers ------------------------------------------------------------
@@ -45,81 +47,171 @@ func classLOC(c *model.Class, ignoreWhitespace ignoreWhitespaceOption) int {
 	return loc
 }
 
+func funcMeasurement(fn *model.Function, value int) rule.ThresholdMeasurement {
+	return rule.ThresholdMeasurement{Value: value, Args: []any{string(fn.NodeType()), fn.Name}}
+}
+
+func classNodeMeasurement(class *model.Class, value int) rule.ThresholdMeasurement {
+	return rule.ThresholdMeasurement{Value: value, Args: []any{string(class.NodeType()), class.Name}}
+}
+
+func classNameMeasurement(class *model.Class, value int) rule.ThresholdMeasurement {
+	return rule.ThresholdMeasurement{Value: value, Args: []any{class.Name}}
+}
+
 // ----- CyclomaticComplexity ----------------------------------------------
 
-type CyclomaticComplexity struct{ *rule.Base }
-
-func (r *CyclomaticComplexity) check(c *rule.Context, fn *model.Function) {
-	threshold := c.Props().Int("reportLevel", 10)
-	ccn := metrics.CyclomaticComplexity(fn.Body)
-	if ccn < threshold {
-		return
-	}
-	c.ReportFunc(fn, string(fn.NodeType()), fn.Name, ccn, threshold)
+type CyclomaticComplexity struct {
+	*rule.Base
+	*rule.ThresholdRule
 }
-func (r *CyclomaticComplexity) ApplyFunc(c *rule.Context, fn *model.Function) { r.check(c, fn) }
+
+func newCyclomaticComplexity() rule.Rule {
+	r := &CyclomaticComplexity{Base: rule.NewBase()}
+	r.ThresholdRule = rule.NewThresholdRule(rule.ThresholdDeclaration{
+		Property:   "reportLevel",
+		Default:    10,
+		Boundary:   rule.AtOrAbove,
+		NodeKind:   rule.ThresholdFunction,
+		FuncMetric: r.measure,
+	})
+	return r
+}
+
+func (r *CyclomaticComplexity) measure(_ *rule.Context, fn *model.Function) (rule.ThresholdMeasurement, bool) {
+	return funcMeasurement(fn, metrics.CyclomaticComplexity(fn.Body)), true
+}
 
 // ----- NPathComplexity ----------------------------------------------------
 
-type NPathComplexity struct{ *rule.Base }
-
-func (r *NPathComplexity) check(c *rule.Context, fn *model.Function) {
-	threshold := c.Props().Int("minimum", 200)
-	npath := metrics.NPathComplexity(fn.Body)
-	if npath < threshold {
-		return
-	}
-	c.ReportFunc(fn, string(fn.NodeType()), fn.Name, npath, threshold)
+type NPathComplexity struct {
+	*rule.Base
+	*rule.ThresholdRule
 }
-func (r *NPathComplexity) ApplyFunc(c *rule.Context, fn *model.Function) { r.check(c, fn) }
+
+func newNPathComplexity() rule.Rule {
+	r := &NPathComplexity{Base: rule.NewBase()}
+	r.ThresholdRule = rule.NewThresholdRule(rule.ThresholdDeclaration{
+		Property:   "minimum",
+		Default:    200,
+		Boundary:   rule.AtOrAbove,
+		NodeKind:   rule.ThresholdFunction,
+		FuncMetric: r.measure,
+	})
+	return r
+}
+
+func (r *NPathComplexity) measure(_ *rule.Context, fn *model.Function) (rule.ThresholdMeasurement, bool) {
+	return funcMeasurement(fn, metrics.NPathComplexity(fn.Body)), true
+}
 
 // ----- LongMethod (ExcessiveMethodLength) --------------------------------
 
-type LongMethod struct{ *rule.Base }
-
-func (r *LongMethod) check(c *rule.Context, fn *model.Function) {
-	threshold := c.Props().Int("minimum", 100)
-	loc := funcLOC(fn, c.Props().Bool("ignore-whitespace", false))
-	if loc < threshold {
-		return
-	}
-	c.ReportFunc(fn, string(fn.NodeType()), fn.Name, loc, threshold)
+type LongMethod struct {
+	*rule.Base
+	*rule.ThresholdRule
+	ignoreWhitespace ignoreWhitespaceOption
 }
-func (r *LongMethod) ApplyFunc(c *rule.Context, fn *model.Function) { r.check(c, fn) }
+
+func newLongMethod() rule.Rule {
+	r := &LongMethod{Base: rule.NewBase()}
+	r.ThresholdRule = rule.NewThresholdRule(rule.ThresholdDeclaration{
+		Property:   "minimum",
+		Default:    100,
+		Boundary:   rule.AtOrAbove,
+		NodeKind:   rule.ThresholdFunction,
+		FuncMetric: r.measure,
+	})
+	return r
+}
+
+func (r *LongMethod) Configure(props rule.Properties) error {
+	if err := r.ThresholdRule.Configure(props); err != nil {
+		return err
+	}
+	r.ignoreWhitespace = props.Bool("ignore-whitespace", false)
+	return nil
+}
+
+func (r *LongMethod) measure(_ *rule.Context, fn *model.Function) (rule.ThresholdMeasurement, bool) {
+	return funcMeasurement(fn, funcLOC(fn, r.ignoreWhitespace)), true
+}
 
 // ----- LongClass (ExcessiveClassLength) ----------------------------------
 
-type LongClass struct{ *rule.Base }
+type LongClass struct {
+	*rule.Base
+	*rule.ThresholdRule
+	ignoreWhitespace ignoreWhitespaceOption
+}
 
-func (r *LongClass) ApplyClass(c *rule.Context, class *model.Class) {
-	threshold := c.Props().Int("minimum", 1000)
-	loc := classLOC(class, c.Props().Bool("ignore-whitespace", false))
-	if loc < threshold {
-		return
+func newLongClass() rule.Rule {
+	r := &LongClass{Base: rule.NewBase()}
+	r.ThresholdRule = rule.NewThresholdRule(rule.ThresholdDeclaration{
+		Property:    "minimum",
+		Default:     1000,
+		Boundary:    rule.AtOrAbove,
+		NodeKind:    rule.ThresholdClass,
+		ClassMetric: r.measure,
+	})
+	return r
+}
+
+func (r *LongClass) Configure(props rule.Properties) error {
+	if err := r.ThresholdRule.Configure(props); err != nil {
+		return err
 	}
-	c.ReportClass(class, class.Name, loc, threshold)
+	r.ignoreWhitespace = props.Bool("ignore-whitespace", false)
+	return nil
+}
+
+func (r *LongClass) measure(_ *rule.Context, class *model.Class) (rule.ThresholdMeasurement, bool) {
+	return classNameMeasurement(class, classLOC(class, r.ignoreWhitespace)), true
 }
 
 // ----- LongParameterList (ExcessiveParameterList) ------------------------
 
-type LongParameterList struct{ *rule.Base }
-
-func (r *LongParameterList) check(c *rule.Context, fn *model.Function) {
-	threshold := c.Props().Int("minimum", 10)
-	count := len(fn.Params)
-	if count < threshold {
-		return
-	}
-	c.ReportFunc(fn, string(fn.NodeType()), fn.Name, count, threshold)
+type LongParameterList struct {
+	*rule.Base
+	*rule.ThresholdRule
 }
-func (r *LongParameterList) ApplyFunc(c *rule.Context, fn *model.Function) { r.check(c, fn) }
+
+func newLongParameterList() rule.Rule {
+	r := &LongParameterList{Base: rule.NewBase()}
+	r.ThresholdRule = rule.NewThresholdRule(rule.ThresholdDeclaration{
+		Property:   "minimum",
+		Default:    10,
+		Boundary:   rule.AtOrAbove,
+		NodeKind:   rule.ThresholdFunction,
+		FuncMetric: r.measure,
+	})
+	return r
+}
+
+func (r *LongParameterList) measure(_ *rule.Context, fn *model.Function) (rule.ThresholdMeasurement, bool) {
+	return funcMeasurement(fn, len(fn.Params)), true
+}
 
 // ----- ExcessivePublicCount ----------------------------------------------
 
-type ExcessivePublicCount struct{ *rule.Base }
+type ExcessivePublicCount struct {
+	*rule.Base
+	*rule.ThresholdRule
+}
 
-func (r *ExcessivePublicCount) ApplyClass(c *rule.Context, class *model.Class) {
-	threshold := c.Props().Int("minimum", 45)
+func newExcessivePublicCount() rule.Rule {
+	r := &ExcessivePublicCount{Base: rule.NewBase()}
+	r.ThresholdRule = rule.NewThresholdRule(rule.ThresholdDeclaration{
+		Property:    "minimum",
+		Default:     45,
+		Boundary:    rule.AtOrAbove,
+		NodeKind:    rule.ThresholdClass,
+		ClassMetric: r.measure,
+	})
+	return r
+}
+
+func (r *ExcessivePublicCount) measure(_ *rule.Context, class *model.Class) (rule.ThresholdMeasurement, bool) {
 	cis := 0
 	for _, m := range class.Methods {
 		if m.Exported {
@@ -131,80 +223,136 @@ func (r *ExcessivePublicCount) ApplyClass(c *rule.Context, class *model.Class) {
 			cis++
 		}
 	}
-	if cis < threshold {
-		return
-	}
-	c.ReportClass(class, string(class.NodeType()), class.Name, cis, threshold)
+	return classNodeMeasurement(class, cis), true
 }
 
 // ----- TooManyFields ------------------------------------------------------
 
-type TooManyFields struct{ *rule.Base }
+type TooManyFields struct {
+	*rule.Base
+	*rule.ThresholdRule
+}
 
-func (r *TooManyFields) ApplyClass(c *rule.Context, class *model.Class) {
-	threshold := c.Props().Int("maxfields", 15)
-	vars := len(class.Fields)
-	if vars <= threshold {
-		return
-	}
-	c.ReportClass(class, string(class.NodeType()), class.Name, vars, threshold)
+func newTooManyFields() rule.Rule {
+	r := &TooManyFields{Base: rule.NewBase()}
+	r.ThresholdRule = rule.NewThresholdRule(rule.ThresholdDeclaration{
+		Property:    "maxfields",
+		Default:     15,
+		Boundary:    rule.Above,
+		NodeKind:    rule.ThresholdClass,
+		ClassMetric: r.measure,
+	})
+	return r
+}
+
+func (r *TooManyFields) measure(_ *rule.Context, class *model.Class) (rule.ThresholdMeasurement, bool) {
+	return classNodeMeasurement(class, len(class.Fields)), true
 }
 
 // ----- TooManyMethods -----------------------------------------------------
 
-type TooManyMethods struct{ *rule.Base }
+type TooManyMethods struct {
+	*rule.Base
+	*rule.ThresholdRule
+	ignorePattern *regexp.Regexp
+}
 
-func (r *TooManyMethods) ApplyClass(c *rule.Context, class *model.Class) {
-	threshold := c.Props().Int("maxmethods", 25)
-	re := rule.CompileRegex(c.Props().String("ignorepattern", "(^(set|get|is|has|with))i"))
+func newTooManyMethods() rule.Rule {
+	r := &TooManyMethods{Base: rule.NewBase()}
+	r.ThresholdRule = rule.NewThresholdRule(rule.ThresholdDeclaration{
+		Property:    "maxmethods",
+		Default:     25,
+		Boundary:    rule.Above,
+		NodeKind:    rule.ThresholdClass,
+		ClassMetric: r.measure,
+	})
+	return r
+}
+
+func (r *TooManyMethods) Configure(props rule.Properties) error {
+	if err := r.ThresholdRule.Configure(props); err != nil {
+		return err
+	}
+	r.ignorePattern = rule.CompileRegex(props.String("ignorepattern", "(^(set|get|is|has|with))i"))
+	return nil
+}
+
+func (r *TooManyMethods) measure(_ *rule.Context, class *model.Class) (rule.ThresholdMeasurement, bool) {
 	nom := 0
 	for _, m := range class.Methods {
-		if re != nil && re.MatchString(m.Name) {
+		if r.ignorePattern != nil && r.ignorePattern.MatchString(m.Name) {
 			continue
 		}
 		nom++
 	}
-	if nom <= threshold {
-		return
-	}
-	c.ReportClass(class, string(class.NodeType()), class.Name, nom, threshold)
+	return classNodeMeasurement(class, nom), true
 }
 
 // ----- TooManyPublicMethods ----------------------------------------------
 
-type TooManyPublicMethods struct{ *rule.Base }
+type TooManyPublicMethods struct {
+	*rule.Base
+	*rule.ThresholdRule
+	ignorePattern *regexp.Regexp
+}
 
-func (r *TooManyPublicMethods) ApplyClass(c *rule.Context, class *model.Class) {
-	threshold := c.Props().Int("maxmethods", 10)
-	re := rule.CompileRegex(c.Props().String("ignorepattern", "(^(set|get|is|has|with))i"))
+func newTooManyPublicMethods() rule.Rule {
+	r := &TooManyPublicMethods{Base: rule.NewBase()}
+	r.ThresholdRule = rule.NewThresholdRule(rule.ThresholdDeclaration{
+		Property:    "maxmethods",
+		Default:     10,
+		Boundary:    rule.Above,
+		NodeKind:    rule.ThresholdClass,
+		ClassMetric: r.measure,
+	})
+	return r
+}
+
+func (r *TooManyPublicMethods) Configure(props rule.Properties) error {
+	if err := r.ThresholdRule.Configure(props); err != nil {
+		return err
+	}
+	r.ignorePattern = rule.CompileRegex(props.String("ignorepattern", "(^(set|get|is|has|with))i"))
+	return nil
+}
+
+func (r *TooManyPublicMethods) measure(_ *rule.Context, class *model.Class) (rule.ThresholdMeasurement, bool) {
 	nom := 0
 	for _, m := range class.Methods {
 		if !m.Exported {
 			continue
 		}
-		if re != nil && re.MatchString(m.Name) {
+		if r.ignorePattern != nil && r.ignorePattern.MatchString(m.Name) {
 			continue
 		}
 		nom++
 	}
-	if nom <= threshold {
-		return
-	}
-	c.ReportClass(class, string(class.NodeType()), class.Name, nom, threshold)
+	return classNodeMeasurement(class, nom), true
 }
 
 // ----- WeightedMethodCount (ExcessiveClassComplexity) --------------------
 
-type WeightedMethodCount struct{ *rule.Base }
+type WeightedMethodCount struct {
+	*rule.Base
+	*rule.ThresholdRule
+}
 
-func (r *WeightedMethodCount) ApplyClass(c *rule.Context, class *model.Class) {
-	threshold := c.Props().Int("maximum", 50)
+func newWeightedMethodCount() rule.Rule {
+	r := &WeightedMethodCount{Base: rule.NewBase()}
+	r.ThresholdRule = rule.NewThresholdRule(rule.ThresholdDeclaration{
+		Property:    "maximum",
+		Default:     50,
+		Boundary:    rule.AtOrAbove,
+		NodeKind:    rule.ThresholdClass,
+		ClassMetric: r.measure,
+	})
+	return r
+}
+
+func (r *WeightedMethodCount) measure(_ *rule.Context, class *model.Class) (rule.ThresholdMeasurement, bool) {
 	wmc := 0
 	for _, m := range class.Methods {
 		wmc += metrics.CyclomaticComplexity(m.Body)
 	}
-	if wmc < threshold {
-		return
-	}
-	c.ReportClass(class, class.Name, wmc, threshold)
+	return classNameMeasurement(class, wmc), true
 }

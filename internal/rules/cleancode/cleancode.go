@@ -14,7 +14,7 @@ import (
 )
 
 func init() {
-	rule.Register("PHPMD\\Rule\\CleanCode\\BooleanArgumentFlag", func() rule.Rule { return &BooleanArgumentFlag{Base: rule.NewBase()} })
+	rule.Register("PHPMD\\Rule\\CleanCode\\BooleanArgumentFlag", newBooleanArgumentFlag)
 	rule.Register("PHPMD\\Rule\\CleanCode\\ElseExpression", func() rule.Rule { return &ElseExpression{Base: rule.NewBase()} })
 	rule.Register("PHPMD\\Rule\\CleanCode\\IfStatementAssignment", func() rule.Rule { return &IfStatementAssignment{Base: rule.NewBase()} })
 	rule.Register("PHPMD\\Rule\\CleanCode\\DuplicatedArrayKey", func() rule.Rule { return &DuplicatedArrayKey{Base: rule.NewBase()} })
@@ -25,11 +25,22 @@ func init() {
 // Flags boolean parameters, which typically signal that a function does two
 // things depending on the flag (a Single Responsibility Principle smell).
 
-type BooleanArgumentFlag struct{ *rule.Base }
+type BooleanArgumentFlag struct {
+	*rule.Base
+	exceptions []string
+}
+
+func newBooleanArgumentFlag() rule.Rule {
+	return &BooleanArgumentFlag{Base: rule.NewBase()}
+}
+
+func (r *BooleanArgumentFlag) Configure(props rule.Properties) error {
+	r.exceptions = util.SplitToList(props.String("exceptions", ""))
+	return nil
+}
 
 func (r *BooleanArgumentFlag) check(c *rule.Context, fn *model.Function) {
-	exceptions := util.SplitToList(c.Props().String("exceptions", ""))
-	if fn.Receiver != "" && util.Contains(exceptions, fn.Receiver) {
+	if fn.Receiver != "" && util.Contains(r.exceptions, fn.Receiver) {
 		return
 	}
 	image := fn.Name

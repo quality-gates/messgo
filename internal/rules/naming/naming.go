@@ -100,8 +100,7 @@ func (r *ShortVariable) checkFunc(c *rule.Context, fn *model.Function) {
 		}
 	}
 }
-func (r *ShortVariable) ApplyMethod(c *rule.Context, fn *model.Function)   { r.checkFunc(c, fn) }
-func (r *ShortVariable) ApplyFunction(c *rule.Context, fn *model.Function) { r.checkFunc(c, fn) }
+func (r *ShortVariable) ApplyFunc(c *rule.Context, fn *model.Function) { r.checkFunc(c, fn) }
 
 // ----- LongVariable -------------------------------------------------------
 
@@ -134,8 +133,7 @@ func (r *LongVariable) checkFunc(c *rule.Context, fn *model.Function) {
 		}
 	}
 }
-func (r *LongVariable) ApplyMethod(c *rule.Context, fn *model.Function)   { r.checkFunc(c, fn) }
-func (r *LongVariable) ApplyFunction(c *rule.Context, fn *model.Function) { r.checkFunc(c, fn) }
+func (r *LongVariable) ApplyFunc(c *rule.Context, fn *model.Function) { r.checkFunc(c, fn) }
 
 // ----- ShortMethodName ----------------------------------------------------
 
@@ -151,8 +149,7 @@ func (r *ShortMethodName) check(c *rule.Context, fn *model.Function) {
 	}
 	c.ReportFunc(fn, fn.Receiver, fn.Name, min)
 }
-func (r *ShortMethodName) ApplyMethod(c *rule.Context, fn *model.Function)   { r.check(c, fn) }
-func (r *ShortMethodName) ApplyFunction(c *rule.Context, fn *model.Function) { r.check(c, fn) }
+func (r *ShortMethodName) ApplyFunc(c *rule.Context, fn *model.Function) { r.check(c, fn) }
 
 // ----- BooleanGetMethodName -----------------------------------------------
 
@@ -179,8 +176,7 @@ func returnsSingleBool(fn *model.Function) bool {
 	}
 	return fn.Results[0].Type == "bool"
 }
-func (r *BooleanGetMethodName) ApplyMethod(c *rule.Context, fn *model.Function)   { r.check(c, fn) }
-func (r *BooleanGetMethodName) ApplyFunction(c *rule.Context, fn *model.Function) { r.check(c, fn) }
+func (r *BooleanGetMethodName) ApplyFunc(c *rule.Context, fn *model.Function) { r.check(c, fn) }
 
 // ----- ConstantNamingConventions ------------------------------------------
 //
@@ -205,8 +201,11 @@ func (r *ConstantNamingConventions) ApplyFile(c *rule.Context) {
 
 type ConstructorWithNameAsEnclosingClass struct{ *rule.Base }
 
-func (r *ConstructorWithNameAsEnclosingClass) ApplyMethod(c *rule.Context, fn *model.Function) {
-	if fn.Receiver != "" && fn.Name == fn.Receiver {
+func (r *ConstructorWithNameAsEnclosingClass) ApplyFunc(c *rule.Context, fn *model.Function) {
+	if !fn.IsMethod() {
+		return
+	}
+	if fn.Name == fn.Receiver {
 		c.ReportFunc(fn)
 	}
 }

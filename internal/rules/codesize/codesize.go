@@ -57,8 +57,7 @@ func (r *CyclomaticComplexity) check(c *rule.Context, fn *model.Function) {
 	}
 	c.ReportFunc(fn, string(fn.NodeType()), fn.Name, ccn, threshold)
 }
-func (r *CyclomaticComplexity) ApplyMethod(c *rule.Context, fn *model.Function)   { r.check(c, fn) }
-func (r *CyclomaticComplexity) ApplyFunction(c *rule.Context, fn *model.Function) { r.check(c, fn) }
+func (r *CyclomaticComplexity) ApplyFunc(c *rule.Context, fn *model.Function) { r.check(c, fn) }
 
 // ----- NPathComplexity ----------------------------------------------------
 
@@ -72,8 +71,7 @@ func (r *NPathComplexity) check(c *rule.Context, fn *model.Function) {
 	}
 	c.ReportFunc(fn, string(fn.NodeType()), fn.Name, npath, threshold)
 }
-func (r *NPathComplexity) ApplyMethod(c *rule.Context, fn *model.Function)   { r.check(c, fn) }
-func (r *NPathComplexity) ApplyFunction(c *rule.Context, fn *model.Function) { r.check(c, fn) }
+func (r *NPathComplexity) ApplyFunc(c *rule.Context, fn *model.Function) { r.check(c, fn) }
 
 // ----- LongMethod (ExcessiveMethodLength) --------------------------------
 
@@ -87,8 +85,7 @@ func (r *LongMethod) check(c *rule.Context, fn *model.Function) {
 	}
 	c.ReportFunc(fn, string(fn.NodeType()), fn.Name, loc, threshold)
 }
-func (r *LongMethod) ApplyMethod(c *rule.Context, fn *model.Function)   { r.check(c, fn) }
-func (r *LongMethod) ApplyFunction(c *rule.Context, fn *model.Function) { r.check(c, fn) }
+func (r *LongMethod) ApplyFunc(c *rule.Context, fn *model.Function) { r.check(c, fn) }
 
 // ----- LongClass (ExcessiveClassLength) ----------------------------------
 
@@ -115,8 +112,7 @@ func (r *LongParameterList) check(c *rule.Context, fn *model.Function) {
 	}
 	c.ReportFunc(fn, string(fn.NodeType()), fn.Name, count, threshold)
 }
-func (r *LongParameterList) ApplyMethod(c *rule.Context, fn *model.Function)   { r.check(c, fn) }
-func (r *LongParameterList) ApplyFunction(c *rule.Context, fn *model.Function) { r.check(c, fn) }
+func (r *LongParameterList) ApplyFunc(c *rule.Context, fn *model.Function) { r.check(c, fn) }
 
 // ----- ExcessivePublicCount ----------------------------------------------
 

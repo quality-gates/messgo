@@ -92,8 +92,7 @@ func (r *UnusedFormalParameter) check(c *rule.Context, fn *model.Function) {
 		}
 	}
 }
-func (r *UnusedFormalParameter) ApplyMethod(c *rule.Context, fn *model.Function)   { r.check(c, fn) }
-func (r *UnusedFormalParameter) ApplyFunction(c *rule.Context, fn *model.Function) { r.check(c, fn) }
+func (r *UnusedFormalParameter) ApplyFunc(c *rule.Context, fn *model.Function) { r.check(c, fn) }
 
 // ----- UnusedLocalVariable ------------------------------------------------
 
@@ -115,8 +114,7 @@ func (r *UnusedLocalVariable) check(c *rule.Context, fn *model.Function) {
 		c.Report(v.Line, v.Line, v.Name)
 	}
 }
-func (r *UnusedLocalVariable) ApplyMethod(c *rule.Context, fn *model.Function)   { r.check(c, fn) }
-func (r *UnusedLocalVariable) ApplyFunction(c *rule.Context, fn *model.Function) { r.check(c, fn) }
+func (r *UnusedLocalVariable) ApplyFunc(c *rule.Context, fn *model.Function) { r.check(c, fn) }
 
 // identReads returns the set of identifier names that are *read* somewhere in
 // the body — i.e. referenced outside of the left-hand side of an assignment or

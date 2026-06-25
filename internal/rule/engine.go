@@ -44,27 +44,22 @@ func applyRule(ctx *Context, r Rule, file *model.File) {
 			ir.ApplyInterface(ctx, i)
 		}
 	}
-	if mr, ok := r.(MethodRule); ok {
-		applyMethodRule(ctx, mr, file)
-	}
-	if fnr, ok := r.(FunctionRule); ok {
-		for _, fn := range file.Functions {
-			fnr.ApplyFunction(ctx, fn)
-		}
+	if fr, ok := r.(FuncRule); ok {
+		applyFuncRule(ctx, fr, file)
 	}
 }
 
-// applyMethodRule invokes a method-aware rule for every method in the file,
-// including interface methods (which PHPMD also models as methods).
-func applyMethodRule(ctx *Context, mr MethodRule, file *model.File) {
+// applyFuncRule invokes a function-aware rule once for every function-level
+// artifact: free functions, methods (both in AllFuncs), and interface methods
+// (which PHPMD also models as methods). Method-only rules guard on
+// fn.IsMethod() in their own body.
+func applyFuncRule(ctx *Context, fr FuncRule, file *model.File) {
 	for _, fn := range file.AllFuncs {
-		if fn.IsMethod() {
-			mr.ApplyMethod(ctx, fn)
-		}
+		fr.ApplyFunc(ctx, fn)
 	}
 	for _, iface := range file.Interfaces {
 		for _, fn := range iface.Methods {
-			mr.ApplyMethod(ctx, fn)
+			fr.ApplyFunc(ctx, fn)
 		}
 	}
 }

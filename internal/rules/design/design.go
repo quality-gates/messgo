@@ -106,8 +106,7 @@ func (r *ExitExpression) check(c *rule.Context, fn *model.Function) {
 		}
 	}
 }
-func (r *ExitExpression) ApplyMethod(c *rule.Context, fn *model.Function)   { r.check(c, fn) }
-func (r *ExitExpression) ApplyFunction(c *rule.Context, fn *model.Function) { r.check(c, fn) }
+func (r *ExitExpression) ApplyFunc(c *rule.Context, fn *model.Function) { r.check(c, fn) }
 
 // ----- GotoStatement ------------------------------------------------------
 
@@ -129,8 +128,7 @@ func (r *GotoStatement) check(c *rule.Context, fn *model.Function) {
 		c.ReportFunc(fn, string(fn.NodeType()), fn.Name)
 	}
 }
-func (r *GotoStatement) ApplyMethod(c *rule.Context, fn *model.Function)   { r.check(c, fn) }
-func (r *GotoStatement) ApplyFunction(c *rule.Context, fn *model.Function) { r.check(c, fn) }
+func (r *GotoStatement) ApplyFunc(c *rule.Context, fn *model.Function) { r.check(c, fn) }
 
 // ----- CountInLoopExpression ----------------------------------------------
 //
@@ -163,8 +161,7 @@ func (r *CountInLoopExpression) check(c *rule.Context, fn *model.Function) {
 		return true
 	})
 }
-func (r *CountInLoopExpression) ApplyMethod(c *rule.Context, fn *model.Function)   { r.check(c, fn) }
-func (r *CountInLoopExpression) ApplyFunction(c *rule.Context, fn *model.Function) { r.check(c, fn) }
+func (r *CountInLoopExpression) ApplyFunc(c *rule.Context, fn *model.Function) { r.check(c, fn) }
 
 // ----- DevelopmentCodeFragment --------------------------------------------
 
@@ -188,8 +185,7 @@ func (r *DevelopmentCodeFragment) check(c *rule.Context, fn *model.Function) {
 		}
 	}
 }
-func (r *DevelopmentCodeFragment) ApplyMethod(c *rule.Context, fn *model.Function)   { r.check(c, fn) }
-func (r *DevelopmentCodeFragment) ApplyFunction(c *rule.Context, fn *model.Function) { r.check(c, fn) }
+func (r *DevelopmentCodeFragment) ApplyFunc(c *rule.Context, fn *model.Function) { r.check(c, fn) }
 
 // ----- EmptyCatchBlock ----------------------------------------------------
 //
@@ -232,8 +228,7 @@ func isNilIdent(e ast.Expr) bool {
 	id, ok := e.(*ast.Ident)
 	return ok && id.Name == "nil"
 }
-func (r *EmptyCatchBlock) ApplyMethod(c *rule.Context, fn *model.Function)   { r.check(c, fn) }
-func (r *EmptyCatchBlock) ApplyFunction(c *rule.Context, fn *model.Function) { r.check(c, fn) }
+func (r *EmptyCatchBlock) ApplyFunc(c *rule.Context, fn *model.Function) { r.check(c, fn) }
 
 // ----- CouplingBetweenObjects ---------------------------------------------
 //

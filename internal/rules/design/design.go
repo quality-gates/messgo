@@ -4,8 +4,6 @@
 package design
 
 import (
-	"go/ast"
-	"go/token"
 	"strings"
 
 	"github.com/quality-gates/messgo/internal/model"
@@ -56,48 +54,12 @@ func (r *GlobalVariable) Configure(props rule.Properties) error {
 }
 
 func (r *GlobalVariable) ApplyFile(c *rule.Context) {
-	mutated := c.File.MutatedGlobals
-	if mutated == nil {
-		// Analyzed in isolation (e.g. a single file): fall back to scanning
-		// just this file for mutations.
-		mutated = util.MutatedGlobalNames([]*ast.File{c.File.Syntax})
-	}
-	for _, g := range packageVars(c.File.Syntax) {
-		if mutated[g.name] || r.reportImmutable {
-			line := c.File.Fset.Position(g.pos).Line
-			c.Report(line, line, g.name)
+	mutated := c.File.MutatedPackageGlobals()
+	for _, g := range c.File.PackageVars() {
+		if mutated[g.Name] || r.reportImmutable {
+			c.Report(g.Line, g.Line, g.Name)
 		}
 	}
-}
-
-type pkgVar struct {
-	name string
-	pos  token.Pos
-}
-
-// packageVars returns every package-level variable declared in the file (one
-// entry per name), skipping the blank identifier. Constants and locals are not
-// package-level vars and are excluded by construction.
-func packageVars(f *ast.File) []pkgVar {
-	var out []pkgVar
-	for _, decl := range f.Decls {
-		gd, ok := decl.(*ast.GenDecl)
-		if !ok || gd.Tok != token.VAR {
-			continue
-		}
-		for _, spec := range gd.Specs {
-			vs, ok := spec.(*ast.ValueSpec)
-			if !ok {
-				continue
-			}
-			for _, name := range vs.Names {
-				if name.Name != "_" {
-					out = append(out, pkgVar{name.Name, name.Pos()})
-				}
-			}
-		}
-	}
-	return out
 }
 
 // ----- ExitExpression -----------------------------------------------------
@@ -107,10 +69,7 @@ func packageVars(f *ast.File) []pkgVar {
 type ExitExpression struct{ *rule.Base }
 
 func (r *ExitExpression) check(c *rule.Context, fn *model.Function) {
-	if fn.Body == nil {
-		return
-	}
-	for _, call := range util.Calls(fn.Body, fn.File.Fset) {
+	for _, call := range fn.Calls() {
 		if call.Name == "os.Exit" || call.Name == "syscall.Exit" {
 			c.ReportFuncAt(fn, call.Line, call.Line, string(fn.NodeType()), fn.Name)
 			return
@@ -124,18 +83,7 @@ func (r *ExitExpression) ApplyFunc(c *rule.Context, fn *model.Function) { r.chec
 type GotoStatement struct{ *rule.Base }
 
 func (r *GotoStatement) check(c *rule.Context, fn *model.Function) {
-	if fn.Body == nil {
-		return
-	}
-	found := false
-	ast.Inspect(fn.Body, func(n ast.Node) bool {
-		if b, ok := n.(*ast.BranchStmt); ok && b.Tok == token.GOTO {
-			found = true
-			return false
-		}
-		return true
-	})
-	if found {
+	if fn.HasGoto() {
 		c.ReportFunc(fn, string(fn.NodeType()), fn.Name)
 	}
 }
@@ -151,26 +99,9 @@ type CountInLoopExpression struct{ *rule.Base }
 var loopCountFuncs = map[string]bool{"len": true, "cap": true}
 
 func (r *CountInLoopExpression) check(c *rule.Context, fn *model.Function) {
-	if fn.Body == nil {
-		return
+	for _, call := range fn.LoopConditionCalls(loopCountFuncs) {
+		c.ReportFuncAt(fn, call.Line, call.Line, call.Name, "for")
 	}
-	ast.Inspect(fn.Body, func(n ast.Node) bool {
-		fs, ok := n.(*ast.ForStmt)
-		if !ok || fs.Cond == nil {
-			return true
-		}
-		ast.Inspect(fs.Cond, func(cn ast.Node) bool {
-			if ce, ok := cn.(*ast.CallExpr); ok {
-				name := util.CalleeName(ce.Fun)
-				if loopCountFuncs[name] {
-					line := fn.File.Fset.Position(fs.Pos()).Line
-					c.ReportFuncAt(fn, line, line, name, "for")
-				}
-			}
-			return true
-		})
-		return true
-	})
 }
 func (r *CountInLoopExpression) ApplyFunc(c *rule.Context, fn *model.Function) { r.check(c, fn) }
 
@@ -194,14 +125,11 @@ func (r *DevelopmentCodeFragment) Configure(props rule.Properties) error {
 }
 
 func (r *DevelopmentCodeFragment) check(c *rule.Context, fn *model.Function) {
-	if fn.Body == nil {
-		return
-	}
 	image := fn.Name
 	if fn.IsMethod() {
 		image = fn.Receiver + "::" + fn.Name
 	}
-	for _, call := range util.Calls(fn.Body, fn.File.Fset) {
+	for _, call := range fn.Calls() {
 		if r.unwantedFunctions[strings.ToLower(call.Name)] {
 			c.ReportFuncAt(fn, call.Line, call.Line, string(fn.NodeType()), image, call.Name)
 		}
@@ -217,38 +145,9 @@ func (r *DevelopmentCodeFragment) ApplyFunc(c *rule.Context, fn *model.Function)
 type EmptyCatchBlock struct{ *rule.Base }
 
 func (r *EmptyCatchBlock) check(c *rule.Context, fn *model.Function) {
-	if fn.Body == nil {
-		return
+	for _, line := range fn.EmptyNilCheckBlockLines() {
+		c.ReportFuncAt(fn, line, line, fn.Name)
 	}
-	ast.Inspect(fn.Body, func(n ast.Node) bool {
-		ifs, ok := n.(*ast.IfStmt)
-		if !ok || ifs.Body == nil || len(ifs.Body.List) != 0 {
-			return true
-		}
-		if conditionChecksNil(ifs.Cond) {
-			line := fn.File.Fset.Position(ifs.Pos()).Line
-			c.ReportFuncAt(fn, line, line, fn.Name)
-		}
-		return true
-	})
-}
-
-func conditionChecksNil(cond ast.Expr) bool {
-	found := false
-	ast.Inspect(cond, func(n ast.Node) bool {
-		if be, ok := n.(*ast.BinaryExpr); ok && (be.Op == token.NEQ || be.Op == token.EQL) {
-			if isNilIdent(be.X) || isNilIdent(be.Y) {
-				found = true
-			}
-		}
-		return true
-	})
-	return found
-}
-
-func isNilIdent(e ast.Expr) bool {
-	id, ok := e.(*ast.Ident)
-	return ok && id.Name == "nil"
 }
 func (r *EmptyCatchBlock) ApplyFunc(c *rule.Context, fn *model.Function) { r.check(c, fn) }
 
@@ -368,7 +267,7 @@ func lcom4(class *model.Class) int {
 		if accessorOf[m.Name] != "" {
 			continue
 		}
-		usedFields, calledMethods := receiverUses(m, fields, methodIdx)
+		usedFields, calledMethods := m.ReceiverUses(fields, methodIdx)
 		for _, f := range usedFields {
 			g.addFieldUse(i, f)
 		}
@@ -398,103 +297,11 @@ func indexMethods(class *model.Class, fields map[string]bool) (methodIdx map[str
 	accessorOf = map[string]string{}
 	for i, m := range class.Methods {
 		methodIdx[m.Name] = i
-		if f := accessorFieldOf(m, fields); f != "" {
+		if f := m.AccessorField(fields); f != "" {
 			accessorOf[m.Name] = f
 		}
 	}
 	return methodIdx, accessorOf
-}
-
-// accessorFieldOf returns the field a trivial getter or setter wraps: the
-// method's whole body is `return r.field`, or `r.field = v` with a plain
-// identifier or literal v. Anything more (computation, validation, touching a
-// second field) makes the method a real behavior carrier and returns "".
-func accessorFieldOf(m *model.Function, fields map[string]bool) string {
-	if m.Body == nil || len(m.Body.List) != 1 {
-		return ""
-	}
-	switch s := m.Body.List[0].(type) {
-	case *ast.ReturnStmt:
-		if len(s.Results) == 1 {
-			return fieldSelectorName(s.Results[0], m.RecvName, fields)
-		}
-	case *ast.AssignStmt:
-		return setterFieldOf(s, m.RecvName, fields)
-	}
-	return ""
-}
-
-// setterFieldOf returns the field assigned by a trivial setter statement
-// (`r.field = v` with a plain identifier or literal v), or "".
-func setterFieldOf(s *ast.AssignStmt, recvName string, fields map[string]bool) string {
-	if s.Tok == token.ASSIGN && len(s.Lhs) == 1 && len(s.Rhs) == 1 && isPlainValue(s.Rhs[0]) {
-		return fieldSelectorName(s.Lhs[0], recvName, fields)
-	}
-	return ""
-}
-
-// isPlainValue reports whether e is a bare identifier or literal.
-func isPlainValue(e ast.Expr) bool {
-	switch e.(type) {
-	case *ast.Ident, *ast.BasicLit:
-		return true
-	}
-	return false
-}
-
-// fieldSelectorName returns the field name if e is `<recvName>.<field>`.
-func fieldSelectorName(e ast.Expr, recvName string, fields map[string]bool) string {
-	sel, ok := e.(*ast.SelectorExpr)
-	if !ok {
-		return ""
-	}
-	id, ok := sel.X.(*ast.Ident)
-	if ok && id.Name == recvName && fields[sel.Sel.Name] {
-		return sel.Sel.Name
-	}
-	return ""
-}
-
-// receiverUses scans a method body for selector expressions rooted at the
-// receiver variable and splits them into used field names and called sibling
-// method names. Field and method names cannot collide in Go, so the
-// classification is unambiguous; a method value reference (`f := r.m`) counts
-// the same as a call, since it ties the methods together just as strongly.
-func receiverUses(m *model.Function, fields map[string]bool, methods map[string]int) (usedFields, calledMethods []string) {
-	if m.Body == nil || m.RecvName == "" || m.RecvName == "_" {
-		return nil, nil
-	}
-	seen := map[string]bool{}
-	ast.Inspect(m.Body, func(n ast.Node) bool {
-		name := receiverSelector(n, m.RecvName)
-		if name == "" || seen[name] {
-			return true
-		}
-		_, isMethod := methods[name]
-		switch {
-		case fields[name]:
-			seen[name] = true
-			usedFields = append(usedFields, name)
-		case isMethod:
-			seen[name] = true
-			calledMethods = append(calledMethods, name)
-		}
-		return true
-	})
-	return usedFields, calledMethods
-}
-
-// receiverSelector returns the selected name if n is a selector expression on
-// the given receiver variable, else "".
-func receiverSelector(n ast.Node, recvName string) string {
-	sel, ok := n.(*ast.SelectorExpr)
-	if !ok {
-		return ""
-	}
-	if id, ok := sel.X.(*ast.Ident); ok && id.Name == recvName {
-		return sel.Sel.Name
-	}
-	return ""
 }
 
 // cohesionGraph is a union-find over a class's methods. Methods become

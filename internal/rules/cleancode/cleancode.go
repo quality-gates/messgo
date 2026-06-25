@@ -5,9 +5,6 @@
 package cleancode
 
 import (
-	"go/ast"
-	"go/token"
-
 	"github.com/quality-gates/messgo/internal/model"
 	"github.com/quality-gates/messgo/internal/rule"
 	"github.com/quality-gates/messgo/internal/util"
@@ -60,21 +57,9 @@ func (r *BooleanArgumentFlag) ApplyFunc(c *rule.Context, fn *model.Function) { r
 type ElseExpression struct{ *rule.Base }
 
 func (r *ElseExpression) check(c *rule.Context, fn *model.Function) {
-	if fn.Body == nil {
-		return
+	for _, line := range fn.ElseBlockLines() {
+		c.ReportFuncAt(fn, line, line, fn.Name)
 	}
-	ast.Inspect(fn.Body, func(n ast.Node) bool {
-		ifs, ok := n.(*ast.IfStmt)
-		if !ok {
-			return true
-		}
-		// An else block (not an else-if chain) is a *ast.BlockStmt.
-		if _, isBlock := ifs.Else.(*ast.BlockStmt); isBlock {
-			line := fn.File.Fset.Position(ifs.Else.Pos()).Line
-			c.ReportFuncAt(fn, line, line, fn.Name)
-		}
-		return true
-	})
 }
 func (r *ElseExpression) ApplyFunc(c *rule.Context, fn *model.Function) { r.check(c, fn) }
 
@@ -86,20 +71,9 @@ func (r *ElseExpression) ApplyFunc(c *rule.Context, fn *model.Function) { r.chec
 type IfStatementAssignment struct{ *rule.Base }
 
 func (r *IfStatementAssignment) check(c *rule.Context, fn *model.Function) {
-	if fn.Body == nil {
-		return
+	for _, pos := range fn.IfAssignmentInitPositions() {
+		c.ReportFuncAt(fn, pos.Line, pos.Line, pos.Line, pos.Column)
 	}
-	ast.Inspect(fn.Body, func(n ast.Node) bool {
-		ifs, ok := n.(*ast.IfStmt)
-		if !ok {
-			return true
-		}
-		if a, ok := ifs.Init.(*ast.AssignStmt); ok && a.Tok == token.ASSIGN {
-			pos := fn.File.Fset.Position(a.Pos())
-			c.ReportFuncAt(fn, pos.Line, pos.Line, pos.Line, pos.Column)
-		}
-		return true
-	})
 }
 func (r *IfStatementAssignment) ApplyFunc(c *rule.Context, fn *model.Function) { r.check(c, fn) }
 
@@ -111,54 +85,8 @@ func (r *IfStatementAssignment) ApplyFunc(c *rule.Context, fn *model.Function) {
 type DuplicatedArrayKey struct{ *rule.Base }
 
 func (r *DuplicatedArrayKey) check(c *rule.Context, fn *model.Function) {
-	if fn.Body == nil {
-		return
+	for _, dup := range fn.DuplicateLiteralKeys() {
+		c.ReportFuncAt(fn, dup.Line, dup.Line, dup.Display, dup.FirstLine)
 	}
-	ast.Inspect(fn.Body, func(n ast.Node) bool {
-		cl, ok := n.(*ast.CompositeLit)
-		if !ok {
-			return true
-		}
-		seen := map[string]int{}
-		for _, elt := range cl.Elts {
-			kv, ok := elt.(*ast.KeyValueExpr)
-			if !ok {
-				continue
-			}
-			key, ok := literalKey(kv.Key)
-			if !ok {
-				continue
-			}
-			line := fn.File.Fset.Position(kv.Key.Pos()).Line
-			if first, dup := seen[key]; dup {
-				c.ReportFuncAt(fn, line, line, displayKey(kv.Key), first)
-				continue
-			}
-			seen[key] = line
-		}
-		return true
-	})
-}
-
-// literalKey returns a normalized comparison key for a constant composite-lit
-// key (basic literal or identifier constant), and whether it is one.
-func literalKey(e ast.Expr) (string, bool) {
-	switch k := e.(type) {
-	case *ast.BasicLit:
-		return k.Kind.String() + ":" + k.Value, true
-	case *ast.Ident:
-		return "ident:" + k.Name, true
-	}
-	return "", false
-}
-
-func displayKey(e ast.Expr) string {
-	switch k := e.(type) {
-	case *ast.BasicLit:
-		return k.Value
-	case *ast.Ident:
-		return k.Name
-	}
-	return ""
 }
 func (r *DuplicatedArrayKey) ApplyFunc(c *rule.Context, fn *model.Function) { r.check(c, fn) }

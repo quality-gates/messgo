@@ -25,7 +25,7 @@ or method.
         </description>
         <priority>1</priority>
         <properties>
-            <property name="exceptions" description="Comma-separated class name list of exceptions" value=""/>
+            <property name="exceptions" description="Comma-separated class name list of exceptions"/>
             <property name="ignorepattern" description="Ignore methods matching this regex. Example: /^(__construct|get.*Filtered)$/" value=""/>
         </properties>
         <example>

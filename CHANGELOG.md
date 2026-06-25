@@ -7,6 +7,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 ## [Unreleased]
 
 ### Changed
+- Moved AST walking for `design`, `cleancode`, and `unusedcode` rules behind model-level query primitives. Rules now ask `model.File` / `model.Function` for package variables, statement patterns, duplicate literal keys, identifier reads, and receiver uses instead of importing `go/ast`; added direct model query tests for those behaviours.
+- Moved threshold-style rules onto a shared declarative `ThresholdRule` skeleton with typed load-time configuration. Codesize/design threshold rules now declare property/default/boundary plus a metric function; property parsing, regex compilation, and list splitting happen when rulesets load instead of during artifact walks. Built-in XML keeps property names/descriptions but no longer duplicates defaults owned by rule declarations.
 - Collapsed the rule engine's separate `MethodRule` and `FunctionRule` interfaces (and the `applyMethodRule` helper) into a single `FuncRule` with one `ApplyFunc(ctx, fn)` seam. The model already unifies free functions and methods as `*model.Function`, so the engine now iterates the unified function list once and rules that only care about methods guard on `fn.IsMethod()` inline. This removes 20+ identical `ApplyMethod`/`ApplyFunction` pass-through pairs across the rule packages. No behavioural change.
 
 ## [0.1.9] - 2026-06-10

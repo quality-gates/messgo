@@ -25,7 +25,7 @@ method entry. The decision points are 'if', 'while', 'for', and 'case labels'. G
         </description>
         <priority>3</priority>
         <properties>
-            <property name="reportLevel" description="The Cyclomatic Complexity reporting threshold"  value="10"/>
+            <property name="reportLevel" description="The Cyclomatic Complexity reporting threshold"/>
             <property name="showClassesComplexity"
                       description="Indicate if class average violation should be added to the report"
                       value="true"/>
@@ -87,7 +87,7 @@ A threshold of 200 is generally considered the point where measures should be ta
         </description>
         <priority>3</priority>
         <properties>
-            <property name="minimum" description="The npath reporting threshold" value="200"/>
+            <property name="minimum" description="The npath reporting threshold"/>
         </properties>
         <example>
             <![CDATA[
@@ -111,8 +111,8 @@ too much. Try to reduce the method size by creating helper methods and removing 
         </description>
         <priority>3</priority>
         <properties>
-            <property name="minimum" description="The method size reporting threshold" value="100"/>
-            <property name="ignore-whitespace" description="Count whitespace in reporting threshold" value="false"/>
+            <property name="minimum" description="The method size reporting threshold"/>
+            <property name="ignore-whitespace" description="Count whitespace in reporting threshold"/>
         </properties>
         <example>
             <![CDATA[
@@ -139,8 +139,8 @@ manageable.
         </description>
         <priority>3</priority>
         <properties>
-            <property name="minimum" description="The class size reporting threshold"  value="1000"/>
-            <property name="ignore-whitespace" description="Count whitespace in reporting threshold" value="false"/>
+            <property name="minimum" description="The class size reporting threshold"/>
+            <property name="ignore-whitespace" description="Count whitespace in reporting threshold"/>
         </properties>
         <example>
             <![CDATA[
@@ -164,7 +164,7 @@ wrap the numerous parameters.  Basically, try to group the parameters together.
         </description>
         <priority>3</priority>
         <properties>
-            <property name="minimum" description="The parameter count reporting threshold" value="10"/>
+            <property name="minimum" description="The parameter count reporting threshold"/>
         </properties>
         <example>
             <![CDATA[
@@ -191,7 +191,7 @@ thoroughly test it.
         </description>
         <priority>3</priority>
         <properties>
-            <property name="minimum" description="The public item reporting threshold" value="45"/>
+            <property name="minimum" description="The public item reporting threshold"/>
         </properties>
         <example>
             <![CDATA[
@@ -223,7 +223,7 @@ field.
         </description>
         <priority>3</priority>
         <properties>
-            <property name="maxfields" description="The field count reporting threshold " value="15"/>
+            <property name="maxfields" description="The field count reporting threshold"/>
         </properties>
         <example>
             <![CDATA[
@@ -347,8 +347,8 @@ The default was changed from 10 to 25 in PHPMD 2.3.
         </description>
         <priority>3</priority>
         <properties>
-            <property name="maxmethods" description="The method count reporting threshold" value="25"/>
-            <property name="ignorepattern" description="Ignore methods matching this regex" value="(^(set|get|is|has|with))i"/>
+            <property name="maxmethods" description="The method count reporting threshold"/>
+            <property name="ignorepattern" description="Ignore methods matching this regex"/>
         </properties>
     </rule>
 
@@ -367,8 +367,8 @@ By default it ignores methods starting with 'get' or 'set'.
         </description>
         <priority>3</priority>
         <properties>
-            <property name="maxmethods" description="The method count reporting threshold" value="10"/>
-            <property name="ignorepattern" description="Ignore methods matching this regex" value="(^(set|get|is|has|with))i"/>
+            <property name="maxmethods" description="The method count reporting threshold"/>
+            <property name="ignorepattern" description="Ignore methods matching this regex"/>
         </properties>
     </rule>
 
@@ -387,7 +387,7 @@ methods also means that this class has a greater potential impact on derived cla
         </description>
         <priority>3</priority>
         <properties>
-            <property name="maximum" description="The maximum WMC tolerable for a class." value="50"/>
+            <property name="maximum" description="The maximum WMC tolerable for a class."/>
         </properties>
         <example>
             <![CDATA[

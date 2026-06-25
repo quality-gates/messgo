@@ -30,6 +30,12 @@ type BaseRef interface {
 	base() *Base
 }
 
+// Configurable is implemented by rules that parse typed properties once when
+// the ruleset is loaded.
+type Configurable interface {
+	Configure(Properties) error
+}
+
 func (b *Base) base() *Base { return b }
 
 // BaseOf returns the embedded *Base of a rule, or nil if it has none.

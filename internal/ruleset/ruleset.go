@@ -74,8 +74,8 @@ type xmlProperties struct {
 }
 
 type xmlProperty struct {
-	Name  string `xml:"name,attr"`
-	Value string `xml:"value,attr"`
+	Name  string  `xml:"name,attr"`
+	Value *string `xml:"value,attr"`
 	// Inline value form: <property name="x"><value>...</value></property>
 	InnerValue string `xml:"value"`
 }
@@ -218,7 +218,11 @@ func (l *Loader) addRule(set *rule.RuleSet, setName string, xr xmlRule) error {
 	case xr.Ref != "":
 		return l.addRef(set, xr)
 	case xr.Class != "":
-		if r := l.buildRule(setName, xr, &xr); r != nil {
+		r, err := l.buildRule(setName, xr, &xr)
+		if err != nil {
+			return err
+		}
+		if r != nil {
 			l.appendRule(set, r)
 		}
 	}
@@ -240,46 +244,57 @@ func (l *Loader) addRef(set *rule.RuleSet, xr xmlRule) error {
 	}
 	excluded := excludeSet(xr.Exclude)
 	for _, sr := range src.Rules {
-		l.processRefRule(set, src.Name, sr, ruleName, excluded, &xr)
+		if err := processRefRule(l, set, src.Name, sr, ruleName, excluded, &xr); err != nil {
+			return err
+		}
 	}
 	return nil
 }
 
-func (l *Loader) processRefRule(set *rule.RuleSet, srcName string, sr xmlRule, ruleName string, excluded map[string]bool, xr *xmlRule) {
+func processRefRule(l *Loader, set *rule.RuleSet, srcName string, sr xmlRule, ruleName string, excluded map[string]bool, xr *xmlRule) error {
 	if sr.Class == "" {
-		return
+		return nil
 	}
 	if ruleName != "" {
 		if sr.Name == ruleName {
-			if r := l.buildRule(srcName, sr, xr); r != nil {
+			r, err := l.buildRule(srcName, sr, xr)
+			if err != nil {
+				return err
+			}
+			if r != nil {
 				l.appendRule(set, r)
 			}
 		}
-		return
+		return nil
 	}
 	if excluded[sr.Name] {
-		return
+		return nil
 	}
-	if r := l.buildRule(srcName, sr, &sr); r != nil {
+	r, err := l.buildRule(srcName, sr, &sr)
+	if err != nil {
+		return err
+	}
+	if r != nil {
 		l.appendRule(set, r)
 	}
+	return nil
 }
 
 // buildRule constructs a configured rule from a definition (def, which carries
 // message/class/url/since/description) and an override source (ov, which
 // carries priority and property overrides — usually the same element, but for
 // a single-rule ref it is the referencing element).
-func (l *Loader) buildRule(setName string, def xmlRule, ov *xmlRule) rule.Rule {
+func (l *Loader) buildRule(setName string, def xmlRule, ov *xmlRule) (rule.Rule, error) {
 	ctor, ok := rule.Lookup(def.Class)
 	if !ok {
 		l.warn("skipping unimplemented rule %s (%s)", def.Name, def.Class)
-		return nil
+		return nil, nil
 	}
 	r := ctor()
 	base := rule.BaseOf(r)
 	if base == nil {
 		l.warn("rule %s does not expose metadata", def.Name)
-		return nil
+		return nil, nil
 	}
 	base.RuleName = def.Name
 	base.RuleMessage = strings.TrimSpace(def.Message)
@@ -295,7 +310,12 @@ func (l *Loader) buildRule(setName string, def xmlRule, ov *xmlRule) rule.Rule {
 	if ov.Priority != nil {
 		base.RulePrio = *ov.Priority
 	}
-	return r
+	if configurable, ok := r.(rule.Configurable); ok {
+		if err := configurable.Configure(base.RuleProps); err != nil {
+			return nil, fmt.Errorf("configure rule %s: %w", def.Name, err)
+		}
+	}
+	return r, nil
 }
 
 // appendRule adds a rule to the set unless it is filtered out by the
@@ -346,17 +366,30 @@ func excludeSet(excludes []xmlExclude) map[string]bool {
 func mergeProps(base, override xmlProperties) rule.Properties {
 	props := rule.Properties{}
 	for _, p := range base.Property {
+		if !hasPropValue(p) {
+			continue
+		}
 		props[p.Name] = propValue(p)
 	}
 	for _, p := range override.Property {
+		if !hasPropValue(p) {
+			continue
+		}
 		props[p.Name] = propValue(p)
 	}
 	return props
 }
 
+func hasPropValue(p xmlProperty) bool {
+	return p.Value != nil || strings.TrimSpace(p.InnerValue) != ""
+}
+
 func propValue(p xmlProperty) string {
-	if p.Value == "" && p.InnerValue != "" {
+	if p.Value != nil {
+		return *p.Value
+	}
+	if p.InnerValue != "" {
 		return strings.TrimSpace(p.InnerValue)
 	}
-	return p.Value
+	return ""
 }

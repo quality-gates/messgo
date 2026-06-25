@@ -18,9 +18,9 @@ The Naming Ruleset contains a collection of rules about names - too long, too sh
         </description>
         <priority>3</priority>
         <properties>
-            <property name="maximum" description="The class name length reporting threshold" value="40"/>
-            <property name="subtract-prefixes" description="Comma-separated list of prefixes that will not count in the length of the class name. Only the first matching prefix will be subtracted." value=""/>
-            <property name="subtract-suffixes" description="Comma-separated list of suffixes that will not count in the length of the class name. Only the first matching suffix will be subtracted." value=""/>
+            <property name="maximum" description="The class name length reporting threshold"/>
+            <property name="subtract-prefixes" description="Comma-separated list of prefixes that will not count in the length of the class name. Only the first matching prefix will be subtracted."/>
+            <property name="subtract-suffixes" description="Comma-separated list of suffixes that will not count in the length of the class name. Only the first matching suffix will be subtracted."/>
         </properties>
         <example>
             <![CDATA[
@@ -49,8 +49,8 @@ class ClassGroupPrefixesThatIsUsedForGrouping {
         </description>
         <priority>3</priority>
         <properties>
-            <property name="minimum" description="The class name length reporting threshold" value="3"/>
-            <property name="exceptions" description="Comma-separated list of exceptions. Example: Log,URL,FTP" value=""/>
+            <property name="minimum" description="The class name length reporting threshold"/>
+            <property name="exceptions" description="Comma-separated list of exceptions. Example: Log,URL,FTP"/>
         </properties>
         <example>
             <![CDATA[
@@ -75,8 +75,8 @@ Detects when a field, local, or parameter has a very short name.
         </description>
         <priority>3</priority>
         <properties>
-            <property name="minimum" description="Minimum length for a variable, property or parameter name" value="3"/>
-            <property name="exceptions" description="Comma-separated list of exceptions" value=""/>
+            <property name="minimum" description="Minimum length for a variable, property or parameter name"/>
+            <property name="exceptions" description="Comma-separated list of exceptions"/>
         </properties>
         <example>
             <![CDATA[
@@ -103,9 +103,9 @@ Detects when a field, formal or local variable is declared with a long name.
         </description>
         <priority>3</priority>
         <properties>
-            <property name="maximum" description="The variable length reporting threshold" value="20"/>
-            <property name="subtract-prefixes" description="Comma-separated list of prefixes that will not count in the length of the variable name. Only the first matching prefix will be subtracted." value=""/>
-            <property name="subtract-suffixes" description="Comma-separated list of suffixes that will not count in the length of the variable name. Only the first matching suffix will be subtracted." value=""/>
+            <property name="maximum" description="The variable length reporting threshold"/>
+            <property name="subtract-prefixes" description="Comma-separated list of prefixes that will not count in the length of the variable name. Only the first matching prefix will be subtracted."/>
+            <property name="subtract-suffixes" description="Comma-separated list of suffixes that will not count in the length of the variable name. Only the first matching suffix will be subtracted."/>
         </properties>
         <example>
             <![CDATA[
@@ -134,8 +134,8 @@ Detects when very short method names are used.
         </description>
         <priority>3</priority>
         <properties>
-            <property name="minimum" description="Minimum length for a method or function name" value="3"/>
-            <property name="exceptions" description="Comma-separated list of exceptions" value=""/>
+            <property name="minimum" description="Minimum length for a method or function name"/>
+            <property name="exceptions" description="Comma-separated list of exceptions"/>
         </properties>
         <example>
             <![CDATA[
@@ -200,7 +200,7 @@ is to name these methods 'isX()' or 'hasX()'.
         </description>
         <priority>4</priority>
         <properties>
-            <property name="checkParameterizedMethods" value="false" description="Applies only to methods without parameter when set to true" />
+            <property name="checkParameterizedMethods" description="Applies only to methods without parameter when set to true" />
         </properties>
         <example>
             <![CDATA[

@@ -11,29 +11,42 @@ import (
 )
 
 func init() {
-	rule.Register("PHPMD\\Rule\\Naming\\ShortClassName", func() rule.Rule { return &ShortClassName{Base: rule.NewBase()} })
-	rule.Register("PHPMD\\Rule\\Naming\\LongClassName", func() rule.Rule { return &LongClassName{Base: rule.NewBase()} })
-	rule.Register("PHPMD\\Rule\\Naming\\ShortVariable", func() rule.Rule { return &ShortVariable{Base: rule.NewBase()} })
-	rule.Register("PHPMD\\Rule\\Naming\\LongVariable", func() rule.Rule { return &LongVariable{Base: rule.NewBase()} })
-	rule.Register("PHPMD\\Rule\\Naming\\ShortMethodName", func() rule.Rule { return &ShortMethodName{Base: rule.NewBase()} })
-	rule.Register("PHPMD\\Rule\\Naming\\BooleanGetMethodName", func() rule.Rule { return &BooleanGetMethodName{Base: rule.NewBase()} })
+	rule.Register("PHPMD\\Rule\\Naming\\ShortClassName", newShortClassName)
+	rule.Register("PHPMD\\Rule\\Naming\\LongClassName", newLongClassName)
+	rule.Register("PHPMD\\Rule\\Naming\\ShortVariable", newShortVariable)
+	rule.Register("PHPMD\\Rule\\Naming\\LongVariable", newLongVariable)
+	rule.Register("PHPMD\\Rule\\Naming\\ShortMethodName", newShortMethodName)
+	rule.Register("PHPMD\\Rule\\Naming\\BooleanGetMethodName", newBooleanGetMethodName)
 	rule.Register("PHPMD\\Rule\\Naming\\ConstantNamingConventions", func() rule.Rule { return &ConstantNamingConventions{Base: rule.NewBase()} })
 	rule.Register("PHPMD\\Rule\\Naming\\ConstructorWithNameAsEnclosingClass", func() rule.Rule { return &ConstructorWithNameAsEnclosingClass{Base: rule.NewBase()} })
 }
 
 // ----- ShortClassName -----------------------------------------------------
 
-type ShortClassName struct{ *rule.Base }
+type ShortClassName struct {
+	*rule.Base
+	minimum    int
+	exceptions []string
+}
+
+func newShortClassName() rule.Rule {
+	return &ShortClassName{Base: rule.NewBase()}
+}
+
+func (r *ShortClassName) Configure(props rule.Properties) error {
+	r.minimum = props.Int("minimum", 3)
+	r.exceptions = util.SplitToList(props.String("exceptions", ""))
+	return nil
+}
 
 func (r *ShortClassName) check(c *rule.Context, name string, line, end int) {
-	min := c.Props().Int("minimum", 3)
-	if len(name) >= min {
+	if len(name) >= r.minimum {
 		return
 	}
-	if util.Contains(util.SplitToList(c.Props().String("exceptions", "")), name) {
+	if util.Contains(r.exceptions, name) {
 		return
 	}
-	c.Report(line, end, name, min)
+	c.Report(line, end, name, r.minimum)
 }
 func (r *ShortClassName) ApplyClass(c *rule.Context, cl *model.Class) {
 	r.check(c, cl.Name, cl.Line, cl.EndLine)
@@ -44,16 +57,29 @@ func (r *ShortClassName) ApplyInterface(c *rule.Context, i *model.Interface) {
 
 // ----- LongClassName ------------------------------------------------------
 
-type LongClassName struct{ *rule.Base }
+type LongClassName struct {
+	*rule.Base
+	maximum  int
+	prefixes []string
+	suffixes []string
+}
+
+func newLongClassName() rule.Rule {
+	return &LongClassName{Base: rule.NewBase()}
+}
+
+func (r *LongClassName) Configure(props rule.Properties) error {
+	r.maximum = props.Int("maximum", 40)
+	r.prefixes = util.SplitToList(props.String("subtract-prefixes", ""))
+	r.suffixes = util.SplitToList(props.String("subtract-suffixes", ""))
+	return nil
+}
 
 func (r *LongClassName) check(c *rule.Context, name string, line, end int) {
-	max := c.Props().Int("maximum", 40)
-	prefixes := util.SplitToList(c.Props().String("subtract-prefixes", ""))
-	suffixes := util.SplitToList(c.Props().String("subtract-suffixes", ""))
-	if util.LengthWithoutPrefixesAndSuffixes(name, prefixes, suffixes) <= max {
+	if util.LengthWithoutPrefixesAndSuffixes(name, r.prefixes, r.suffixes) <= r.maximum {
 		return
 	}
-	c.Report(line, end, name, max)
+	c.Report(line, end, name, r.maximum)
 }
 func (r *LongClassName) ApplyClass(c *rule.Context, cl *model.Class) {
 	r.check(c, cl.Name, cl.Line, cl.EndLine)
@@ -64,31 +90,42 @@ func (r *LongClassName) ApplyInterface(c *rule.Context, i *model.Interface) {
 
 // ----- ShortVariable ------------------------------------------------------
 
-type ShortVariable struct{ *rule.Base }
+type ShortVariable struct {
+	*rule.Base
+	minimum    int
+	exceptions []string
+}
 
-func (r *ShortVariable) checkName(c *rule.Context, name string, line int, exceptions []string) {
-	min := c.Props().Int("minimum", 3)
-	if len(name) >= min {
+func newShortVariable() rule.Rule {
+	return &ShortVariable{Base: rule.NewBase()}
+}
+
+func (r *ShortVariable) Configure(props rule.Properties) error {
+	r.minimum = props.Int("minimum", 3)
+	r.exceptions = util.SplitToList(props.String("exceptions", ""))
+	return nil
+}
+
+func (r *ShortVariable) checkName(c *rule.Context, name string, line int) {
+	if len(name) >= r.minimum {
 		return
 	}
-	if util.Contains(exceptions, name) {
+	if util.Contains(r.exceptions, name) {
 		return
 	}
-	c.Report(line, line, name, min)
+	c.Report(line, line, name, r.minimum)
 }
 
 func (r *ShortVariable) ApplyClass(c *rule.Context, cl *model.Class) {
-	ex := util.SplitToList(c.Props().String("exceptions", ""))
 	for _, f := range cl.Fields {
-		r.checkName(c, f.Name, f.Line, ex)
+		r.checkName(c, f.Name, f.Line)
 	}
 }
 
 func (r *ShortVariable) checkFunc(c *rule.Context, fn *model.Function) {
-	ex := util.SplitToList(c.Props().String("exceptions", ""))
 	for _, p := range fn.Params {
 		if p.Name != "" {
-			r.checkName(c, p.Name, p.Line, ex)
+			r.checkName(c, p.Name, p.Line)
 		}
 	}
 	if fn.Body != nil {
@@ -96,7 +133,7 @@ func (r *ShortVariable) checkFunc(c *rule.Context, fn *model.Function) {
 			if v.IsLoop { // PHPMD allows short loop counters (for-init context)
 				continue
 			}
-			r.checkName(c, v.Name, v.Line, ex)
+			r.checkName(c, v.Name, v.Line)
 		}
 	}
 }
@@ -104,16 +141,29 @@ func (r *ShortVariable) ApplyFunc(c *rule.Context, fn *model.Function) { r.check
 
 // ----- LongVariable -------------------------------------------------------
 
-type LongVariable struct{ *rule.Base }
+type LongVariable struct {
+	*rule.Base
+	maximum  int
+	prefixes []string
+	suffixes []string
+}
+
+func newLongVariable() rule.Rule {
+	return &LongVariable{Base: rule.NewBase()}
+}
+
+func (r *LongVariable) Configure(props rule.Properties) error {
+	r.maximum = props.Int("maximum", 20)
+	r.prefixes = util.SplitToList(props.String("subtract-prefixes", ""))
+	r.suffixes = util.SplitToList(props.String("subtract-suffixes", ""))
+	return nil
+}
 
 func (r *LongVariable) checkName(c *rule.Context, name string, line int) {
-	max := c.Props().Int("maximum", 20)
-	prefixes := util.SplitToList(c.Props().String("subtract-prefixes", ""))
-	suffixes := util.SplitToList(c.Props().String("subtract-suffixes", ""))
-	if util.LengthWithoutPrefixesAndSuffixes(name, prefixes, suffixes) <= max {
+	if util.LengthWithoutPrefixesAndSuffixes(name, r.prefixes, r.suffixes) <= r.maximum {
 		return
 	}
-	c.Report(line, line, name, max)
+	c.Report(line, line, name, r.maximum)
 }
 
 func (r *LongVariable) ApplyClass(c *rule.Context, cl *model.Class) {
@@ -137,23 +187,48 @@ func (r *LongVariable) ApplyFunc(c *rule.Context, fn *model.Function) { r.checkF
 
 // ----- ShortMethodName ----------------------------------------------------
 
-type ShortMethodName struct{ *rule.Base }
+type ShortMethodName struct {
+	*rule.Base
+	minimum    int
+	exceptions []string
+}
+
+func newShortMethodName() rule.Rule {
+	return &ShortMethodName{Base: rule.NewBase()}
+}
+
+func (r *ShortMethodName) Configure(props rule.Properties) error {
+	r.minimum = props.Int("minimum", 3)
+	r.exceptions = util.SplitToList(props.String("exceptions", ""))
+	return nil
+}
 
 func (r *ShortMethodName) check(c *rule.Context, fn *model.Function) {
-	min := c.Props().Int("minimum", 3)
-	if len(fn.Name) >= min {
+	if len(fn.Name) >= r.minimum {
 		return
 	}
-	if util.Contains(util.SplitToList(c.Props().String("exceptions", "")), fn.Name) {
+	if util.Contains(r.exceptions, fn.Name) {
 		return
 	}
-	c.ReportFunc(fn, fn.Receiver, fn.Name, min)
+	c.ReportFunc(fn, fn.Receiver, fn.Name, r.minimum)
 }
 func (r *ShortMethodName) ApplyFunc(c *rule.Context, fn *model.Function) { r.check(c, fn) }
 
 // ----- BooleanGetMethodName -----------------------------------------------
 
-type BooleanGetMethodName struct{ *rule.Base }
+type BooleanGetMethodName struct {
+	*rule.Base
+	checkParameterizedMethods bool
+}
+
+func newBooleanGetMethodName() rule.Rule {
+	return &BooleanGetMethodName{Base: rule.NewBase()}
+}
+
+func (r *BooleanGetMethodName) Configure(props rule.Properties) error {
+	r.checkParameterizedMethods = props.Bool("checkParameterizedMethods", false)
+	return nil
+}
 
 var getterRe = regexp.MustCompile(`(?i)^_?get`)
 
@@ -164,7 +239,7 @@ func (r *BooleanGetMethodName) check(c *rule.Context, fn *model.Function) {
 	if !returnsSingleBool(fn) {
 		return
 	}
-	if c.Props().Bool("checkParameterizedMethods", false) && len(fn.Params) > 0 {
+	if r.checkParameterizedMethods && len(fn.Params) > 0 {
 		return
 	}
 	c.ReportFunc(fn, fn.Name)

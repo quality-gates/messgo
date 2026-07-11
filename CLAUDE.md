@@ -71,6 +71,10 @@ Rules are verified using crafted Go fixture sources in `internal/rules/rules_tes
 
 Issues are tracked in GitHub Issues (`quality-gates/messgo`, via `gh`). See `docs/agents/issue-tracker.md`.
 
+### Triage labels
+
+Default five-role vocabulary (`needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`), labels not yet created on GitHub. See `docs/agents/triage-labels.md`.
+
 ### Domain docs
 
 Single-context layout — `CONTEXT.md` + `docs/adr/` at the repo root (not yet created). See `docs/agents/domain.md`.

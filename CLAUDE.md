@@ -73,7 +73,7 @@ Issues are tracked in GitHub Issues (`quality-gates/messgo`, via `gh`). See `doc
 
 ### Triage labels
 
-Default five-role vocabulary (`needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`), labels not yet created on GitHub. See `docs/agents/triage-labels.md`.
+Default five-role vocabulary (`needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`), created on GitHub and ready for `/triage`. See `docs/agents/triage-labels.md`.
 
 ### Domain docs
 

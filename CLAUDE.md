@@ -2,6 +2,12 @@
 
 A PHP Mess Detector (phpmd) port for Go. Parses Go source code using `go/ast` and applies rules faithful to Go semantics.
 
+## Definition of Ready
+
+Before starting work in this repo:
+
+1. Activate git hooks: `git config core.hooksPath githooks`
+
 ## Build & test
 
 ```bash

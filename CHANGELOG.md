@@ -6,6 +6,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 
 ## [Unreleased]
 
+## [0.1.10] - 2026-07-11
+
 ### Added
 - Committed git hooks in `githooks/` mirroring the CI workflows locally: `pre-commit` runs `gofmt -s`, `go vet`, `gocyclo -over 15`, `ineffassign`, `go build`, `go test`, and messgo self-analysis (whole-tree, hard-fails on any finding or missing tool); `pre-push` runs diff-scoped mutation testing (`mutago --git-diff-lines` against `origin/main`, min covered-MSI 80%). `govulncheck` stays CI-only since it depends on external advisories, not the diff. Activation is a manual `git config core.hooksPath githooks`, now listed as a new "Definition of Ready" step in `CLAUDE.md`; the hooks are inert until a clone opts in. Added `CONTEXT.md` distinguishing "git hooks" (the mechanism) from "pre-commit"/"pre-push" (the git stages) and from the unrelated Python `pre-commit` framework.
 - Agent skills configuration: `docs/agents/issue-tracker.md` (GitHub Issues) and `docs/agents/domain.md` (single-context `CONTEXT.md` + `docs/adr/` layout), linked from a new `## Agent skills` section in `CLAUDE.md`. No behavioural change.

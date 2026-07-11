@@ -22,7 +22,7 @@ const (
 	ExitViolation = 2
 )
 
-const version = "0.1.9"
+const version = "0.1.10"
 
 type options struct {
 	paths            string

@@ -65,6 +65,16 @@ Rules are verified using crafted Go fixture sources in `internal/rules/rules_tes
 - Assert on which rules fire (using `mustHave` and `mustNotHave`).
 - Ensure metrics values correspond to expected outputs of reference tools (like real phpmd).
 
+## Agent skills
+
+### Issue tracker
+
+Issues are tracked in GitHub Issues (`quality-gates/messgo`, via `gh`). See `docs/agents/issue-tracker.md`.
+
+### Domain docs
+
+Single-context layout — `CONTEXT.md` + `docs/adr/` at the repo root (not yet created). See `docs/agents/domain.md`.
+
 <!-- BEGIN BEADS INTEGRATION v:1 profile:minimal hash:6cd5cc61 -->
 ## Beads Issue Tracker
 

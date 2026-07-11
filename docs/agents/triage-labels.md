@@ -12,4 +12,4 @@ The skills speak in terms of five canonical triage roles. This file maps those r
 
 When a skill mentions a role (e.g. "apply the AFK-ready triage label"), use the corresponding label string from this table.
 
-These labels don't exist yet on `quality-gates/messgo`'s GitHub Issues — create them (e.g. via `gh label create`) before the first `/triage` run.
+All five labels exist on `quality-gates/messgo`'s GitHub Issues and are ready for `/triage`. The four skill-specific ones were created with GitHub's default gray — recolor in Settings → Labels if desired.

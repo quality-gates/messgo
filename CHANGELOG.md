@@ -8,6 +8,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 
 ### Added
 - Agent skills configuration: `docs/agents/issue-tracker.md` (GitHub Issues) and `docs/agents/domain.md` (single-context `CONTEXT.md` + `docs/adr/` layout), linked from a new `## Agent skills` section in `CLAUDE.md`. No behavioural change.
+- Installed the 21 [mattpocock/skills](https://github.com/mattpocock/skills) engineering/productivity skills under `.claude/skills/`, with MIT attribution recorded in `.claude/skills/ATTRIBUTION.md`. No behavioural change to messgo itself.
+- `docs/agents/triage-labels.md`, mapping the `triage` skill's five canonical roles to this repo's label vocabulary (kept at defaults), linked from `CLAUDE.md`. The labels themselves still need to be created on GitHub before first use.
 
 ### Changed
 - Moved AST walking for `design`, `cleancode`, and `unusedcode` rules behind model-level query primitives. Rules now ask `model.File` / `model.Function` for package variables, statement patterns, duplicate literal keys, identifier reads, and receiver uses instead of importing `go/ast`; added direct model query tests for those behaviours.

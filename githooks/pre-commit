@@ -1,0 +1,55 @@
+#!/bin/sh
+# Fast, whole-tree checks that mirror the CI workflows. Every check here is
+# mandatory when this hook is active: missing tools hard-fail with an
+# install hint rather than being skipped.
+set -e
+
+cd "$(git rev-parse --show-toplevel)" || {
+    echo "pre-commit: not inside a git repository" >&2
+    exit 1
+}
+
+fail() {
+    echo "pre-commit: $1" >&2
+    exit 1
+}
+
+need() {
+    command -v "$1" >/dev/null 2>&1 || fail "$1 not found. Install with: $2"
+}
+
+echo "pre-commit: gofmt -s"
+fmt_out=$(gofmt -s -l .)
+if [ -n "$fmt_out" ]; then
+    echo "$fmt_out" >&2
+    fail "unformatted files found (run: gofmt -s -w .)"
+fi
+
+echo "pre-commit: go vet"
+go vet ./... || fail "go vet failed"
+
+need gocyclo "go install github.com/fzipp/gocyclo/cmd/gocyclo@latest"
+echo "pre-commit: gocyclo"
+cyclo_out=$(gocyclo -over 15 . || true)
+if [ -n "$cyclo_out" ]; then
+    echo "$cyclo_out" >&2
+    fail "functions over cyclomatic complexity 15 found"
+fi
+
+need ineffassign "go install github.com/gordonklaus/ineffassign@latest"
+echo "pre-commit: ineffassign"
+ineffassign ./... || fail "ineffassign found issues"
+
+echo "pre-commit: go build"
+go build ./... || fail "go build failed"
+
+echo "pre-commit: go test"
+go test ./... || fail "go test failed"
+
+echo "pre-commit: messgo self-analysis"
+tmp_dir=$(mktemp -d) || fail "mktemp failed"
+trap 'rm -rf "$tmp_dir"' EXIT
+go build -o "$tmp_dir/messgo" ./cmd/messgo || fail "failed to build messgo for self-analysis"
+"$tmp_dir/messgo" ./internal text go,codesize --ignore-tests || fail "messgo self-analysis found violations"
+
+echo "pre-commit: all checks passed"

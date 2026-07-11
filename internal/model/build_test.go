@@ -118,7 +118,7 @@ func TestParseInterfaceMethods(t *testing.T) {
 	}
 }
 
-func TestParseFunctionsAndMethods(t *testing.T) {
+func TestParseFreeFunction(t *testing.T) {
 	f := parseSample(t)
 	if len(f.Functions) != 1 || f.Functions[0].Name != "Free" {
 		t.Fatalf("free Functions = %+v, want one Free", f.Functions)
@@ -133,14 +133,23 @@ func TestParseFunctionsAndMethods(t *testing.T) {
 	if len(free.Params) != 2 || len(free.Results) != 1 {
 		t.Errorf("Free signature params=%d results=%d, want 2/1", len(free.Params), len(free.Results))
 	}
+}
 
-	// Methods are attached to their owning class and excluded from Functions.
-	var greeter *Class
+// findGreeter returns the Greeter class parsed from the sample source.
+func findGreeter(t *testing.T, f *File) *Class {
+	t.Helper()
 	for _, c := range f.Classes {
 		if c.Name == "Greeter" {
-			greeter = c
+			return c
 		}
 	}
+	t.Fatal("Greeter class not found")
+	return nil
+}
+
+func TestParseGreeterMethods(t *testing.T) {
+	f := parseSample(t)
+	greeter := findGreeter(t, f)
 	if len(greeter.Methods) != 2 {
 		t.Fatalf("Greeter methods = %d, want 2", len(greeter.Methods))
 	}
@@ -165,8 +174,10 @@ func TestParseFunctionsAndMethods(t *testing.T) {
 	if hello.Class != greeter {
 		t.Error("Hello.Class should point back to its Greeter class")
 	}
+}
 
-	// AllFuncs holds both free functions and methods.
+func TestParseAllFuncsIncludesFunctionsAndMethods(t *testing.T) {
+	f := parseSample(t)
 	if len(f.AllFuncs) != 3 {
 		t.Errorf("AllFuncs = %d, want 3 (Free, Hello, value)", len(f.AllFuncs))
 	}

@@ -1,0 +1,33 @@
+#!/bin/sh
+# Diff-scoped mutation testing against origin/main. Only mutates lines this
+# branch actually changed, so cost stays bounded regardless of push size.
+# Mandatory when this hook is active: a missing mutago hard-fails with an
+# install hint rather than being skipped.
+set -e
+
+cd "$(git rev-parse --show-toplevel)" || {
+    echo "pre-push: not inside a git repository" >&2
+    exit 1
+}
+
+fail() {
+    echo "pre-push: $1" >&2
+    exit 1
+}
+
+if ! git rev-parse --verify origin/main >/dev/null 2>&1; then
+    fail "origin/main not found locally; run: git fetch origin main"
+fi
+
+command -v mutago >/dev/null 2>&1 || fail "mutago not found. Install with: go install github.com/quality-gates/mutago/v2/cmd/mutago@latest"
+
+echo "pre-push: mutation testing (diff vs origin/main)"
+mutago \
+    --git-diff-lines \
+    --git-diff-base origin/main \
+    --ignore-msi-with-no-mutations \
+    --coverage \
+    --min-covered-msi 80 \
+    ./... || fail "mutation testing failed (covered-MSI below 80%)"
+
+echo "pre-push: all checks passed"

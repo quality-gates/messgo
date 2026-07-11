@@ -7,9 +7,13 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 ## [Unreleased]
 
 ### Added
+- Committed git hooks in `githooks/` mirroring the CI workflows locally: `pre-commit` runs `gofmt -s`, `go vet`, `gocyclo -over 15`, `ineffassign`, `go build`, `go test`, and messgo self-analysis (whole-tree, hard-fails on any finding or missing tool); `pre-push` runs diff-scoped mutation testing (`mutago --git-diff-lines` against `origin/main`, min covered-MSI 80%). `govulncheck` stays CI-only since it depends on external advisories, not the diff. Activation is a manual `git config core.hooksPath githooks`, now listed as a new "Definition of Ready" step in `CLAUDE.md`; the hooks are inert until a clone opts in. Added `CONTEXT.md` distinguishing "git hooks" (the mechanism) from "pre-commit"/"pre-push" (the git stages) and from the unrelated Python `pre-commit` framework.
 - Agent skills configuration: `docs/agents/issue-tracker.md` (GitHub Issues) and `docs/agents/domain.md` (single-context `CONTEXT.md` + `docs/adr/` layout), linked from a new `## Agent skills` section in `CLAUDE.md`. No behavioural change.
 - Installed the 21 [mattpocock/skills](https://github.com/mattpocock/skills) engineering/productivity skills under `.claude/skills/`, with MIT attribution recorded in `.claude/skills/ATTRIBUTION.md`. No behavioural change to messgo itself.
 - `docs/agents/triage-labels.md`, mapping the `triage` skill's five canonical roles to this repo's label vocabulary (kept at defaults), linked from `CLAUDE.md`.
+
+### Fixed
+- Split `TestParseFunctionsAndMethods` (`internal/model/build_test.go`) into three focused tests (`TestParseFreeFunction`, `TestParseGreeterMethods`, `TestParseAllFuncsIncludesFunctionsAndMethods`) to bring cyclomatic complexity under the new pre-commit hook's `gocyclo -over 15` gate. Same assertions, same coverage.
 
 ### Changed
 - Created the five triage labels on GitHub Issues (via seed issue #19, since closed); triage docs now state the labels are live rather than pending creation.

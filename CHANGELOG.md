@@ -6,6 +6,9 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 
 ## [Unreleased]
 
+### Fixed
+- Pinned the release workflow to an exact Go patch version so rebuilding a matching draft cannot silently produce different binaries after a toolchain update.
+
 ## [0.2.0] - 2026-07-15
 
 ### Added

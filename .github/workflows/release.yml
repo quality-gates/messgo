@@ -239,11 +239,12 @@ jobs:
           GH_REPO: ${{ github.repository }}
         run: |
           set -euo pipefail
-          if gh release view "$TAG" >/dev/null 2>&1; then
-            is_draft="$(gh api "repos/$GH_REPO/releases/tags/$TAG" --jq .draft)"
+          if release="$(gh release view "$TAG" --json databaseId,isDraft 2>/dev/null)"; then
+            release_id="$(jq -r .databaseId <<<"$release")"
+            is_draft="$(jq -r .isDraft <<<"$release")"
             if [[ "$is_draft" != "true" ]]; then
               echo "A published release already exists; verifying immutable assets."
-              if [[ "$(gh api "repos/$GH_REPO/releases/tags/$TAG" --jq .immutable)" != "true" ]]; then
+              if [[ "$(gh api "repos/$GH_REPO/releases/$release_id" --jq .immutable)" != "true" ]]; then
                 echo "The existing published release is not immutable." >&2
                 exit 1
               fi
@@ -254,14 +255,17 @@ jobs:
           else
             gh release create "$TAG" \
               --draft --verify-tag --title "messgo ${TAG#v}" --generate-notes
-            is_draft=true
+            release="$(gh release view "$TAG" --json databaseId,isDraft)"
+            release_id="$(jq -r .databaseId <<<"$release")"
+            is_draft="$(jq -r .isDraft <<<"$release")"
           fi
+          release_api="repos/$GH_REPO/releases/$release_id"
 
           if [[ "$is_draft" == "true" ]]; then
             mkdir -p existing
             for asset in dist/*; do
               name="$(basename "$asset")"
-              if gh api "repos/$GH_REPO/releases/tags/$TAG" --jq '.assets[].name' | grep -Fxq "$name"; then
+              if gh api "$release_api" --jq '.assets[].name' | grep -Fxq "$name"; then
                 gh release download "$TAG" --pattern "$name" --dir existing
                 if ! cmp -s "$asset" "existing/$name"; then
                   echo "Draft asset differs from the verified build: $name" >&2
@@ -274,7 +278,7 @@ jobs:
           fi
 
           expected_assets="$(find dist -maxdepth 1 -type f -printf '%f\n' | LC_ALL=C sort)"
-          actual_assets="$(gh api "repos/$GH_REPO/releases/tags/$TAG" --jq '[.assets[].name] | sort | .[]')"
+          actual_assets="$(gh api "$release_api" --jq '[.assets[].name] | sort | .[]')"
           if [[ "$actual_assets" != "$expected_assets" ]]; then
             echo "Release assets do not match the verified build." >&2
             diff -u <(printf '%s\n' "$expected_assets") <(printf '%s\n' "$actual_assets") || true
@@ -286,7 +290,7 @@ jobs:
           fi
 
           for attempt in {1..6}; do
-            immutable="$(gh api "repos/$GH_REPO/releases/tags/$TAG" --jq .immutable)"
+            immutable="$(gh api "$release_api" --jq .immutable)"
             [[ "$immutable" == "true" ]] && break
             sleep 5
           done
@@ -298,7 +302,6 @@ jobs:
           for asset in dist/*; do
             gh release verify-asset "$TAG" "$asset"
           done
-          release_id="$(gh api "repos/$GH_REPO/releases/tags/$TAG" --jq .id)"
           version="${TAG#v}"
           arm64_sha="$(awk -v asset="messgo_${version}_darwin_arm64.tar.gz" '$2 == asset { print $1 }' dist/checksums.txt)"
           amd64_sha="$(awk -v asset="messgo_${version}_darwin_amd64.tar.gz" '$2 == asset { print $1 }' dist/checksums.txt)"

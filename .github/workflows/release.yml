@@ -28,6 +28,7 @@ jobs:
     outputs:
       version: ${{ steps.tag.outputs.version }}
       source_sha: ${{ steps.tag.outputs.source_sha }}
+      immutable_release: ${{ steps.tag.outputs.immutable_release }}
     steps:
       - uses: actions/checkout@v6
         with:
@@ -37,6 +38,9 @@ jobs:
       - id: tag
         name: Require a stable semantic-version tag
         shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
         run: |
           set -euo pipefail
           if [[ ! "$TAG" =~ ^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]; then
@@ -60,12 +64,20 @@ jobs:
             test "$GITHUB_REF_TYPE" = tag
             test "$GITHUB_SHA" = "$source_sha"
           fi
+          immutable_release=false
+          if release="$(gh api "repos/$GH_REPO/releases/tags/$TAG" 2>/dev/null)"; then
+            if [[ "$(jq -r .draft <<<"$release")" == false && "$(jq -r .immutable <<<"$release")" == true ]]; then
+              immutable_release=true
+            fi
+          fi
           echo "version=${TAG#v}" >> "$GITHUB_OUTPUT"
           echo "source_sha=$source_sha" >> "$GITHUB_OUTPUT"
+          echo "immutable_release=$immutable_release" >> "$GITHUB_OUTPUT"
 
   test:
     name: Test release source
     needs: validate
+    if: needs.validate.outputs.immutable_release != 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
@@ -86,6 +98,7 @@ jobs:
   build:
     name: Build darwin/${{ matrix.arch }}
     needs: [validate, test]
+    if: needs.validate.outputs.immutable_release != 'true'
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -131,6 +144,7 @@ jobs:
   package:
     name: Package release assets
     needs: [validate, build]
+    if: needs.validate.outputs.immutable_release != 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/download-artifact@v5
@@ -151,6 +165,7 @@ jobs:
   smoke:
     name: Smoke test ${{ matrix.runner }}
     needs: [validate, package]
+    if: needs.validate.outputs.immutable_release != 'true'
     strategy:
       fail-fast: false
       matrix:
@@ -198,13 +213,20 @@ jobs:
   release:
     name: Publish immutable GitHub release
     needs: [validate, smoke]
+    if: >-
+      always() &&
+      needs.validate.result == 'success' &&
+      (needs.smoke.result == 'success' || needs.validate.outputs.immutable_release == 'true')
     runs-on: ubuntu-latest
     permissions:
       contents: write
     outputs:
       release_id: ${{ steps.release.outputs.release_id }}
+      arm64_sha: ${{ steps.release.outputs.arm64_sha }}
+      amd64_sha: ${{ steps.release.outputs.amd64_sha }}
     steps:
       - uses: actions/download-artifact@v5
+        if: needs.validate.outputs.immutable_release != 'true'
         with:
           name: release-assets
           path: dist
@@ -221,6 +243,13 @@ jobs:
             is_draft="$(gh api "repos/$GH_REPO/releases/tags/$TAG" --jq .draft)"
             if [[ "$is_draft" != "true" ]]; then
               echo "A published release already exists; verifying immutable assets."
+              if [[ "$(gh api "repos/$GH_REPO/releases/tags/$TAG" --jq .immutable)" != "true" ]]; then
+                echo "The existing published release is not immutable." >&2
+                exit 1
+              fi
+              rm -rf dist
+              mkdir dist
+              gh release download "$TAG" --dir dist
             fi
           else
             gh release create "$TAG" \
@@ -270,7 +299,14 @@ jobs:
             gh release verify-asset "$TAG" "$asset"
           done
           release_id="$(gh api "repos/$GH_REPO/releases/tags/$TAG" --jq .id)"
+          version="${TAG#v}"
+          arm64_sha="$(awk -v asset="messgo_${version}_darwin_arm64.tar.gz" '$2 == asset { print $1 }' dist/checksums.txt)"
+          amd64_sha="$(awk -v asset="messgo_${version}_darwin_amd64.tar.gz" '$2 == asset { print $1 }' dist/checksums.txt)"
+          [[ "$arm64_sha" =~ ^[0-9a-f]{64}$ ]]
+          [[ "$amd64_sha" =~ ^[0-9a-f]{64}$ ]]
           echo "release_id=$release_id" >> "$GITHUB_OUTPUT"
+          echo "arm64_sha=$arm64_sha" >> "$GITHUB_OUTPUT"
+          echo "amd64_sha=$amd64_sha" >> "$GITHUB_OUTPUT"
 
   homebrew:
     name: Update Homebrew tap
@@ -295,6 +331,8 @@ jobs:
           RELEASE_ID: ${{ needs.release.outputs.release_id }}
           SOURCE_SHA: ${{ needs.validate.outputs.source_sha }}
           VERSION: ${{ needs.validate.outputs.version }}
+          ARM64_SHA: ${{ needs.release.outputs.arm64_sha }}
+          AMD64_SHA: ${{ needs.release.outputs.amd64_sha }}
         run: |
           set -euo pipefail
           response="$(gh api --method POST \
@@ -306,7 +344,9 @@ jobs:
             -f "inputs[release_id]=$RELEASE_ID" \
             -f "inputs[source_sha]=$SOURCE_SHA" \
             -f "inputs[arm64_asset]=messgo_${VERSION}_darwin_arm64.tar.gz" \
-            -f "inputs[amd64_asset]=messgo_${VERSION}_darwin_amd64.tar.gz")"
+            -f "inputs[amd64_asset]=messgo_${VERSION}_darwin_amd64.tar.gz" \
+            -f "inputs[arm64_sha]=$ARM64_SHA" \
+            -f "inputs[amd64_sha]=$AMD64_SHA")"
           run_id="$(jq -r .workflow_run_id <<<"$response")"
           run_url="$(jq -r .html_url <<<"$response")"
           test "$run_id" != null

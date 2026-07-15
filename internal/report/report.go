@@ -10,9 +10,7 @@ import (
 )
 
 // Version is the messgo version reported in machine-readable output.
-func Version() string {
-	return version.Version
-}
+var Version = version.Version
 
 // ProcessingError is a file that could not be parsed.
 type ProcessingError struct {

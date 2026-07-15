@@ -15,7 +15,9 @@ release is the release commit point: a later tap failure never rolls it back.
 4. In `homebrew-tap`, allow Actions to create pull requests. Protect `main` and
    require the `Test tap` checks. Decide whether passing PRs auto-merge or wait
    for maintainer review; neither choice permits a direct automation push to
-   `main`.
+   `main`. GitHub requires a maintainer to approve check runs on PRs created by
+   the tap's `GITHUB_TOKEN`; the source release workflow waits for those checks
+   and reports failure if they do not pass.
 
 ## Normal release
 

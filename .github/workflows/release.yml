@@ -315,6 +315,10 @@ jobs:
   homebrew:
     name: Update Homebrew tap
     needs: [validate, release]
+    if: >-
+      always() &&
+      needs.validate.result == 'success' &&
+      needs.release.result == 'success'
     runs-on: ubuntu-latest
     environment: homebrew
     steps:

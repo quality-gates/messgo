@@ -6,6 +6,15 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-07-15
+
+### Added
+- Added automated Homebrew distribution for stable releases: reproducible Intel and Apple Silicon archives, four-cell macOS artifact verification, immutable GitHub release publication, and least-privilege dispatch to a tap-owned formula PR workflow.
+- Added `brew install quality-gates/tap/messgo` and release-recovery documentation.
+
+### Changed
+- Made stable release tags the single version authority for CLI output and machine-readable reports. Local builds report `dev`; release builds inject the validated semantic version at link time.
+
 ## [0.1.10] - 2026-07-11
 
 ### Added

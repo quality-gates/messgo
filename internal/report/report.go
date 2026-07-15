@@ -6,10 +6,11 @@ import (
 	"io"
 
 	"github.com/quality-gates/messgo/internal/rule"
+	"github.com/quality-gates/messgo/internal/version"
 )
 
 // Version is the messgo version reported in machine-readable output.
-const Version = "0.1.8"
+var Version = version.Version
 
 // ProcessingError is a file that could not be parsed.
 type ProcessingError struct {

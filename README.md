@@ -14,7 +14,15 @@ rules can be optionally enabled.
 
 ### 1. Install the binary
 
-Install with `go install` to put `messgo` on your `PATH`:
+On macOS, install the latest stable release with Homebrew:
+
+```bash
+brew install quality-gates/tap/messgo
+```
+
+Upgrade it later with `brew update && brew upgrade quality-gates/tap/messgo`.
+
+Alternatively, install with Go to put `messgo` on your `PATH`:
 
 ```bash
 go install github.com/quality-gates/messgo/cmd/messgo@latest

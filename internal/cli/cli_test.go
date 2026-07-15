@@ -68,7 +68,7 @@ func TestUnknownFormat(t *testing.T) {
 
 func TestVersion(t *testing.T) {
 	code, out, _ := runMain(t, "--version")
-	if code != ExitSuccess || !strings.Contains(out, "messgo") {
+	if code != ExitSuccess || out != "messgo dev\n" {
 		t.Errorf("version: code=%d out=%q", code, out)
 	}
 }
@@ -81,6 +81,9 @@ func TestJSONFormat(t *testing.T) {
 	}
 	if !strings.HasPrefix(strings.TrimSpace(out), "{") || !strings.Contains(out, "\"rule\": \"ExcessiveParameterList\"") {
 		t.Errorf("unexpected json: %q", out)
+	}
+	if !strings.Contains(out, "\"version\": \"dev\"") {
+		t.Errorf("JSON report did not use the development build version: %q", out)
 	}
 }
 

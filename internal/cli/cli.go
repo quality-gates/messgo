@@ -13,6 +13,7 @@ import (
 	"github.com/quality-gates/messgo/internal/rule"
 	"github.com/quality-gates/messgo/internal/ruleset"
 	"github.com/quality-gates/messgo/internal/runner"
+	"github.com/quality-gates/messgo/internal/version"
 )
 
 // Exit codes match PHPMD.
@@ -21,8 +22,6 @@ const (
 	ExitError     = 1
 	ExitViolation = 2
 )
-
-const version = "0.1.10"
 
 type options struct {
 	paths            string
@@ -107,7 +106,7 @@ func run(opt options, stdout, stderr io.Writer) int {
 func handleInfoFlags(first string, stdout io.Writer) (code int, handled bool) {
 	switch first {
 	case "--version":
-		fmt.Fprintf(stdout, "messgo %s\n", version)
+		fmt.Fprintf(stdout, "messgo %s\n", version.Version)
 		return ExitSuccess, true
 	case "--help", "-h", "help":
 		printUsage(stdout)
@@ -279,5 +278,5 @@ Options:
   --help, -h                     Show this help.
 
 Exit codes: 0 = clean, 1 = error, 2 = violations found.
-`, version, strings.Join(report.Formats(), ", "), strings.Join(ruleset.BuiltinNames(), ", "))
+`, version.Version, strings.Join(report.Formats(), ", "), strings.Join(ruleset.BuiltinNames(), ", "))
 }

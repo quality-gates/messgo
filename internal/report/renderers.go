@@ -62,7 +62,7 @@ type XMLRenderer struct{}
 
 func (XMLRenderer) Render(w io.Writer, r *Report) error {
 	fmt.Fprint(w, "<?xml version=\"1.0\" encoding=\"UTF-8\" ?>\n")
-	fmt.Fprintf(w, "<pmd version=\"%s\" tool=\"messgo\" timestamp=\"%s\">\n", Version, time.Now().Format(time.RFC3339))
+	fmt.Fprintf(w, "<pmd version=\"%s\" tool=\"messgo\" timestamp=\"%s\">\n", Version(), time.Now().Format(time.RFC3339))
 	var curFile string
 	open := false
 	for _, v := range r.Violations {
@@ -150,7 +150,7 @@ type jsonError struct {
 
 func (JSONRenderer) Render(w io.Writer, r *Report) error {
 	rep := jsonReport{
-		Version:   Version,
+		Version:   Version(),
 		Package:   "messgo",
 		Timestamp: time.Now().Format(time.RFC3339),
 		Files:     []jsonFile{},
@@ -265,7 +265,7 @@ type CheckStyleRenderer struct{}
 
 func (CheckStyleRenderer) Render(w io.Writer, r *Report) error {
 	fmt.Fprint(w, "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n")
-	fmt.Fprintf(w, "<checkstyle version=\"%s\">\n", Version)
+	fmt.Fprintf(w, "<checkstyle version=\"%s\">\n", Version())
 	var curFile string
 	open := false
 	for _, v := range r.Violations {
@@ -380,7 +380,7 @@ func (SARIFRenderer) Render(w io.Writer, r *Report) error {
 		Schema:  "https://raw.githubusercontent.com/oasis-tcs/sarif-spec/master/Schemata/sarif-schema-2.1.0.json",
 		Version: "2.1.0",
 		Runs: []run{{
-			Tool:    tool{Driver: driver{Name: "messgo", Version: Version, Rules: rules}},
+			Tool:    tool{Driver: driver{Name: "messgo", Version: Version(), Rules: rules}},
 			Results: results,
 		}},
 	}

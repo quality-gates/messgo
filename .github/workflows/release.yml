@@ -1,0 +1,322 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing stable release tag to retry Homebrew publication for
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ inputs.tag || github.ref_name }}
+  cancel-in-progress: false
+
+env:
+  TAG: ${{ inputs.tag || github.ref_name }}
+
+jobs:
+  validate:
+    name: Validate release tag
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.tag.outputs.version }}
+      source_sha: ${{ steps.tag.outputs.source_sha }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.TAG }}
+          fetch-depth: 0
+
+      - id: tag
+        name: Require a stable semantic-version tag
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ ! "$TAG" =~ ^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]; then
+            echo "Release tags must match vMAJOR.MINOR.PATCH; got: $TAG" >&2
+            exit 1
+          fi
+          source_sha="$(git rev-list -n 1 "$TAG")"
+          if [[ -z "$source_sha" ]]; then
+            echo "Tag does not resolve to a commit: $TAG" >&2
+            exit 1
+          fi
+          remote_sha="$(git ls-remote origin "refs/tags/$TAG^{}" | cut -f1)"
+          if [[ -z "$remote_sha" ]]; then
+            remote_sha="$(git ls-remote origin "refs/tags/$TAG" | cut -f1)"
+          fi
+          if [[ "$remote_sha" != "$source_sha" ]]; then
+            echo "Remote tag resolves to $remote_sha, expected $source_sha." >&2
+            exit 1
+          fi
+          if [[ "${{ github.event_name }}" == "push" ]]; then
+            test "$GITHUB_REF_TYPE" = tag
+            test "$GITHUB_SHA" = "$source_sha"
+          fi
+          echo "version=${TAG#v}" >> "$GITHUB_OUTPUT"
+          echo "source_sha=$source_sha" >> "$GITHUB_OUTPUT"
+
+  test:
+    name: Test release source
+    needs: validate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ needs.validate.outputs.source_sha }}
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache: true
+      - run: go test ./...
+      - name: Build and self-analyse
+        run: |
+          go build -o messgo ./cmd/messgo
+          ./messgo ./internal text go --ignore-tests
+      - name: Manual CLI smoke test
+        run: ./messgo testdata/misc/misc.go json go --ignore-violations-on-exit >/dev/null
+
+  build:
+    name: Build darwin/${{ matrix.arch }}
+    needs: [validate, test]
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: [amd64, arm64]
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ needs.validate.outputs.source_sha }}
+          fetch-depth: 0
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Build reproducible archive
+        shell: bash
+        env:
+          ARCH: ${{ matrix.arch }}
+          VERSION: ${{ needs.validate.outputs.version }}
+        run: |
+          set -euo pipefail
+          archive="messgo_${VERSION}_darwin_${ARCH}.tar.gz"
+          source_date_epoch="$(git show -s --format=%ct "${{ needs.validate.outputs.source_sha }}")"
+          mkdir -p dist/package
+          cp LICENSE dist/package/LICENSE
+          CGO_ENABLED=0 GOOS=darwin GOARCH="$ARCH" go build \
+            -trimpath \
+            -ldflags="-s -w -X github.com/quality-gates/messgo/internal/version.Version=$VERSION" \
+            -o dist/package/messgo ./cmd/messgo
+          tar --sort=name \
+            --mtime="@$source_date_epoch" \
+            --owner=0 --group=0 --numeric-owner \
+            -C dist/package -czf "dist/$archive" LICENSE messgo
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: messgo-darwin-${{ matrix.arch }}
+          path: dist/*.tar.gz
+          if-no-files-found: error
+          retention-days: 7
+
+  package:
+    name: Package release assets
+    needs: [validate, build]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v5
+        with:
+          pattern: messgo-darwin-*
+          path: dist
+          merge-multiple: true
+      - name: Create checksum manifest
+        working-directory: dist
+        run: sha256sum messgo_*.tar.gz | LC_ALL=C sort > checksums.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-assets
+          path: dist/*
+          if-no-files-found: error
+          retention-days: 7
+
+  smoke:
+    name: Smoke test ${{ matrix.runner }}
+    needs: [validate, package]
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: amd64
+            runner: macos-15-intel
+            machine: x86_64
+          - arch: arm64
+            runner: macos-15
+            machine: arm64
+          - arch: amd64
+            runner: macos-26-intel
+            machine: x86_64
+          - arch: arm64
+            runner: macos-26
+            machine: arm64
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ needs.validate.outputs.source_sha }}
+      - uses: actions/download-artifact@v5
+        with:
+          name: release-assets
+          path: dist
+
+      - name: Run packaged binary
+        shell: bash
+        env:
+          VERSION: ${{ needs.validate.outputs.version }}
+        run: |
+          set -euo pipefail
+          test "$(uname -m)" = "${{ matrix.machine }}"
+          (cd dist && shasum -a 256 -c checksums.txt)
+          tar -xzf "dist/messgo_${VERSION}_darwin_${{ matrix.arch }}.tar.gz" -C dist
+          test "$(dist/messgo --version)" = "messgo $VERSION"
+          cat > "$RUNNER_TEMP/smoke.go" <<'EOF'
+          package smoke
+
+          func Meaning() int { return 42 }
+          EOF
+          dist/messgo "$RUNNER_TEMP/smoke.go" json go > "$RUNNER_TEMP/report.json"
+          test "$(jq -r .version "$RUNNER_TEMP/report.json")" = "$VERSION"
+
+  release:
+    name: Publish immutable GitHub release
+    needs: [validate, smoke]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    outputs:
+      release_id: ${{ steps.release.outputs.release_id }}
+    steps:
+      - uses: actions/download-artifact@v5
+        with:
+          name: release-assets
+          path: dist
+
+      - id: release
+        name: Create or verify release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            is_draft="$(gh api "repos/$GH_REPO/releases/tags/$TAG" --jq .draft)"
+            if [[ "$is_draft" != "true" ]]; then
+              echo "A published release already exists; verifying immutable assets."
+            fi
+          else
+            gh release create "$TAG" \
+              --draft --verify-tag --title "messgo ${TAG#v}" --generate-notes
+            is_draft=true
+          fi
+
+          if [[ "$is_draft" == "true" ]]; then
+            mkdir -p existing
+            for asset in dist/*; do
+              name="$(basename "$asset")"
+              if gh api "repos/$GH_REPO/releases/tags/$TAG" --jq '.assets[].name' | grep -Fxq "$name"; then
+                gh release download "$TAG" --pattern "$name" --dir existing
+                if ! cmp -s "$asset" "existing/$name"; then
+                  echo "Draft asset differs from the verified build: $name" >&2
+                  exit 1
+                fi
+              else
+                gh release upload "$TAG" "$asset"
+              fi
+            done
+          fi
+
+          expected_assets="$(find dist -maxdepth 1 -type f -printf '%f\n' | LC_ALL=C sort)"
+          actual_assets="$(gh api "repos/$GH_REPO/releases/tags/$TAG" --jq '[.assets[].name] | sort | .[]')"
+          if [[ "$actual_assets" != "$expected_assets" ]]; then
+            echo "Release assets do not match the verified build." >&2
+            diff -u <(printf '%s\n' "$expected_assets") <(printf '%s\n' "$actual_assets") || true
+            exit 1
+          fi
+
+          if [[ "$is_draft" == "true" ]]; then
+            gh release edit "$TAG" --draft=false --latest
+          fi
+
+          for attempt in {1..6}; do
+            immutable="$(gh api "repos/$GH_REPO/releases/tags/$TAG" --jq .immutable)"
+            [[ "$immutable" == "true" ]] && break
+            sleep 5
+          done
+          if [[ "$immutable" != "true" ]]; then
+            echo "Release was published but is not immutable; Homebrew dispatch is blocked." >&2
+            exit 1
+          fi
+          gh release verify "$TAG"
+          for asset in dist/*; do
+            gh release verify-asset "$TAG" "$asset"
+          done
+          release_id="$(gh api "repos/$GH_REPO/releases/tags/$TAG" --jq .id)"
+          echo "release_id=$release_id" >> "$GITHUB_OUTPUT"
+
+  homebrew:
+    name: Update Homebrew tap
+    needs: [validate, release]
+    runs-on: ubuntu-latest
+    environment: homebrew
+    steps:
+      - id: app-token
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ secrets.HOMEBREW_TAP_APP_ID }}
+          private-key: ${{ secrets.HOMEBREW_TAP_APP_PRIVATE_KEY }}
+          owner: quality-gates
+          repositories: homebrew-tap
+          permission-actions: write
+
+      - id: dispatch
+        name: Dispatch tap-owned publication workflow
+        shell: bash
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          RELEASE_ID: ${{ needs.release.outputs.release_id }}
+          SOURCE_SHA: ${{ needs.validate.outputs.source_sha }}
+          VERSION: ${{ needs.validate.outputs.version }}
+        run: |
+          set -euo pipefail
+          response="$(gh api --method POST \
+            repos/quality-gates/homebrew-tap/actions/workflows/publish-messgo.yml/dispatches \
+            -F return_run_details=true \
+            -f ref=main \
+            -f "inputs[tag]=$TAG" \
+            -f "inputs[version]=$VERSION" \
+            -f "inputs[release_id]=$RELEASE_ID" \
+            -f "inputs[source_sha]=$SOURCE_SHA" \
+            -f "inputs[arm64_asset]=messgo_${VERSION}_darwin_arm64.tar.gz" \
+            -f "inputs[amd64_asset]=messgo_${VERSION}_darwin_amd64.tar.gz")"
+          run_id="$(jq -r .workflow_run_id <<<"$response")"
+          run_url="$(jq -r .html_url <<<"$response")"
+          test "$run_id" != null
+          test "$run_url" != null
+          echo "run_id=$run_id" >> "$GITHUB_OUTPUT"
+          echo "run_url=$run_url" >> "$GITHUB_OUTPUT"
+          echo "Tap publication: $run_url" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Wait for tap publication
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          RUN_ID: ${{ steps.dispatch.outputs.run_id }}
+        run: gh run watch "$RUN_ID" --repo quality-gates/homebrew-tap --exit-status

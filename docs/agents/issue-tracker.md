@@ -16,9 +16,3 @@ to read and write issues for this repo.
 
 - **PRs as a request surface:** off. Skills should treat only GitHub Issues as
   the request queue, not open pull requests.
-
-## Note
-
-This repo separately uses **bd (beads)** (see root `CLAUDE.md`) for local agent
-task tracking during implementation sessions. Beads and GitHub Issues are
-complementary, not interchangeable — this file governs GitHub Issues only.

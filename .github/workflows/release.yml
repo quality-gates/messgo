@@ -31,7 +31,7 @@ jobs:
       source_sha: ${{ steps.tag.outputs.source_sha }}
       immutable_release: ${{ steps.tag.outputs.immutable_release }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
           ref: ${{ env.TAG }}
           fetch-depth: 0
@@ -88,10 +88,10 @@ jobs:
     if: needs.validate.outputs.immutable_release != 'true'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
           ref: ${{ needs.validate.outputs.source_sha }}
-      - uses: actions/setup-go@v6
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
         with:
           go-version: ${{ env.GO_VERSION }}
           cache: true
@@ -113,11 +113,11 @@ jobs:
       matrix:
         arch: [amd64, arm64]
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
           ref: ${{ needs.validate.outputs.source_sha }}
           fetch-depth: 0
-      - uses: actions/setup-go@v6
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
         with:
           go-version: ${{ env.GO_VERSION }}
           cache: true
@@ -142,7 +142,7 @@ jobs:
             --owner=0 --group=0 --numeric-owner \
             -C dist/package -czf "dist/$archive" LICENSE messgo
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: messgo-darwin-${{ matrix.arch }}
           path: dist/*.tar.gz
@@ -155,7 +155,7 @@ jobs:
     if: needs.validate.outputs.immutable_release != 'true'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/download-artifact@v5
+      - uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5
         with:
           pattern: messgo-darwin-*
           path: dist
@@ -163,7 +163,7 @@ jobs:
       - name: Create checksum manifest
         working-directory: dist
         run: sha256sum messgo_*.tar.gz | LC_ALL=C sort > checksums.txt
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: release-assets
           path: dist/*
@@ -192,10 +192,10 @@ jobs:
             machine: arm64
     runs-on: ${{ matrix.runner }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
           ref: ${{ needs.validate.outputs.source_sha }}
-      - uses: actions/download-artifact@v5
+      - uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5
         with:
           name: release-assets
           path: dist
@@ -233,7 +233,7 @@ jobs:
       arm64_sha: ${{ steps.release.outputs.arm64_sha }}
       amd64_sha: ${{ steps.release.outputs.amd64_sha }}
     steps:
-      - uses: actions/download-artifact@v5
+      - uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5
         if: needs.validate.outputs.immutable_release != 'true'
         with:
           name: release-assets
@@ -353,7 +353,7 @@ jobs:
     environment: homebrew
     steps:
       - id: app-token
-        uses: actions/create-github-app-token@v2
+        uses: actions/create-github-app-token@fee1f7d63c2ff003460e3d139729b119787bc349 # v2
         with:
           app-id: ${{ secrets.HOMEBREW_TAP_APP_ID }}
           private-key: ${{ secrets.HOMEBREW_TAP_APP_PRIVATE_KEY }}

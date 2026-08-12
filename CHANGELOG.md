@@ -6,6 +6,9 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 
 ## [Unreleased]
 
+### Changed
+- Removed the repository's secondary local task tracker and its agent hooks. GitHub Issues is now the only project issue tracker.
+
 ### Fixed
 - Pinned the release workflow to an exact Go patch version so rebuilding a matching draft cannot silently produce different binaries after a toolchain update.
 - Ensured Homebrew publication runs when retrying an existing immutable release, even though the release build and smoke-test jobs are intentionally skipped.

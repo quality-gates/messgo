@@ -49,6 +49,8 @@ func (lc *localCollector) add(id *ast.Ident) {
 
 func (lc *localCollector) collect(node ast.Node) bool {
 	switch s := node.(type) {
+	case *ast.FuncLit:
+		return false
 	case *ast.AssignStmt:
 		for _, id := range defineIdents(s) {
 			lc.add(id)
@@ -72,6 +74,8 @@ func collectLoopIdents(body *ast.BlockStmt) map[*ast.Ident]bool {
 	set := map[*ast.Ident]bool{}
 	ast.Inspect(body, func(n ast.Node) bool {
 		switch fs := n.(type) {
+		case *ast.FuncLit:
+			return false
 		case *ast.ForStmt:
 			if a, ok := fs.Init.(*ast.AssignStmt); ok {
 				for _, id := range defineIdents(a) {

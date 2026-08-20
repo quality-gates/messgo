@@ -37,6 +37,7 @@ type LocalVariable struct {
 	Name   string
 	Line   int
 	IsLoop bool
+	Ident  *ast.Ident
 }
 
 // HasGoto reports whether the function body contains a goto statement.
@@ -261,7 +262,7 @@ func (f *Function) LocalVariables() []LocalVariable {
 	locals := util.LocalVariables(f.Body, f.File.Fset)
 	out := make([]LocalVariable, 0, len(locals))
 	for _, v := range locals {
-		out = append(out, LocalVariable{Name: v.Name, Line: v.Line, IsLoop: v.IsLoop})
+		out = append(out, LocalVariable{Name: v.Name, Line: v.Line, IsLoop: v.IsLoop, Ident: v.Ident})
 	}
 	return out
 }
@@ -274,6 +275,7 @@ func (f *Function) IdentifierReads() map[string]bool {
 	}
 	reads := map[string]bool{}
 	writeIdents := collectWriteIdents(f.Body)
+	nestedObjects := collectNestedFunctionObjects(f.Body)
 	ast.Inspect(f.Body, func(n ast.Node) bool {
 		id, ok := n.(*ast.Ident)
 		if !ok || id.Name == "_" {
@@ -282,10 +284,146 @@ func (f *Function) IdentifierReads() map[string]bool {
 		if writeIdents[id] {
 			return true
 		}
+		if id.Obj != nil && nestedObjects[id.Obj] {
+			return true
+		}
 		reads[id.Name] = true
 		return true
 	})
 	return reads
+}
+
+// IdentifierRead reports whether target's binding is read in this function.
+// Object identity distinguishes a shadowing local from a captured parameter or
+// local with the same name.
+func (f *Function) IdentifierRead(target *ast.Ident) bool {
+	if f.Body == nil || target == nil {
+		return false
+	}
+	return containsIdentifierRead(f.Body, target, collectWriteIdents(f.Body))
+}
+
+func containsIdentifierRead(body *ast.BlockStmt, target *ast.Ident, writeIdents map[*ast.Ident]bool) bool {
+	found := false
+	ast.Inspect(body, func(n ast.Node) bool {
+		id, ok := n.(*ast.Ident)
+		if !ok {
+			return true
+		}
+		if !isReadIdentifier(id, writeIdents) {
+			return true
+		}
+		if sameIdentifierBinding(id, target) {
+			found = true
+			return false
+		}
+		return true
+	})
+	return found
+}
+
+func isReadIdentifier(id *ast.Ident, writeIdents map[*ast.Ident]bool) bool {
+	return id.Name != "_" && !writeIdents[id]
+}
+
+func sameIdentifierBinding(id, target *ast.Ident) bool {
+	if target.Obj != nil {
+		return id.Obj == target.Obj
+	}
+	return id.Obj == nil && id.Name == target.Name
+}
+
+// collectNestedFunctionObjects returns objects declared inside function
+// literals nested in body. Parser object resolution lets IdentifierReads keep
+// references captured from an outer function while excluding names shadowed by
+// a closure's own parameters and locals.
+func collectNestedFunctionObjects(body *ast.BlockStmt) map[any]bool {
+	objects := map[any]bool{}
+	ast.Inspect(body, func(n ast.Node) bool {
+		fn, ok := n.(*ast.FuncLit)
+		if !ok {
+			return true
+		}
+		collectFunctionLiteralObjects(fn, objects)
+		return false
+	})
+	return objects
+}
+
+func collectFunctionLiteralObjects(fn *ast.FuncLit, objects map[any]bool) {
+	collectFieldObjects(fn.Type.Params, objects)
+	collectFieldObjects(fn.Type.Results, objects)
+	ast.Inspect(fn.Body, func(n ast.Node) bool {
+		if nested, ok := n.(*ast.FuncLit); ok {
+			collectFunctionLiteralObjects(nested, objects)
+			return false
+		}
+		collectFunctionLiteralDeclaration(n, objects)
+		return true
+	})
+}
+
+func collectFunctionLiteralDeclaration(n ast.Node, objects map[any]bool) {
+	switch s := n.(type) {
+	case *ast.ValueSpec:
+		for _, id := range s.Names {
+			addDeclaredObject(id, objects)
+		}
+	case *ast.AssignStmt:
+		collectShortDeclarationObjects(s, objects)
+	case *ast.RangeStmt:
+		collectRangeDeclarationObjects(s, objects)
+	case *ast.TypeSpec:
+		addDeclaredObject(s.Name, objects)
+	}
+}
+
+func collectShortDeclarationObjects(s *ast.AssignStmt, objects map[any]bool) {
+	if s.Tok != token.DEFINE {
+		return
+	}
+	for _, lhs := range s.Lhs {
+		id, ok := lhs.(*ast.Ident)
+		if ok && isDeclaredBy(id, s) {
+			objects[id.Obj] = true
+		}
+	}
+}
+
+func collectRangeDeclarationObjects(s *ast.RangeStmt, objects map[any]bool) {
+	if s.Tok != token.DEFINE {
+		return
+	}
+	addRangeObject(s.Key, s, objects)
+	addRangeObject(s.Value, s, objects)
+}
+
+func collectFieldObjects(fields *ast.FieldList, objects map[any]bool) {
+	if fields == nil {
+		return
+	}
+	for _, field := range fields.List {
+		for _, id := range field.Names {
+			addDeclaredObject(id, objects)
+		}
+	}
+}
+
+func addDeclaredObject(id *ast.Ident, objects map[any]bool) {
+	if id != nil && id.Obj != nil {
+		objects[id.Obj] = true
+	}
+}
+
+func isDeclaredBy(id *ast.Ident, decl ast.Node) bool {
+	return id != nil && id.Obj != nil && id.Obj.Decl == decl
+}
+
+func addRangeObject(expr ast.Expr, decl *ast.RangeStmt, objects map[any]bool) {
+	id, ok := expr.(*ast.Ident)
+	if ok && isDeclaredBy(id, decl) {
+		objects[id.Obj] = true
+	}
 }
 
 func collectWriteIdents(body *ast.BlockStmt) map[*ast.Ident]bool {

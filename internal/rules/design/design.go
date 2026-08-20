@@ -372,4 +372,5 @@ var builtinTypes = map[string]bool{
 	"uint32": true, "uint64": true, "uintptr": true, "byte": true, "rune": true,
 	"float32": true, "float64": true, "complex64": true, "complex128": true,
 	"error": true, "any": true, "interface{}": true, "struct{}": true,
+	"map": true, "chan": true, "func": true,
 }

@@ -60,12 +60,11 @@ func (r *UnusedPrivateMethod) ApplyClass(c *rule.Context, class *model.Class) {
 type UnusedFormalParameter struct{ *rule.Base }
 
 func (r *UnusedFormalParameter) check(c *rule.Context, fn *model.Function) {
-	reads := fn.IdentifierReads()
 	for _, p := range fn.Params {
 		if p.Name == "" || p.Name == "_" {
 			continue
 		}
-		if !reads[p.Name] {
+		if !fn.IdentifierRead(p.Ident) {
 			c.Report(p.Line, p.Line, p.Name)
 		}
 	}
@@ -90,10 +89,9 @@ func (r *UnusedLocalVariable) Configure(props rule.Properties) error {
 
 func (r *UnusedLocalVariable) check(c *rule.Context, fn *model.Function) {
 	locals := fn.LocalVariables()
-	reads := fn.IdentifierReads()
 	reported := map[string]bool{}
 	for _, v := range locals {
-		if reads[v.Name] || reported[v.Name] || util.Contains(r.exceptions, v.Name) {
+		if fn.IdentifierRead(v.Ident) || reported[v.Name] || util.Contains(r.exceptions, v.Name) {
 			continue
 		}
 		reported[v.Name] = true

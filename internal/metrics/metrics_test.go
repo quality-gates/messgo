@@ -3,6 +3,7 @@ package metrics
 import (
 	"go/parser"
 	"go/token"
+	"strings"
 	"testing"
 
 	"go/ast"
@@ -99,5 +100,13 @@ func TestNPathTabledCases(t *testing.T) {
 				t.Errorf("NPath(%s) = %d, want %d", tc.name, got, tc.want)
 			}
 		})
+	}
+}
+
+func TestNPathComplexitySaturatesInsteadOfOverflowing(t *testing.T) {
+	body := parseFuncBody(t, "func f() {\n"+strings.Repeat("if true {}\n", 63)+"}")
+	want := int(^uint(0) >> 1)
+	if got := NPathComplexity(body); got != want {
+		t.Fatalf("NPathComplexity(63 sequential branches) = %d, want saturated max %d", got, want)
 	}
 }

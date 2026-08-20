@@ -6,6 +6,16 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 
 ## [Unreleased]
 
+### Fixed
+- Saturated NPath complexity arithmetic to prevent integer overflow from suppressing high-complexity findings.
+- Applied `--ignore-tests`, suffix, and exclude filters consistently to explicitly named files.
+- Kept function-literal locals out of enclosing-function analysis while preserving captured outer-variable reads.
+- Stopped `CouplingBetweenObjects` from treating Go's built-in map, channel, and function types as external couplings.
+- Propagated report writer errors instead of silently accepting truncated output.
+
+### Changed
+- Pinned the module to Go 1.26.6, which contains the standard-library XML decoder vulnerability fix.
+
 ## [0.2.0] - 2026-07-15
 
 ### Added

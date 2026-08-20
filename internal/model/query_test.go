@@ -174,6 +174,56 @@ func use(x int) {
 	}
 }
 
+func TestFunctionLiteralHasItsOwnLocalScope(t *testing.T) {
+	src := []byte(`package sample
+
+func outer(x int) {
+	closure := func() {
+		x := 1
+		_ = x
+	}
+	_ = closure
+}
+`)
+	f, err := ParseSource("query.go", src)
+	if err != nil {
+		t.Fatalf("ParseSource: %v", err)
+	}
+	fn := f.Functions[0]
+	locals := fn.LocalVariables()
+	if len(locals) != 1 || locals[0].Name != "closure" {
+		t.Fatalf("LocalVariables() = %+v, want only closure from the outer function", locals)
+	}
+	if reads := fn.IdentifierReads(); reads["x"] {
+		t.Fatalf("IdentifierReads() = %v, inner shadow should not count as an outer read", reads)
+	}
+	if fn.IdentifierRead(fn.Params[0].Ident) {
+		t.Fatal("IdentifierRead() counted the closure's shadowed x as a read of the outer parameter")
+	}
+}
+
+func TestIdentifierReadsIncludesCapturedOuterVariable(t *testing.T) {
+	src := []byte(`package sample
+
+func outer(x int) {
+	closure := func() int {
+		return x
+	}
+	_ = closure
+}
+`)
+	f, err := ParseSource("query.go", src)
+	if err != nil {
+		t.Fatalf("ParseSource: %v", err)
+	}
+	if reads := f.Functions[0].IdentifierReads(); !reads["x"] {
+		t.Fatalf("IdentifierReads() = %v, captured outer variable x should count as read", reads)
+	}
+	if !f.Functions[0].IdentifierRead(f.Functions[0].Params[0].Ident) {
+		t.Fatal("IdentifierRead() missed the captured outer parameter")
+	}
+}
+
 func TestFunctionReceiverQueries(t *testing.T) {
 	src := []byte(`package sample
 

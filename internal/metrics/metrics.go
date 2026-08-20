@@ -57,7 +57,7 @@ func NPathComplexity(body *ast.BlockStmt) int {
 func npathStmts(stmts []ast.Stmt) int {
 	product := 1
 	for _, s := range stmts {
-		product *= npathStmt(s)
+		product = npathMul(product, npathStmt(s))
 	}
 	return product
 }
@@ -65,12 +65,39 @@ func npathStmts(stmts []ast.Stmt) int {
 func returnStmtComplexity(n *ast.ReturnStmt) int {
 	c := 0
 	for _, r := range n.Results {
-		c += expressionComplexity(r)
+		c = npathAdd(c, expressionComplexity(r))
 	}
 	if c == 0 {
 		return 1
 	}
 	return c
+}
+
+func npathMaxInt() int { return int(^uint(0) >> 1) }
+
+func npathAdd(a, b int) int {
+	if a < 0 || b < 0 {
+		return npathMaxInt()
+	}
+	max := npathMaxInt()
+	if a > max-b {
+		return max
+	}
+	return a + b
+}
+
+func npathMul(a, b int) int {
+	if a < 0 || b < 0 {
+		return npathMaxInt()
+	}
+	if a == 0 || b == 0 {
+		return 0
+	}
+	max := npathMaxInt()
+	if a > max/b {
+		return max
+	}
+	return a * b
 }
 
 func npathSwitchOrSelect(s ast.Stmt) (int, bool) {
@@ -96,7 +123,8 @@ func npathStmt(s ast.Stmt) int {
 		return npathFor(n)
 	case *ast.RangeStmt:
 		// pdepend visitForeachStatement: E(iterable) + 1 + NP(body).
-		return expressionComplexity(n.X) + 1 + npathStmts(n.Body.List)
+		npath := npathAdd(expressionComplexity(n.X), 1)
+		return npathAdd(npath, npathStmts(n.Body.List))
 	case *ast.BlockStmt:
 		return npathStmts(n.List)
 	case *ast.LabeledStmt:
@@ -125,26 +153,26 @@ func npathIf(n *ast.IfStmt) int {
 	default:
 		elsePart = npathStmt(e)
 	}
-	return elsePart + body + expr
+	npath := npathAdd(elsePart, body)
+	return npathAdd(npath, expr)
 }
 
 // npathFor follows pdepend visitForStatement: 1 + Σ E(loop expressions) +
 // NP(body). Init/Cond/Post each contribute their boolean-op complexity.
 func npathFor(n *ast.ForStmt) int {
 	npath := 1
-	npath += expressionComplexity(n.Cond)
+	npath = npathAdd(npath, expressionComplexity(n.Cond))
 	if a, ok := n.Init.(*ast.AssignStmt); ok {
 		for _, e := range a.Rhs {
-			npath += expressionComplexity(e)
+			npath = npathAdd(npath, expressionComplexity(e))
 		}
 	}
 	if a, ok := n.Post.(*ast.AssignStmt); ok {
 		for _, e := range a.Rhs {
-			npath += expressionComplexity(e)
+			npath = npathAdd(npath, expressionComplexity(e))
 		}
 	}
-	npath += npathStmts(n.Body.List)
-	return npath
+	return npathAdd(npath, npathStmts(n.Body.List))
 }
 
 // npathSwitch follows pdepend visitSwitchStatement: E(tag) plus the sum over
@@ -154,7 +182,7 @@ func npathSwitch(body *ast.BlockStmt, tag ast.Expr) int {
 	npath := expressionComplexity(tag)
 	for _, c := range body.List {
 		if cc, ok := c.(*ast.CaseClause); ok {
-			npath += npathStmts(cc.Body)
+			npath = npathAdd(npath, npathStmts(cc.Body))
 		}
 	}
 	return npath
@@ -165,7 +193,7 @@ func npathSelect(body *ast.BlockStmt) int {
 	npath := 0
 	for _, c := range body.List {
 		if cc, ok := c.(*ast.CommClause); ok {
-			npath += npathStmts(cc.Body)
+			npath = npathAdd(npath, npathStmts(cc.Body))
 		}
 	}
 	if npath == 0 {

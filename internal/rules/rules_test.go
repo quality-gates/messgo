@@ -161,6 +161,19 @@ func loop() {
 	mustHave(t, hits, "UnusedLocalVariable")
 }
 
+func TestUnusedFormalParameterRespectsClosureShadowing(t *testing.T) {
+	src := `
+func outer(x int) {
+	func() {
+		x := 1
+		_ = x
+	}()
+}
+`
+	hits := analyze(t, src, "opinionated")
+	mustHave(t, hits, "UnusedFormalParameter")
+}
+
 func TestDesign(t *testing.T) {
 	src := `
 import "os"
@@ -181,6 +194,26 @@ loop:
 		"DevelopmentCodeFragment",
 		"ExitExpression",
 	)
+}
+
+func TestCouplingBetweenObjectsIgnoresBuiltinMapType(t *testing.T) {
+	rulesetPath := filepath.Join(t.TempDir(), "coupling.xml")
+	rulesetXML := []byte(`<ruleset name="coupling">
+  <rule ref="design/CouplingBetweenObjects">
+    <properties><property name="maximum" value="1"/></properties>
+  </rule>
+</ruleset>
+`)
+	if err := os.WriteFile(rulesetPath, rulesetXML, 0o600); err != nil {
+		t.Fatalf("write ruleset: %v", err)
+	}
+
+	hits := analyze(t, `
+type Box struct {
+	values map[string]int
+}
+`, rulesetPath)
+	mustNotHave(t, hits, "CouplingBetweenObjects")
 }
 
 // globalVarFixture exercises every classification the GlobalVariable rule must

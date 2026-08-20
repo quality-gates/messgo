@@ -204,6 +204,9 @@ func (r *CouplingBetweenObjects) measure(_ *rule.Context, class *model.Class) (r
 func baseTypeName(t string) string {
 	t = strings.TrimLeft(t, "*[]")
 	t = strings.TrimPrefix(t, "...")
+	if strings.HasPrefix(t, "chan ") {
+		return "chan"
+	}
 	if i := strings.IndexByte(t, '['); i >= 0 {
 		t = t[:i]
 	}
@@ -372,4 +375,5 @@ var builtinTypes = map[string]bool{
 	"uint32": true, "uint64": true, "uintptr": true, "byte": true, "rune": true,
 	"float32": true, "float64": true, "complex64": true, "complex128": true,
 	"error": true, "any": true, "interface{}": true, "struct{}": true,
+	"map": true, "chan": true, "func": true,
 }

@@ -174,6 +174,130 @@ func use(x int) {
 	}
 }
 
+func TestFunctionLiteralHasItsOwnLocalScope(t *testing.T) {
+	src := []byte(`package sample
+
+func outer(x int) {
+	closure := func() {
+		x := 1
+		_ = x
+	}
+	_ = closure
+}
+`)
+	f, err := ParseSource("query.go", src)
+	if err != nil {
+		t.Fatalf("ParseSource: %v", err)
+	}
+	fn := f.Functions[0]
+	locals := fn.LocalVariables()
+	if len(locals) != 1 || locals[0].Name != "closure" {
+		t.Fatalf("LocalVariables() = %+v, want only closure from the outer function", locals)
+	}
+	if reads := fn.IdentifierReads(); reads["x"] {
+		t.Fatalf("IdentifierReads() = %v, inner shadow should not count as an outer read", reads)
+	}
+	if fn.IdentifierRead(fn.Params[0].Ident) {
+		t.Fatal("IdentifierRead() counted the closure's shadowed x as a read of the outer parameter")
+	}
+}
+
+func TestIdentifierReadsIncludesCapturedOuterVariable(t *testing.T) {
+	src := []byte(`package sample
+
+func outer(x int) {
+	closure := func() int {
+		return x
+	}
+	_ = closure
+}
+`)
+	f, err := ParseSource("query.go", src)
+	if err != nil {
+		t.Fatalf("ParseSource: %v", err)
+	}
+	if reads := f.Functions[0].IdentifierReads(); !reads["x"] {
+		t.Fatalf("IdentifierReads() = %v, captured outer variable x should count as read", reads)
+	}
+	if !f.Functions[0].IdentifierRead(f.Functions[0].Params[0].Ident) {
+		t.Fatal("IdentifierRead() missed the captured outer parameter")
+	}
+}
+
+func TestIdentifierQueriesTrackEveryClosureDeclarationKind(t *testing.T) {
+	src := []byte(`package sample
+
+func outer(captured int) (named int) {
+	outerLocal := 0
+	index := 0
+	_ = outerLocal
+	closure := func(arg int) (result int) {
+		var declared int
+		const constant = 1
+		type local struct{}
+		short := 2
+		declared = 3
+		captured, reused := captured, 4
+		existing := 0
+		existing, reusedExisting := existing, 5
+		for key, value := range []int{1} {
+			_ = key
+			_ = value
+		}
+		for single := range []int{1} {
+			_ = single
+		}
+		for index = range []int{1} {
+		}
+		nested := func(inner int) int {
+			return inner
+		}
+		_ = arg
+		_ = declared
+		_ = constant
+		_ = local{}
+		_ = short
+		_ = reused
+		_ = nested
+		_ = result
+		return result
+	}
+	_ = closure
+	return named
+}
+`)
+	f, err := ParseSource("query.go", src)
+	if err != nil {
+		t.Fatalf("ParseSource: %v", err)
+	}
+	fn := f.Functions[0]
+	locals := fn.LocalVariables()
+	if len(locals) != 3 || locals[0].Name != "outerLocal" || locals[1].Name != "index" || locals[2].Name != "closure" {
+		t.Fatalf("LocalVariables() = %+v, want only outerLocal, index, and closure", locals)
+	}
+
+	reads := fn.IdentifierReads()
+	for _, name := range []string{"captured", "outerLocal", "closure", "named"} {
+		if !reads[name] {
+			t.Errorf("IdentifierReads() = %v, want outer %q to be read", reads, name)
+		}
+	}
+	for _, name := range []string{"arg", "result", "declared", "constant", "local", "short", "reused", "existing", "reusedExisting", "key", "value", "single", "nested", "inner", "index"} {
+		if reads[name] {
+			t.Errorf("IdentifierReads() = %v, inner/write-only %q should not be reported as an outer read", reads, name)
+		}
+	}
+	if !fn.IdentifierRead(fn.Params[0].Ident) {
+		t.Fatal("IdentifierRead() missed the captured outer parameter")
+	}
+	if !fn.IdentifierRead(locals[0].Ident) {
+		t.Fatal("IdentifierRead() missed the outer local read")
+	}
+	if fn.IdentifierRead(nil) {
+		t.Fatal("IdentifierRead(nil) = true, want false")
+	}
+}
+
 func TestFunctionReceiverQueries(t *testing.T) {
 	src := []byte(`package sample
 

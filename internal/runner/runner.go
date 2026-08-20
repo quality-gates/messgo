@@ -91,13 +91,7 @@ func walkDirFunc(opts Options, add func(string)) fs.WalkDirFunc {
 			}
 			return nil
 		}
-		if !hasSuffix(path, opts.Suffixes) {
-			return nil
-		}
-		if opts.IgnoreTests && strings.HasSuffix(path, "_test.go") {
-			return nil
-		}
-		if isExcluded(path, opts.Exclude) {
+		if !shouldIncludeFile(path, opts) {
 			return nil
 		}
 		add(path)
@@ -122,6 +116,9 @@ func discover(opts Options) ([]string, error) {
 			return nil, err
 		}
 		if !info.IsDir() {
+			if !shouldIncludeFile(p, opts) {
+				continue
+			}
 			add(p)
 			continue
 		}
@@ -132,6 +129,16 @@ func discover(opts Options) ([]string, error) {
 	}
 	sort.Strings(out)
 	return out, nil
+}
+
+func shouldIncludeFile(path string, opts Options) bool {
+	if !hasSuffix(path, opts.Suffixes) {
+		return false
+	}
+	if opts.IgnoreTests && strings.HasSuffix(path, "_test.go") {
+		return false
+	}
+	return !isExcluded(path, opts.Exclude)
 }
 
 func shouldSkipDir(name string) bool {

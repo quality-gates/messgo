@@ -8,11 +8,17 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 
 ### Changed
 - Removed the repository's secondary local task tracker and its agent hooks. GitHub Issues is now the only project issue tracker.
+- Pinned the module to Go 1.26.6, which contains the standard-library XML decoder vulnerability fix.
 
 ### Fixed
 - Pinned the release workflow to an exact Go patch version so rebuilding a matching draft cannot silently produce different binaries after a toolchain update.
 - Ensured Homebrew publication runs when retrying an existing immutable release, even though the release build and smoke-test jobs are intentionally skipped.
 - Removed the unavailable Homebrew install command from the README and pointed macOS users to the published release archives instead.
+- Saturated NPath complexity arithmetic to prevent integer overflow from suppressing high-complexity findings.
+- Applied `--ignore-tests`, suffix, and exclude filters consistently to explicitly named files.
+- Kept function-literal locals out of enclosing-function analysis while preserving captured outer-variable reads.
+- Stopped `CouplingBetweenObjects` from treating Go's built-in map, channel, and function types as external couplings.
+- Propagated report writer errors instead of silently accepting truncated output.
 
 ## [0.2.0] - 2026-07-15
 

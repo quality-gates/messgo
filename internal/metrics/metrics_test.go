@@ -110,3 +110,72 @@ func TestNPathComplexitySaturatesInsteadOfOverflowing(t *testing.T) {
 		t.Fatalf("NPathComplexity(63 sequential branches) = %d, want saturated max %d", got, want)
 	}
 }
+
+func TestNPathArithmeticSaturatesAndPreservesNormalValues(t *testing.T) {
+	max := npathMaxInt()
+	addCases := []struct {
+		name string
+		a, b int
+		want int
+	}{
+		{name: "normal", a: 2, b: 3, want: 5},
+		{name: "overflow", a: max, b: 1, want: max},
+		{name: "negative left", a: -1, b: 1, want: max},
+		{name: "negative right", a: 1, b: -1, want: max},
+	}
+	for _, tc := range addCases {
+		t.Run("add/"+tc.name, func(t *testing.T) {
+			if got := npathAdd(tc.a, tc.b); got != tc.want {
+				t.Fatalf("npathAdd(%d, %d) = %d, want %d", tc.a, tc.b, got, tc.want)
+			}
+		})
+	}
+
+	mulCases := []struct {
+		name string
+		a, b int
+		want int
+	}{
+		{name: "normal", a: 2, b: 3, want: 6},
+		{name: "zero left", a: 0, b: 3, want: 0},
+		{name: "zero right", a: 3, b: 0, want: 0},
+		{name: "overflow", a: max, b: 2, want: max},
+		{name: "negative left", a: -1, b: 2, want: max},
+		{name: "negative right", a: 2, b: -1, want: max},
+	}
+	for _, tc := range mulCases {
+		t.Run("multiply/"+tc.name, func(t *testing.T) {
+			if got := npathMul(tc.a, tc.b); got != tc.want {
+				t.Fatalf("npathMul(%d, %d) = %d, want %d", tc.a, tc.b, got, tc.want)
+			}
+		})
+	}
+}
+
+func TestNPathCoversRangeSwitchSelectLoopAndReturnForms(t *testing.T) {
+	body := parseFuncBody(t, `func f(items []int, ch <-chan int, value any, a, b bool) int {
+	total := 0
+	for range items {
+		total++
+	}
+	switch value.(type) {
+	case int:
+		total++
+	default:
+		total--
+	}
+	select {
+	case <-ch:
+		total++
+	default:
+		total--
+	}
+	for i := 0 + (a && b); i < 1; i = i + (a || b) {
+		total++
+	}
+	return total
+}`)
+	if got := NPathComplexity(body); got != 32 {
+		t.Fatalf("NPathComplexity(mixed control flow) = %d, want 32", got)
+	}
+}

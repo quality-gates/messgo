@@ -204,6 +204,9 @@ func (r *CouplingBetweenObjects) measure(_ *rule.Context, class *model.Class) (r
 func baseTypeName(t string) string {
 	t = strings.TrimLeft(t, "*[]")
 	t = strings.TrimPrefix(t, "...")
+	if strings.HasPrefix(t, "chan ") {
+		return "chan"
+	}
 	if i := strings.IndexByte(t, '['); i >= 0 {
 		t = t[:i]
 	}

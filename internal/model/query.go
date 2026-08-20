@@ -421,9 +421,39 @@ func isDeclaredBy(id *ast.Ident, decl ast.Node) bool {
 
 func addRangeObject(expr ast.Expr, decl *ast.RangeStmt, objects map[any]bool) {
 	id, ok := expr.(*ast.Ident)
-	if ok && isDeclaredBy(id, decl) {
+	if ok && isRangeDeclaredBy(id, decl) {
 		objects[id.Obj] = true
 	}
+}
+
+func isRangeDeclaredBy(id *ast.Ident, decl *ast.RangeStmt) bool {
+	if !rangeDeclHasIdentifier(id, decl) {
+		return false
+	}
+	assign, ok := id.Obj.Decl.(*ast.AssignStmt)
+	if !ok || assign.Tok != token.DEFINE {
+		return false
+	}
+	return assignmentContainsIdent(assign, id)
+}
+
+func rangeDeclHasIdentifier(id *ast.Ident, decl *ast.RangeStmt) bool {
+	if id == nil || id.Obj == nil {
+		return false
+	}
+	if decl == nil || decl.Tok != token.DEFINE {
+		return false
+	}
+	return id == decl.Key || id == decl.Value
+}
+
+func assignmentContainsIdent(assign *ast.AssignStmt, id *ast.Ident) bool {
+	for _, lhs := range assign.Lhs {
+		if lhs == id {
+			return true
+		}
+	}
+	return false
 }
 
 func collectWriteIdents(body *ast.BlockStmt) map[*ast.Ident]bool {

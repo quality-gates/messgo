@@ -9,6 +9,7 @@ import (
 	"encoding/xml"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/quality-gates/messgo/internal/rule"
@@ -101,11 +102,11 @@ func (l *Loader) Load(spec string) ([]*rule.RuleSet, error) {
 		if part == "" {
 			continue
 		}
-		data, _, err := l.read(part)
+		data, loc, err := l.read(part, "")
 		if err != nil {
 			return nil, err
 		}
-		set, err := l.parse(data)
+		set, err := l.parse(data, loc)
 		if err != nil {
 			return nil, fmt.Errorf("%s: %w", part, err)
 		}
@@ -175,16 +176,17 @@ func dedupeRules(sets []*rule.RuleSet) {
 	}
 }
 
-func (l *Loader) read(part string) ([]byte, string, error) {
+func (l *Loader) read(part, fromDir string) ([]byte, string, error) {
 	if file, ok := builtinNames[part]; ok {
 		data, err := builtinFS.ReadFile(file)
 		return data, part, err
 	}
-	data, err := os.ReadFile(part)
+	path := resolvePath(part, fromDir)
+	data, err := os.ReadFile(path)
 	if err != nil {
 		return nil, "", fmt.Errorf("unknown ruleset or file %q: %w", part, err)
 	}
-	return data, part, nil
+	return data, path, nil
 }
 
 func (l *Loader) warn(format string, args ...any) {
@@ -193,7 +195,7 @@ func (l *Loader) warn(format string, args ...any) {
 	}
 }
 
-func (l *Loader) parse(data []byte) (*rule.RuleSet, error) {
+func (l *Loader) parse(data []byte, loc string) (*rule.RuleSet, error) {
 	var xrs xmlRuleSet
 	if err := xml.Unmarshal(data, &xrs); err != nil {
 		return nil, err
@@ -202,8 +204,12 @@ func (l *Loader) parse(data []byte) (*rule.RuleSet, error) {
 		Name:        xrs.Name,
 		Description: strings.TrimSpace(xrs.Description),
 	}
+	fromDir := ""
+	if _, builtin := builtinNames[loc]; !builtin {
+		fromDir = filepath.Dir(loc)
+	}
 	for _, xr := range xrs.Rules {
-		if err := l.addRule(set, xrs.Name, xr); err != nil {
+		if err := l.addRule(set, xrs.Name, xr, fromDir); err != nil {
 			return nil, err
 		}
 	}
@@ -213,10 +219,10 @@ func (l *Loader) parse(data []byte) (*rule.RuleSet, error) {
 // addRule handles one <rule> element: either a direct class-based definition
 // or a <rule ref="..."> reference to another ruleset (optionally with
 // <exclude> children or single-rule property overrides).
-func (l *Loader) addRule(set *rule.RuleSet, setName string, xr xmlRule) error {
+func (l *Loader) addRule(set *rule.RuleSet, setName string, xr xmlRule, fromDir string) error {
 	switch {
 	case xr.Ref != "":
-		return l.addRef(set, xr)
+		return l.addRef(set, xr, fromDir)
 	case xr.Class != "":
 		r, err := l.buildRule(setName, xr, &xr)
 		if err != nil {
@@ -225,57 +231,6 @@ func (l *Loader) addRule(set *rule.RuleSet, setName string, xr xmlRule) error {
 		if r != nil {
 			l.appendRule(set, r)
 		}
-	}
-	return nil
-}
-
-// addRef expands a <rule ref="..."> element. A ref to a whole ruleset imports
-// all its rules minus any <exclude>d names; a ref of the form "ruleset/Rule"
-// imports a single rule, applying property/priority overrides from xr.
-func (l *Loader) addRef(set *rule.RuleSet, xr xmlRule) error {
-	base, ruleName := l.splitRef(xr.Ref)
-	data, _, err := l.read(base)
-	if err != nil {
-		return err
-	}
-	var src xmlRuleSet
-	if err := xml.Unmarshal(data, &src); err != nil {
-		return err
-	}
-	excluded := excludeSet(xr.Exclude)
-	for _, sr := range src.Rules {
-		if err := processRefRule(l, set, src.Name, sr, ruleName, excluded, &xr); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-func processRefRule(l *Loader, set *rule.RuleSet, srcName string, sr xmlRule, ruleName string, excluded map[string]bool, xr *xmlRule) error {
-	if sr.Class == "" {
-		return nil
-	}
-	if ruleName != "" {
-		if sr.Name == ruleName {
-			r, err := l.buildRule(srcName, sr, xr)
-			if err != nil {
-				return err
-			}
-			if r != nil {
-				l.appendRule(set, r)
-			}
-		}
-		return nil
-	}
-	if excluded[sr.Name] {
-		return nil
-	}
-	r, err := l.buildRule(srcName, sr, &sr)
-	if err != nil {
-		return err
-	}
-	if r != nil {
-		l.appendRule(set, r)
 	}
 	return nil
 }
@@ -329,29 +284,6 @@ func (l *Loader) appendRule(set *rule.RuleSet, r rule.Rule) {
 		return
 	}
 	set.Rules = append(set.Rules, r)
-}
-
-// splitRef resolves a ref string into a (ruleset, rule) pair. "naming" →
-// ("naming", ""); "naming/ShortVariable" → ("naming", "ShortVariable").
-func (l *Loader) splitRef(ref string) (base, ruleName string) {
-	if l.resolvable(ref) {
-		return ref, ""
-	}
-	if i := strings.LastIndex(ref, "/"); i >= 0 {
-		if left := ref[:i]; l.resolvable(left) {
-			return left, ref[i+1:]
-		}
-	}
-	return ref, ""
-}
-
-// resolvable reports whether ident names a built-in ruleset or an existing file.
-func (l *Loader) resolvable(ident string) bool {
-	if _, ok := builtinNames[ident]; ok {
-		return true
-	}
-	_, err := os.Stat(ident)
-	return err == nil
 }
 
 func excludeSet(excludes []xmlExclude) map[string]bool {

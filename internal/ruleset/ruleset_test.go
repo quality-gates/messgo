@@ -272,6 +272,140 @@ func TestLoaderRejectsInvalidThresholdConfig(t *testing.T) {
 	}
 }
 
+func TestNestedGoRefImportsRules(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "team.xml")
+	xml := `<ruleset name="team">
+  <rule ref="go">
+    <exclude name="DevelopmentCodeFragment" />
+  </rule>
+</ruleset>
+`
+	if err := os.WriteFile(path, []byte(xml), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	set := loadOne(t, path)
+	if ruleByName(set, "CyclomaticComplexity") == nil {
+		t.Fatalf(`ref="go" imported %d rules; expected CyclomaticComplexity`, len(set.Rules))
+	}
+	if ruleByName(set, "DevelopmentCodeFragment") != nil {
+		t.Fatal("exclude DevelopmentCodeFragment was ignored")
+	}
+}
+
+func TestBareRuleNameResolvesBuiltin(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "team.xml")
+	xml := `<ruleset name="team">
+  <rule ref="LongVariable">
+    <priority>2</priority>
+    <properties>
+      <property name="maximum" value="50" />
+    </properties>
+  </rule>
+</ruleset>
+`
+	if err := os.WriteFile(path, []byte(xml), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	set := loadOne(t, path)
+	r := ruleByName(set, "LongVariable")
+	if r == nil {
+		t.Fatal(`<rule ref="LongVariable"> imported nothing`)
+	}
+	if got := rule.BaseOf(r).RulePrio; got != 2 {
+		t.Errorf("priority = %d, want 2", got)
+	}
+	if got := rule.BaseOf(r).RuleProps.Int("maximum", 0); got != 50 {
+		t.Errorf("maximum = %d, want 50", got)
+	}
+}
+
+func TestNestedSingleRuleRefThroughGo(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "team.xml")
+	xml := `<ruleset name="team">
+  <rule ref="go/CyclomaticComplexity"/>
+</ruleset>
+`
+	if err := os.WriteFile(path, []byte(xml), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	set := loadOne(t, path)
+	if ruleByName(set, "CyclomaticComplexity") == nil {
+		t.Fatal("go/CyclomaticComplexity did not import the rule")
+	}
+	if ruleByName(set, "LongVariable") != nil {
+		t.Fatal("go/CyclomaticComplexity imported an unrelated rule")
+	}
+}
+
+func TestNestedRelativeFileRefs(t *testing.T) {
+	dir := t.TempDir()
+	sub := filepath.Join(dir, "sub")
+	if err := os.Mkdir(sub, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	leaf := filepath.Join(sub, "leaf.xml")
+	mid := filepath.Join(dir, "mid.xml")
+	team := filepath.Join(dir, "team.xml")
+	if err := os.WriteFile(leaf, []byte(`<ruleset name="leaf">
+  <rule name="CyclomaticComplexity" class="PHPMD\Rule\CyclomaticComplexity"/>
+</ruleset>
+`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(mid, []byte(`<ruleset name="mid">
+  <rule ref="sub/leaf.xml"/>
+</ruleset>
+`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(team, []byte(`<ruleset name="team">
+  <rule ref="mid.xml"/>
+</ruleset>
+`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	set := loadOne(t, team)
+	if ruleByName(set, "CyclomaticComplexity") == nil {
+		t.Fatal("nested relative file refs did not import CyclomaticComplexity")
+	}
+}
+
+func TestUnknownSingleRuleRefErrors(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "team.xml")
+	xml := `<ruleset name="team">
+  <rule ref="naming/ShortVariabl"/>
+</ruleset>
+`
+	if err := os.WriteFile(path, []byte(xml), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := (&Loader{}).Load(path); err == nil {
+		t.Fatal("misspelled single-rule ref loaded with no error")
+	}
+}
+
+func TestRelativeFileRefResolvesAgainstRulesetDir(t *testing.T) {
+	dir := t.TempDir()
+	base := filepath.Join(dir, "base.xml")
+	team := filepath.Join(dir, "team.xml")
+	if err := os.WriteFile(base, []byte(`<ruleset name="base">
+  <rule name="CyclomaticComplexity" class="PHPMD\Rule\CyclomaticComplexity"/>
+</ruleset>
+`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(team, []byte(`<ruleset name="team">
+  <rule ref="base.xml"/>
+</ruleset>
+`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	set := loadOne(t, team)
+	if ruleByName(set, "CyclomaticComplexity") == nil {
+		t.Fatal("relative ref did not import CyclomaticComplexity")
+	}
+}
+
 func thresholdLoaderFile(paramCount int) *model.File {
 	fn := &model.Function{Name: "sample", Line: 1, EndLine: 1}
 	for range paramCount {

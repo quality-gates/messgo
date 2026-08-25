@@ -2,6 +2,7 @@ package model
 
 import (
 	"go/ast"
+	"go/constant"
 	"go/token"
 
 	"github.com/quality-gates/messgo/internal/util"
@@ -100,7 +101,7 @@ func (f *Function) LoopConditionCalls(names map[string]bool) []Call {
 }
 
 // EmptyNilCheckBlockLines returns lines for empty if-blocks whose condition
-// compares any operand with nil.
+// compares any operand with nil using !=.
 func (f *Function) EmptyNilCheckBlockLines() []int {
 	if f.Body == nil {
 		return nil
@@ -166,35 +167,59 @@ func (f *Function) DuplicateLiteralKeys() []DuplicateLiteralKey {
 	if f.Body == nil {
 		return nil
 	}
+	return duplicateLiteralKeys(f.Body, f.File.Fset)
+}
+
+// PackageDuplicateLiteralKeys returns duplicate constant keys in package-level
+// composite literals.
+func (f *File) PackageDuplicateLiteralKeys() []DuplicateLiteralKey {
 	var out []DuplicateLiteralKey
-	ast.Inspect(f.Body, func(n ast.Node) bool {
+	for _, decl := range f.Syntax.Decls {
+		gd, ok := decl.(*ast.GenDecl)
+		if !ok {
+			continue
+		}
+		out = append(out, duplicateLiteralKeys(gd, f.Fset)...)
+	}
+	return out
+}
+
+func duplicateLiteralKeys(root ast.Node, fset *token.FileSet) []DuplicateLiteralKey {
+	var out []DuplicateLiteralKey
+	ast.Inspect(root, func(n ast.Node) bool {
 		cl, ok := n.(*ast.CompositeLit)
 		if !ok {
 			return true
 		}
-		seen := map[string]int{}
-		for _, elt := range cl.Elts {
-			kv, ok := elt.(*ast.KeyValueExpr)
-			if !ok {
-				continue
-			}
-			key, ok := literalKey(kv.Key)
-			if !ok {
-				continue
-			}
-			line := f.File.Fset.Position(kv.Key.Pos()).Line
-			if first, dup := seen[key]; dup {
-				out = append(out, DuplicateLiteralKey{
-					Display:   displayKey(kv.Key),
-					FirstLine: first,
-					Line:      line,
-				})
-				continue
-			}
-			seen[key] = line
-		}
+		out = append(out, duplicateKeysInLiteral(cl, fset)...)
 		return true
 	})
+	return out
+}
+
+func duplicateKeysInLiteral(cl *ast.CompositeLit, fset *token.FileSet) []DuplicateLiteralKey {
+	var out []DuplicateLiteralKey
+	seen := map[string]int{}
+	for _, elt := range cl.Elts {
+		kv, ok := elt.(*ast.KeyValueExpr)
+		if !ok {
+			continue
+		}
+		key, ok := literalKey(kv.Key)
+		if !ok {
+			continue
+		}
+		line := fset.Position(kv.Key.Pos()).Line
+		if first, dup := seen[key]; dup {
+			out = append(out, DuplicateLiteralKey{
+				Display:   displayKey(kv.Key),
+				FirstLine: first,
+				Line:      line,
+			})
+			continue
+		}
+		seen[key] = line
+	}
 	return out
 }
 
@@ -241,17 +266,28 @@ func (f *File) SelectedMemberNames() map[string]bool {
 		case *ast.SelectorExpr:
 			set[e.Sel.Name] = true
 		case *ast.CompositeLit:
-			for _, elt := range e.Elts {
-				if kv, ok := elt.(*ast.KeyValueExpr); ok {
-					if id, ok := kv.Key.(*ast.Ident); ok {
-						set[id.Name] = true
-					}
-				}
-			}
+			collectCompositeMemberNames(e, set)
 		}
 		return true
 	})
 	return set
+}
+
+func collectCompositeMemberNames(lit *ast.CompositeLit, set map[string]bool) {
+	switch lit.Type.(type) {
+	case *ast.MapType, *ast.ArrayType:
+		return
+	}
+	for _, elt := range lit.Elts {
+		kv, ok := elt.(*ast.KeyValueExpr)
+		if !ok {
+			continue
+		}
+		id, ok := kv.Key.(*ast.Ident)
+		if ok {
+			set[id.Name] = true
+		}
+	}
 }
 
 // LocalVariables returns local variable declarations in this function.
@@ -587,10 +623,12 @@ func receiverSelector(n ast.Node, recvName string) string {
 func conditionChecksNil(cond ast.Expr) bool {
 	found := false
 	ast.Inspect(cond, func(n ast.Node) bool {
-		if be, ok := n.(*ast.BinaryExpr); ok && (be.Op == token.NEQ || be.Op == token.EQL) {
-			if isNilIdent(be.X) || isNilIdent(be.Y) {
-				found = true
-			}
+		be, ok := n.(*ast.BinaryExpr)
+		if !ok || be.Op != token.NEQ {
+			return true
+		}
+		if isNilIdent(be.X) || isNilIdent(be.Y) {
+			found = true
 		}
 		return true
 	})
@@ -605,7 +643,11 @@ func isNilIdent(e ast.Expr) bool {
 func literalKey(e ast.Expr) (string, bool) {
 	switch k := e.(type) {
 	case *ast.BasicLit:
-		return k.Kind.String() + ":" + k.Value, true
+		v := constant.MakeFromLiteral(k.Value, k.Kind, 0)
+		if v.Kind() == constant.Unknown {
+			return k.Kind.String() + ":" + k.Value, true
+		}
+		return v.Kind().String() + ":" + v.ExactString(), true
 	case *ast.Ident:
 		return "ident:" + k.Name, true
 	}

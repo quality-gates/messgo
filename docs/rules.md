@@ -27,7 +27,7 @@ clean run reflects idiomatic Go.
 
 `GlobalVariable` is **mutation-aware**: by default it reports only package-level
 variables that are actually mutated somewhere in the package (reassigned,
-incremented, written through, or address-taken), analysed across all files of
+incremented, written through, deleted/cleared, or address-taken), analysed across all files of
 the package. Effectively-constant globals — sentinel errors, compiled regexps,
 lookup tables — stay silent. Set `report-immutable=true` to also surface
 read-only globals.

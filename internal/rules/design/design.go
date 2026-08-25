@@ -29,7 +29,7 @@ func init() {
 //
 // By default only variables that are actually mutated somewhere in the package
 // are reported — reassigned, incremented/decremented, written through
-// (`g.f = x`, `g[k] = v`), or having their address taken. Package-level
+// (`g.f = x`, `g[k] = v`), deleted or cleared, or having their address taken. Package-level
 // variables that are only ever read after initialization (sentinel errors,
 // compiled regexps, lookup tables) are effectively constant and stay silent, so
 // the genuinely risky shared state is not drowned out. Set the `report-immutable`
@@ -181,9 +181,7 @@ func newCouplingBetweenObjects() rule.Rule {
 func (r *CouplingBetweenObjects) measure(_ *rule.Context, class *model.Class) (rule.ThresholdMeasurement, bool) {
 	types := map[string]bool{}
 	collect := func(t string) {
-		if name := baseTypeName(t); name != "" && !builtinTypes[name] {
-			types[name] = true
-		}
+		addCoupledTypes(t, class.Name, types)
 	}
 	for _, f := range class.Fields {
 		collect(f.Type)
@@ -196,8 +194,78 @@ func (r *CouplingBetweenObjects) measure(_ *rule.Context, class *model.Class) (r
 			collect(res.Type)
 		}
 	}
-	cbo := len(types)
-	return designClassNameMeasurement(class, cbo), true
+	return designClassNameMeasurement(class, len(types)), true
+}
+
+func addCoupledTypes(t, className string, types map[string]bool) {
+	for _, name := range namedTypesIn(t) {
+		if name == "" || name == className || builtinTypes[name] {
+			continue
+		}
+		types[name] = true
+	}
+}
+
+func namedTypesIn(t string) []string {
+	t = strings.TrimSpace(t)
+	t = strings.TrimPrefix(t, "...")
+	t = strings.TrimLeft(t, "*")
+	switch {
+	case strings.HasPrefix(t, "[]"):
+		return namedTypesIn(t[2:])
+	case strings.HasPrefix(t, "["):
+		return namedTypesAfterArrayLen(t)
+	case strings.HasPrefix(t, "map["):
+		return namedTypesInMap(t)
+	case strings.HasPrefix(t, "<-chan "):
+		return namedTypesIn(strings.TrimPrefix(t, "<-chan "))
+	case strings.HasPrefix(t, "chan<- "):
+		return namedTypesIn(strings.TrimPrefix(t, "chan<- "))
+	case strings.HasPrefix(t, "chan "):
+		return namedTypesIn(strings.TrimPrefix(t, "chan "))
+	}
+	if i := strings.IndexByte(t, '.'); i >= 0 {
+		t = t[i+1:]
+	}
+	if t == "" {
+		return nil
+	}
+	return []string{t}
+}
+
+func namedTypesAfterArrayLen(t string) []string {
+	i := strings.IndexByte(t, ']')
+	if i < 0 {
+		return nil
+	}
+	return namedTypesIn(t[i+1:])
+}
+
+func namedTypesInMap(t string) []string {
+	key, value, ok := splitMapType(t)
+	if !ok {
+		return nil
+	}
+	return append(namedTypesIn(key), namedTypesIn(value)...)
+}
+
+func splitMapType(t string) (key, value string, ok bool) {
+	if !strings.HasPrefix(t, "map[") {
+		return "", "", false
+	}
+	depth := 0
+	for i := 4; i < len(t); i++ {
+		switch t[i] {
+		case '[':
+			depth++
+		case ']':
+			if depth == 0 {
+				return t[4:i], t[i+1:], true
+			}
+			depth--
+		}
+	}
+	return "", "", false
 }
 
 // baseTypeName strips pointer/slice/map decorations to the leading type name.

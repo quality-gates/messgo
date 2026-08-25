@@ -60,6 +60,9 @@ func (r *UnusedPrivateMethod) ApplyClass(c *rule.Context, class *model.Class) {
 type UnusedFormalParameter struct{ *rule.Base }
 
 func (r *UnusedFormalParameter) check(c *rule.Context, fn *model.Function) {
+	if fn.Body == nil {
+		return
+	}
 	for _, p := range fn.Params {
 		if p.Name == "" || p.Name == "_" {
 			continue

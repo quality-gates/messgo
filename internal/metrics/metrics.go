@@ -185,6 +185,9 @@ func npathSwitch(body *ast.BlockStmt, tag ast.Expr) int {
 			npath = npathAdd(npath, npathStmts(cc.Body))
 		}
 	}
+	if npath == 0 {
+		return 1
+	}
 	return npath
 }
 
@@ -231,8 +234,8 @@ func LinesOfCode(fset *token.FileSet, start, end token.Pos) int {
 // ignore-whitespace option). It is approximate: comment markers inside string
 // literals are not specially handled.
 func EffectiveLinesOfCode(fset *token.FileSet, start, end token.Pos, src []byte) int {
-	first := fset.Position(start).Line
-	last := fset.Position(end).Line
+	first := fset.PositionFor(start, false).Line
+	last := fset.PositionFor(end, false).Line
 	count := 0
 	inBlockComment := false
 	// Process from line 1 so block-comment state entering the span is correct.

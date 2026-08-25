@@ -220,12 +220,25 @@ func (GitHubRenderer) Render(w io.Writer, r *Report) error {
 	out := &checkedWriter{Writer: w}
 	for _, v := range r.Violations {
 		fmt.Fprintf(out, "::warning file=%s,line=%d,col=1::%s (%s)\n",
-			v.File, v.BeginLine, v.Description, v.Rule.Name())
+			githubEscapeProperty(v.File), v.BeginLine,
+			githubEscape(v.Description), githubEscape(v.Rule.Name()))
 	}
 	for _, e := range r.Errors {
-		fmt.Fprintf(out, "::error file=%s::%s\n", e.File, e.Message)
+		fmt.Fprintf(out, "::error file=%s::%s\n", githubEscapeProperty(e.File), githubEscape(e.Message))
 	}
 	return out.err
+}
+
+func githubEscape(s string) string {
+	s = strings.ReplaceAll(s, "%", "%25")
+	s = strings.ReplaceAll(s, "\r", "%0D")
+	return strings.ReplaceAll(s, "\n", "%0A")
+}
+
+func githubEscapeProperty(s string) string {
+	s = githubEscape(s)
+	s = strings.ReplaceAll(s, ":", "%3A")
+	return strings.ReplaceAll(s, ",", "%2C")
 }
 
 // ----- GitLab Code Quality ------------------------------------------------
@@ -259,6 +272,16 @@ func (GitLabRenderer) Render(w io.Writer, r *Report) error {
 		e.Fingerprint = fingerprint(v)
 		e.Location.Path = v.File
 		e.Location.Lines.Begin = v.BeginLine
+		entries = append(entries, e)
+	}
+	for _, errItem := range r.Errors {
+		var e entry
+		e.Type = "issue"
+		e.CheckName = "parse-error"
+		e.Description = errItem.Message
+		e.Severity = "blocker"
+		e.Fingerprint = fmt.Sprintf("%x", fmt.Appendf(nil, "%s:%s", errItem.File, errItem.Message))
+		e.Location.Path = errItem.File
 		entries = append(entries, e)
 	}
 	enc := json.NewEncoder(out)
@@ -312,6 +335,11 @@ func (CheckStyleRenderer) Render(w io.Writer, r *Report) error {
 			v.BeginLine, checkstyleSeverity(v.Priority), xmlEscape(v.Description), xmlEscape(v.RuleSetName+"/"+v.Rule.Name()))
 	}
 	if open {
+		fmt.Fprint(out, "  </file>\n")
+	}
+	for _, e := range r.Errors {
+		fmt.Fprintf(out, "  <file name=\"%s\">\n", xmlEscape(e.File))
+		fmt.Fprintf(out, "    <error line=\"0\" column=\"1\" severity=\"error\" message=\"%s\" source=\"messgo/parse-error\"/>\n", xmlEscape(e.Message))
 		fmt.Fprint(out, "  </file>\n")
 	}
 	fmt.Fprint(out, "</checkstyle>\n")
@@ -384,8 +412,8 @@ func (SARIFRenderer) Render(w io.Writer, r *Report) error {
 	}
 
 	seen := map[string]bool{}
-	var rules []driverRule
-	var results []result
+	rules := make([]driverRule, 0)
+	results := make([]result, 0)
 	for _, v := range r.Violations {
 		id := v.Rule.Name()
 		if !seen[id] {
@@ -406,6 +434,15 @@ func (SARIFRenderer) Render(w io.Writer, r *Report) error {
 		l.PhysicalLocation.Region.StartLine = v.BeginLine
 		l.PhysicalLocation.Region.EndLine = v.EndLine
 		res.Locations = []location{l}
+		results = append(results, res)
+	}
+	for _, e := range r.Errors {
+		var res result
+		res.Level = "error"
+		res.Message.Text = e.Message
+		var loc location
+		loc.PhysicalLocation.ArtifactLocation.URI = e.File
+		res.Locations = []location{loc}
 		results = append(results, res)
 	}
 	doc := sarif{
@@ -457,6 +494,9 @@ func (HTMLRenderer) Render(w io.Writer, r *Report) error {
 	}
 	if open {
 		fmt.Fprint(out, "</table>\n")
+	}
+	for _, e := range r.Errors {
+		fmt.Fprintf(out, "<p>%s: %s</p>\n", htmlEscape(e.File), htmlEscape(e.Message))
 	}
 	fmt.Fprint(out, "</body></html>\n")
 	return out.err

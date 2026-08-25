@@ -1,6 +1,8 @@
 package report
 
 import (
+	"bytes"
+	"encoding/json"
 	"errors"
 	"io"
 	"strings"
@@ -142,5 +144,57 @@ func TestRenderersPropagateWriterErrors(t *testing.T) {
 				t.Fatalf("%s.Render() produced no output", format)
 			}
 		})
+	}
+}
+
+func TestSARIFEmptyReportUsesArrays(t *testing.T) {
+	var buf bytes.Buffer
+	if err := (SARIFRenderer{}).Render(&buf, &Report{}); err != nil {
+		t.Fatal(err)
+	}
+	var doc map[string]any
+	if err := json.Unmarshal(buf.Bytes(), &doc); err != nil {
+		t.Fatal(err)
+	}
+	run := doc["runs"].([]any)[0].(map[string]any)
+	if run["results"] == nil {
+		t.Fatalf("SARIF results is null\n%s", buf.String())
+	}
+	driver := run["tool"].(map[string]any)["driver"].(map[string]any)
+	if driver["rules"] == nil {
+		t.Fatalf("SARIF rules is null\n%s", buf.String())
+	}
+}
+
+func TestGitHubEscapesWorkflowCommands(t *testing.T) {
+	r := &rule.Base{RuleName: "Stub"}
+	var buf bytes.Buffer
+	err := (GitHubRenderer{}).Render(&buf, &Report{Violations: []*rule.Violation{{
+		File: "a,b.go", BeginLine: 1, Description: "first\n::error::injected", Rule: r,
+	}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	out := buf.String()
+	if strings.Contains(out, "\n::error::injected") {
+		t.Fatalf("unescaped newline injected a second workflow command:\n%s", out)
+	}
+}
+
+func TestFormatsSurfaceParseErrors(t *testing.T) {
+	rep := &Report{Errors: []ProcessingError{{File: "bad.go", Message: "parse failed"}}}
+	for _, format := range []string{"gitlab", "checkstyle", "sarif", "html"} {
+		renderer, ok := For(format)
+		if !ok {
+			t.Fatalf("missing renderer %s", format)
+		}
+		var buf bytes.Buffer
+		if err := renderer.Render(&buf, rep); err != nil {
+			t.Errorf("%s: %v", format, err)
+			continue
+		}
+		if !strings.Contains(buf.String(), "parse failed") && !strings.Contains(buf.String(), "bad.go") {
+			t.Errorf("%s dropped Report.Errors:\n%s", format, buf.String())
+		}
 	}
 }

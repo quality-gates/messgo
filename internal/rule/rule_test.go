@@ -107,6 +107,10 @@ func TestCompileRegex(t *testing.T) {
 	if CompileRegex("^foo$") == nil {
 		t.Error("plain pattern should compile")
 	}
+	slash := CompileRegex("/^get/i")
+	if slash == nil || !slash.MatchString("GETValue") {
+		t.Error("PHPMD slash-delimited regex /^get/i should match GETValue")
+	}
 	// Invalid pattern returns nil rather than panicking.
 	if CompileRegex("(") != nil {
 		t.Error("invalid pattern should compile to nil")

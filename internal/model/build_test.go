@@ -107,6 +107,12 @@ func TestParseInterfaceMethods(t *testing.T) {
 		t.Fatalf("interface methods = %+v, want one Say method", iface.Methods)
 	}
 	say := iface.Methods[0]
+	if !say.IsMethod() {
+		t.Errorf("interface method IsMethod() = false, NodeType = %q", say.NodeType())
+	}
+	if say.NodeType() != TypeMethod {
+		t.Errorf("interface method NodeType = %q, want %q", say.NodeType(), TypeMethod)
+	}
 	if len(say.Params) != 1 || say.Params[0].Type != "string" {
 		t.Errorf("Say params = %+v, want one string param", say.Params)
 	}
@@ -115,6 +121,25 @@ func TestParseInterfaceMethods(t *testing.T) {
 	}
 	if len(iface.Embeds) != 1 || iface.Embeds[0] != "Embedded" {
 		t.Errorf("interface Embeds = %v, want [Embedded]", iface.Embeds)
+	}
+}
+
+func TestExprStringPreservesArrayLenAndChanDir(t *testing.T) {
+	f, err := ParseSource("types.go", []byte(`package sample
+func f(a [3]int, b []int, c <-chan int, d chan<- int, e chan int) {}
+`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := make([]string, len(f.Functions[0].Params))
+	for i, p := range f.Functions[0].Params {
+		got[i] = p.Type
+	}
+	want := []string{"[3]int", "[]int", "<-chan int", "chan<- int", "chan int"}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Errorf("param %d type = %q, want %q", i, got[i], want[i])
+		}
 	}
 }
 

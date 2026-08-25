@@ -62,13 +62,17 @@ func parseFiles(files []string, rep *report.Report) []*model.File {
 // annotatePackages groups files by directory (a Go package lives in one
 // directory) and records, on every file, the set of package-level variables
 // mutated anywhere in that package — enabling cross-file analysis.
+type packageKey struct {
+	dir  string
+	name string
+}
+
 func annotatePackages(parsed []*model.File) {
-	byDir := map[string][]*model.File{}
+	byPkg := map[packageKey][]*model.File{}
 	for _, f := range parsed {
-		dir := filepath.Dir(f.Path)
-		byDir[dir] = append(byDir[dir], f)
+		byPkg[packageKeyOf(f)] = append(byPkg[packageKeyOf(f)], f)
 	}
-	for _, group := range byDir {
+	for _, group := range byPkg {
 		asts := make([]*ast.File, len(group))
 		for i, f := range group {
 			asts[i] = f.Syntax
@@ -78,6 +82,17 @@ func annotatePackages(parsed []*model.File) {
 			f.MutatedGlobals = mutated
 		}
 	}
+}
+
+func packageKeyOf(f *model.File) packageKey {
+	dir := filepath.Dir(f.Path)
+	if abs, err := filepath.Abs(dir); err == nil {
+		dir = abs
+	}
+	if real, err := filepath.EvalSymlinks(dir); err == nil {
+		dir = real
+	}
+	return packageKey{dir: dir, name: f.Package}
 }
 
 func walkDirFunc(opts Options, add func(string)) fs.WalkDirFunc {
@@ -111,24 +126,32 @@ func discover(opts Options) ([]string, error) {
 		out = append(out, p)
 	}
 	for _, p := range opts.Paths {
-		info, err := os.Stat(p)
+		root := discoveryRoot(p)
+		info, err := os.Stat(root)
 		if err != nil {
 			return nil, err
 		}
 		if !info.IsDir() {
-			if !shouldIncludeFile(p, opts) {
+			if !shouldIncludeFile(root, opts) {
 				continue
 			}
-			add(p)
+			add(root)
 			continue
 		}
-		err = filepath.WalkDir(p, walkDirFunc(opts, add))
+		err = filepath.WalkDir(root, walkDirFunc(opts, add))
 		if err != nil {
 			return nil, err
 		}
 	}
 	sort.Strings(out)
 	return out, nil
+}
+
+func discoveryRoot(p string) string {
+	if filepath.Base(p) != "..." {
+		return p
+	}
+	return filepath.Dir(p)
 }
 
 func shouldIncludeFile(path string, opts Options) bool {

@@ -174,6 +174,44 @@ func use(x int) {
 	}
 }
 
+func TestSelectedMemberNamesIgnoresMapKeys(t *testing.T) {
+	f, err := ParseSource("query.go", []byte(`package sample
+const key = 1
+type T struct { key int }
+func f() { _ = map[int]int{key: 2} }
+`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if f.SelectedMemberNames()["key"] {
+		t.Fatal("map key counted as a struct member use")
+	}
+}
+
+func TestDuplicateLiteralKeysUseConstantValue(t *testing.T) {
+	f, err := ParseSource("query.go", []byte("package sample\nfunc f() {\n\t_ = map[int]int{1: 0, 01: 0}\n\t_ = map[string]int{\"a\": 0, `a`: 0}\n}\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := f.Functions[0].DuplicateLiteralKeys(); len(got) < 2 {
+		t.Fatalf("DuplicateLiteralKeys() = %#v, want 1/01 and a/`a`", got)
+	}
+}
+
+func TestEmptyNilCheckRequiresInequality(t *testing.T) {
+	f, err := ParseSource("query.go", []byte(`package sample
+func f(pointer *int) {
+	if pointer == nil {}
+}
+`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := f.Functions[0].EmptyNilCheckBlockLines(); len(got) != 0 {
+		t.Fatalf("EmptyNilCheckBlockLines() = %v, want none for == nil", got)
+	}
+}
+
 func TestFunctionLiteralHasItsOwnLocalScope(t *testing.T) {
 	src := []byte(`package sample
 

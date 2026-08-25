@@ -182,6 +182,9 @@ var placeholderRe = regexp.MustCompile(`\{(\d+)\}`)
 // phpmdRegexRe matches PHPMD's delimited "(pattern)flags" property encoding.
 var phpmdRegexRe = regexp.MustCompile(`^\((.*)\)([imsxu]*)$`)
 
+// phpmdSlashRe matches the slash-delimited form `/pattern/flags`.
+var phpmdSlashRe = regexp.MustCompile(`^/(.*)/([imsxu]*)$`)
+
 // RenderMessage substitutes {0}, {1}, ... placeholders in a PHPMD message
 // template with the provided args.
 func RenderMessage(tmpl string, args []any) string {
@@ -233,7 +236,12 @@ func CompileRegex(pat string) *regexp.Regexp {
 	// PHPMD encodes regexes as a delimited pattern plus trailing flags, e.g.
 	// "(^(set|get|is|has|with))i". Translate to Go's (?i) inline-flag form.
 	body, flags := pat, ""
-	if m := phpmdRegexRe.FindStringSubmatch(pat); m != nil {
+	switch {
+	case phpmdRegexRe.MatchString(pat):
+		m := phpmdRegexRe.FindStringSubmatch(pat)
+		body, flags = m[1], strings.ReplaceAll(m[2], "u", "")
+	case phpmdSlashRe.MatchString(pat):
+		m := phpmdSlashRe.FindStringSubmatch(pat)
 		body, flags = m[1], strings.ReplaceAll(m[2], "u", "")
 	}
 	if flags != "" {

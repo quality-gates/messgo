@@ -11,6 +11,16 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 - Pinned the module to Go 1.26.6, which contains the standard-library XML decoder vulnerability fix.
 
 ### Fixed
+- Expanded nested ruleset references so a team XML file that refs `go` actually loads those rules, resolves bare rule names, errors on unknown single-rule refs, and resolves relative file refs against the ruleset file.
+- Accepted Go's `...` path wildcard so `messgo ./...` walks the module as documented.
+- Grouped package analysis by directory and package name, including mixed relative/absolute paths, so external test packages no longer mutate production globals.
+- Treated an empty `switch` as one NPath and ignored `//line` directives when counting effective lines of code.
+- Honored `BooleanGetMethodName`'s documented `checkParameterizedMethods` default, skipped interface-method formal parameters, ignored the blank identifier in `ShortVariable`, and limited `EmptyCatchBlock` to `!= nil`.
+- Counted only struct-literal keys as member uses, compared composite keys by constant value, and reported package-level duplicate keys.
+- Modeled interface methods as methods, preserved array length and channel direction in type strings, skipped self-types in `CouplingBetweenObjects`, and counted named types inside maps.
+- Emitted empty SARIF `rules`/`results` as arrays, escaped GitHub workflow commands, and surfaced parse errors in GitLab, Checkstyle, SARIF, and HTML reports.
+- Compiled PHPMD slash-delimited regex properties such as `/^get/i`.
+- Treated `delete` and `clear` as mutations of package-level maps.
 - Pinned the release workflow to an exact Go patch version so rebuilding a matching draft cannot silently produce different binaries after a toolchain update.
 - Ensured Homebrew publication runs when retrying an existing immutable release, even though the release build and smoke-test jobs are intentionally skipped.
 - Removed the unavailable Homebrew install command from the README and pointed macOS users to the published release archives instead.

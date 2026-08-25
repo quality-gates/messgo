@@ -84,6 +84,12 @@ func (r *IfStatementAssignment) ApplyFunc(c *rule.Context, fn *model.Function) {
 
 type DuplicatedArrayKey struct{ *rule.Base }
 
+func (r *DuplicatedArrayKey) ApplyFile(c *rule.Context) {
+	for _, dup := range c.File.PackageDuplicateLiteralKeys() {
+		c.Report(dup.Line, dup.Line, dup.Display, dup.FirstLine)
+	}
+}
+
 func (r *DuplicatedArrayKey) check(c *rule.Context, fn *model.Function) {
 	for _, dup := range fn.DuplicateLiteralKeys() {
 		c.ReportFuncAt(fn, dup.Line, dup.Line, dup.Display, dup.FirstLine)

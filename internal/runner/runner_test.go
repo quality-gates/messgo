@@ -3,6 +3,7 @@ package runner
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/quality-gates/messgo/internal/ruleset"
@@ -79,5 +80,85 @@ func TestRunFiltersDiscoveredFiles(t *testing.T) {
 	}
 	if len(rep.Errors) != 1 || filepath.Base(rep.Errors[0].File) != "included.go" {
 		t.Fatalf("Run errors = %+v, want only included.go parse error", rep.Errors)
+	}
+}
+
+func TestDiscoverAcceptsGoWildcard(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "ok.go"), []byte("package p\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	files, err := discover(Options{Paths: []string{filepath.Join(dir, "...")}, Suffixes: []string{".go"}})
+	if err != nil {
+		t.Fatalf("discover ... failed: %v", err)
+	}
+	if len(files) == 0 {
+		t.Fatal("advertised ... path found no files")
+	}
+}
+
+func TestExternalTestPackageDoesNotMutateProductionGlobal(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "main.go"), []byte("package p\nvar shared = 1\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "main_test.go"), []byte("package p_test\nvar shared = 1\nfunc mutate() { shared++ }\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	sets, err := (&ruleset.Loader{}).Load("design")
+	if err != nil {
+		t.Fatal(err)
+	}
+	ruleset.FilterRules(sets, []string{"GlobalVariable"}, nil)
+	rep, err := Run(Options{Paths: []string{dir}, RuleSets: sets})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, v := range rep.Violations {
+		if v.Rule.Name() == "GlobalVariable" && strings.HasSuffix(v.File, "main.go") {
+			t.Fatalf("production shared reported mutable because p_test.shared is mutated")
+		}
+	}
+}
+
+func TestMixedRelAbsPathsSharePackage(t *testing.T) {
+	dir := t.TempDir()
+	a := filepath.Join(dir, "a.go")
+	b := filepath.Join(dir, "b.go")
+	if err := os.WriteFile(a, []byte("package p\nvar shared = 1\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(b, []byte("package p\nfunc mutate() { shared++ }\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	absB, err := filepath.Abs(b)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cwd, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chdir(dir); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chdir(cwd) })
+	sets, err := (&ruleset.Loader{}).Load("design")
+	if err != nil {
+		t.Fatal(err)
+	}
+	ruleset.FilterRules(sets, []string{"GlobalVariable"}, nil)
+	rep, err := Run(Options{Paths: []string{"a.go", absB}, RuleSets: sets})
+	if err != nil {
+		t.Fatal(err)
+	}
+	found := false
+	for _, v := range rep.Violations {
+		if v.Rule.Name() == "GlobalVariable" {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatal("mixed relative/absolute paths hid a cross-file global mutation")
 	}
 }

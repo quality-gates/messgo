@@ -7,7 +7,8 @@ messgo <paths> <format> <ruleset[,ruleset...]> [options]
 ```
 
 - **paths** — comma-separated files or directories. Directories are walked;
-  `vendor/`, `node_modules/`, and `.git/` are skipped.
+  `vendor/`, `node_modules/`, and `.git/` are skipped. A path ending in `...`
+  (Go's recursive wildcard, e.g. `./...`) is walked from that directory.
 - **format** — `text`, `xml`, `json`, `html`, `ansi`, `github`, `gitlab`,
   `checkstyle`, or `sarif`.
 - **ruleset** — one or more built-in names or paths to phpmd-format ruleset XML.

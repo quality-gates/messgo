@@ -171,7 +171,8 @@ func collectMutations(f *ast.File, globals, mutated map[string]bool) {
 
 // markMutation calls mark on the lvalue(s) of any node that mutates a variable:
 // assignment (excluding ":=", which introduces locals), increment/decrement,
-// address-of, and a range clause that assigns into existing variables.
+// address-of, delete/clear of a map, and a range clause that assigns into
+// existing variables.
 func markMutation(n ast.Node, mark func(ast.Expr)) {
 	switch s := n.(type) {
 	case *ast.AssignStmt:
@@ -188,11 +189,29 @@ func markMutation(n ast.Node, mark func(ast.Expr)) {
 			mark(s.X)
 		}
 	case *ast.RangeStmt:
-		if s.Tok == token.ASSIGN {
-			mark(s.Key)
-			mark(s.Value)
-		}
+		markRangeAssign(s, mark)
+	case *ast.CallExpr:
+		markDeleteOrClear(s, mark)
 	}
+}
+
+func markRangeAssign(s *ast.RangeStmt, mark func(ast.Expr)) {
+	if s.Tok != token.ASSIGN {
+		return
+	}
+	mark(s.Key)
+	mark(s.Value)
+}
+
+func markDeleteOrClear(call *ast.CallExpr, mark func(ast.Expr)) {
+	id, ok := call.Fun.(*ast.Ident)
+	if !ok || (id.Name != "delete" && id.Name != "clear") {
+		return
+	}
+	if len(call.Args) == 0 {
+		return
+	}
+	mark(call.Args[0])
 }
 
 // topLevelVarNames collects the names declared in package-level `var`

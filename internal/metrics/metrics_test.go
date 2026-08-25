@@ -92,6 +92,7 @@ func TestNPathTabledCases(t *testing.T) {
 		{"if with else", "func f(a int) { if a > 0 { } else { } }", 2},
 		{"if and (&&)", "func f(a, b int) { if a > 0 && b > 0 { } }", 3},
 		{"two sequential ifs", "func f(a int) { if a > 0 {}; if a > 1 {} }", 4},
+		{"empty switch", "func f() { switch {} }", 1},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -147,6 +148,39 @@ func TestNPathArithmeticSaturatesAndPreservesNormalValues(t *testing.T) {
 		t.Run("multiply/"+tc.name, func(t *testing.T) {
 			if got := npathMul(tc.a, tc.b); got != tc.want {
 				t.Fatalf("npathMul(%d, %d) = %d, want %d", tc.a, tc.b, got, tc.want)
+			}
+		})
+	}
+}
+
+func TestEffectiveLinesOfCodeIgnoresLineDirectives(t *testing.T) {
+	cases := []struct {
+		name string
+		src  string
+		want int
+	}{
+		{
+			name: "directive before function",
+			src:  "package p\n//line generated.go:100\nfunc f() {\n\tx := 1\n}\n",
+			want: 3,
+		},
+		{
+			name: "directive shrinks logical end",
+			src:  "package p\nfunc f() {\n\tx := 1\n\ty := 2\n//line gen.go:1\n\tz := 3\n}\n",
+			want: 5,
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			src := []byte(tc.src)
+			fset := token.NewFileSet()
+			f, err := parser.ParseFile(fset, "x.go", src, parser.ParseComments)
+			if err != nil {
+				t.Fatal(err)
+			}
+			fd := f.Decls[0]
+			if got := EffectiveLinesOfCode(fset, fd.Pos(), fd.End(), src); got != tc.want {
+				t.Fatalf("EffectiveLinesOfCode = %d, want %d", got, tc.want)
 			}
 		})
 	}

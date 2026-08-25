@@ -161,6 +161,97 @@ func loop() {
 	mustHave(t, hits, "UnusedLocalVariable")
 }
 
+func TestBooleanGetMethodNameSkipsParameterizedByDefault(t *testing.T) {
+	hits := analyze(t, `
+func getReady(force bool) bool { return force }
+`, "naming")
+	mustNotHave(t, hits, "BooleanGetMethodName")
+}
+
+func TestBooleanGetMethodNameFlagsParameterizedWhenEnabled(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "rs.xml")
+	xml := `<ruleset name="t">
+  <rule ref="naming/BooleanGetMethodName">
+    <properties><property name="checkParameterizedMethods" value="true"/></properties>
+  </rule>
+</ruleset>`
+	if err := os.WriteFile(path, []byte(xml), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	hits := analyze(t, `
+func getReady(force bool) bool { return force }
+`, path)
+	mustHave(t, hits, "BooleanGetMethodName")
+}
+
+func TestUnusedFormalParameterSkipsInterfaceMethods(t *testing.T) {
+	hits := analyze(t, `
+type I interface {
+	Do(value int)
+}
+`, "unusedcode")
+	mustNotHave(t, hits, "UnusedFormalParameter")
+}
+
+func TestShortVariableIgnoresBlank(t *testing.T) {
+	hits := analyze(t, `
+func consume(_ int) {}
+`, "naming")
+	mustNotHave(t, hits, "ShortVariable")
+}
+
+func TestEmptyCatchBlockIgnoresEqualityNilCheck(t *testing.T) {
+	hits := analyze(t, `
+func f(pointer *int) {
+	if pointer == nil {}
+}
+`, "design")
+	mustNotHave(t, hits, "EmptyCatchBlock")
+}
+
+func TestDuplicatedArrayKeyReportsPackageLevel(t *testing.T) {
+	hits := analyze(t, `
+var values = map[string]int{
+	"x": 1,
+	"x": 2,
+}
+`, "cleancode")
+	mustHave(t, hits, "DuplicatedArrayKey")
+}
+
+func TestDuplicatedArrayKeyUsesConstantValue(t *testing.T) {
+	hits := analyze(t, `
+func f() {
+	_ = map[int]int{1: 1, 01: 2}
+}
+`, "cleancode")
+	mustHave(t, hits, "DuplicatedArrayKey")
+}
+
+func TestGlobalVariableFlagsDelete(t *testing.T) {
+	hits := analyze(t, `
+var cache = map[string]int{"x": 1}
+func reset() { delete(cache, "x") }
+`, "design")
+	mustHave(t, hits, "GlobalVariable")
+}
+
+func TestGlobalVariableFlagsClear(t *testing.T) {
+	hits := analyze(t, `
+var cache = map[string]int{"x": 1}
+func reset() { clear(cache) }
+`, "design")
+	mustHave(t, hits, "GlobalVariable")
+}
+
+func TestGlobalVariableIgnoresReadOnlyCall(t *testing.T) {
+	hits := analyze(t, `
+var cache = map[string]int{"x": 1}
+func peek() { println(len(cache)) }
+`, "design")
+	mustNotHave(t, hits, "GlobalVariable")
+}
+
 func TestUnusedFormalParameterRespectsClosureShadowing(t *testing.T) {
 	src := `
 func outer(x int) {

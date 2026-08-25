@@ -157,6 +157,7 @@ func (f *File) collectInterfaceMethods(i *Interface, it *ast.InterfaceType) {
 		for _, n := range m.Names {
 			fn := &Function{
 				Name:     n.Name,
+				Receiver: i.Name,
 				Line:     f.line(n.Pos()),
 				EndLine:  f.line(m.End()),
 				Exported: n.IsExported(),
@@ -268,13 +269,9 @@ func exprString(e ast.Expr) string {
 	case *ast.SelectorExpr:
 		return exprString(t.X) + "." + t.Sel.Name
 	case *ast.ArrayType:
-		return "[]" + exprString(t.Elt)
-	case *ast.MapType:
-		return "map[" + exprString(t.Key) + "]" + exprString(t.Value)
-	case *ast.Ellipsis:
-		return "..." + exprString(t.Elt)
+		return arrayTypeString(t)
 	case *ast.ChanType:
-		return "chan " + exprString(t.Value)
+		return chanTypeString(t)
 	case *ast.ParenExpr:
 		return exprString(t.X)
 	default:
@@ -282,14 +279,43 @@ func exprString(e ast.Expr) string {
 	}
 }
 
+func arrayTypeString(t *ast.ArrayType) string {
+	return "[" + exprString(t.Len) + "]" + exprString(t.Elt)
+}
+
+func chanTypeString(t *ast.ChanType) string {
+	switch t.Dir {
+	case ast.SEND:
+		return "chan<- " + exprString(t.Value)
+	case ast.RECV:
+		return "<-chan " + exprString(t.Value)
+	default:
+		return "chan " + exprString(t.Value)
+	}
+}
+
 func exprStringOther(e ast.Expr) string {
 	switch t := e.(type) {
+	case *ast.BasicLit:
+		return t.Value
+	case *ast.MapType:
+		return "map[" + exprString(t.Key) + "]" + exprString(t.Value)
+	case *ast.Ellipsis:
+		return "..." + exprString(t.Elt)
 	case *ast.InterfaceType:
 		return "interface{}"
 	case *ast.StructType:
 		return "struct{}"
 	case *ast.FuncType:
 		return "func"
+	case *ast.IndexExpr, *ast.IndexListExpr:
+		return indexTypeString(t)
+	}
+	return ""
+}
+
+func indexTypeString(e ast.Expr) string {
+	switch t := e.(type) {
 	case *ast.IndexExpr:
 		return exprString(t.X) + "[" + exprString(t.Index) + "]"
 	case *ast.IndexListExpr:

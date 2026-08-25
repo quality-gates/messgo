@@ -107,7 +107,7 @@ func (r *ShortVariable) Configure(props rule.Properties) error {
 }
 
 func (r *ShortVariable) checkName(c *rule.Context, name string, line int) {
-	if len(name) >= r.minimum {
+	if name == "_" || len(name) >= r.minimum {
 		return
 	}
 	if util.Contains(r.exceptions, name) {
@@ -239,7 +239,7 @@ func (r *BooleanGetMethodName) check(c *rule.Context, fn *model.Function) {
 	if !returnsSingleBool(fn) {
 		return
 	}
-	if r.checkParameterizedMethods && len(fn.Params) > 0 {
+	if !r.checkParameterizedMethods && len(fn.Params) > 0 {
 		return
 	}
 	c.ReportFunc(fn, fn.Name)

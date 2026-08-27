@@ -483,6 +483,101 @@ func TestBareRuleOwnersReuseSessionSources(t *testing.T) {
 	}
 }
 
+func TestExpansionKeyIncludesSortedContext(t *testing.T) {
+	priority := 2
+	alpha := "first"
+	zulu := "last"
+	override := &xmlRule{
+		Priority: &priority,
+		Properties: xmlProperties{Property: []xmlProperty{
+			{Name: "zulu", Value: &zulu},
+			{Name: "alpha", Value: &alpha},
+		}},
+	}
+	excluded := map[string]bool{"zulu": true, "ignored": false, "alpha": true}
+	context := expansionKey("location", "Sample", excluded, override)
+	want := `"location"|"Sample"|exclude:"alpha"|exclude:"zulu"|priority:2|property:"alpha"="first"|property:"zulu"="last"`
+	if context != want {
+		t.Fatalf("expansion key = %q, want %q", context, want)
+	}
+	withoutOverride := `"location"|""|exclude:"alpha"|exclude:"zulu"`
+	if got := expansionKey("location", "", excluded, override); got != withoutOverride {
+		t.Fatalf("unnamed expansion key = %q, want %q", got, withoutOverride)
+	}
+	if got := expansionKey("location", "Sample", excluded, nil); got != strings.Replace(withoutOverride, `|""|`, `|"Sample"|`, 1) {
+		t.Fatalf("nil-override expansion key = %q", got)
+	}
+}
+
+func TestRefExpanderAppliesPriorityBoundaries(t *testing.T) {
+	cases := []struct {
+		name          string
+		loader        Loader
+		priority      int
+		wantRuleCount int
+	}{
+		{name: "unbounded", priority: 3, wantRuleCount: 1},
+		{name: "minimum boundary included", loader: Loader{MinPriority: 3}, priority: 3, wantRuleCount: 1},
+		{name: "below minimum importance excluded", loader: Loader{MinPriority: 3}, priority: 4},
+		{name: "maximum boundary included", loader: Loader{MaxPriority: 3}, priority: 3, wantRuleCount: 1},
+		{name: "above maximum importance excluded", loader: Loader{MaxPriority: 3}, priority: 2},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			set := &rule.RuleSet{}
+			expander := newRefExpander(&loadSession{loader: &tc.loader}, set)
+			base := rule.NewBase()
+			base.RulePrio = tc.priority
+			expander.appendRule(base)
+			if len(set.Rules) != tc.wantRuleCount {
+				t.Fatalf("rule count = %d, want %d", len(set.Rules), tc.wantRuleCount)
+			}
+		})
+	}
+}
+
+func TestRefExpanderBuildsCompleteRuleMetadata(t *testing.T) {
+	const class = "Messgo\\Test\\Metadata"
+	rule.Register(class, func() rule.Rule { return rule.NewBase() })
+	expander := newRefExpander(&loadSession{loader: &Loader{}}, &rule.RuleSet{})
+	definition := xmlRule{
+		Name:            "Metadata",
+		Message:         " message ",
+		Class:           class,
+		ExternalInfoURL: "https://example.test/rule",
+		Since:           "1.2.3",
+		Description:     " description ",
+	}
+	built, err := expander.buildRule("sample-set", definition, &definition)
+	if err != nil {
+		t.Fatal(err)
+	}
+	base := rule.BaseOf(built)
+	if base.RuleName != "Metadata" || base.RuleMessage != "message" || base.RuleSet != "sample-set" ||
+		base.RuleURL != "https://example.test/rule" || base.RuleSince != "1.2.3" ||
+		base.RuleDesc != "description" || base.RulePrio != 3 {
+		t.Fatalf("built metadata = %+v", base)
+	}
+}
+
+func TestLoadSessionCachesDecodedSources(t *testing.T) {
+	session := &loadSession{sources: make(map[string]xmlRuleSet)}
+	first, key, err := session.decode([]byte(`<ruleset name="first"/>`), "codesize")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if key != "builtin:codesize" || first.Name != "first" {
+		t.Fatalf("first decode = %#v at %q", first, key)
+	}
+	second, secondKey, err := session.decode([]byte(`not xml`), "codesize")
+	if err != nil || secondKey != key || second.Name != first.Name {
+		t.Fatalf("cached decode = %#v at %q, error %v", second, secondKey, err)
+	}
+	if _, _, err := session.decode([]byte(`not xml`), "naming"); err == nil {
+		t.Fatal("uncached invalid XML decoded without error")
+	}
+}
+
 func BenchmarkRepeatedRulesetReferences(b *testing.B) {
 	for _, depth := range []int{4, 8, 12} {
 		b.Run(fmt.Sprintf("depth_%d", depth), func(b *testing.B) {

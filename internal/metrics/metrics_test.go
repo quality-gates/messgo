@@ -220,6 +220,23 @@ func second() {}
 	}
 }
 
+func TestEffectiveLOCIndexClampsQueriesToIndexedSource(t *testing.T) {
+	indexedSource := []byte("code\n")
+	positionSource := []byte("code\noutside\nmore outside\n")
+	fset := token.NewFileSet()
+	file := fset.AddFile("x.go", -1, len(positionSource))
+	file.SetLinesForContent(positionSource)
+	index := NewEffectiveLOCIndex(indexedSource)
+
+	if got := index.LinesOfCode(fset, token.NoPos, file.Pos(len(positionSource))); got != 1 {
+		t.Fatalf("clamped effective LOC = %d, want 1", got)
+	}
+	var nilIndex *EffectiveLOCIndex
+	if got := nilIndex.LinesOfCode(fset, file.Pos(0), file.Pos(0)); got != 0 {
+		t.Fatalf("nil index effective LOC = %d, want 0", got)
+	}
+}
+
 func TestNPathCoversRangeSwitchSelectLoopAndReturnForms(t *testing.T) {
 	body := parseFuncBody(t, `func f(items []int, ch <-chan int, value any, a, b bool) int {
 	total := 0

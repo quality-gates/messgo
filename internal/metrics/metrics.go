@@ -250,8 +250,8 @@ func NewEffectiveLOCIndex(src []byte) *EffectiveLOCIndex {
 	index := &EffectiveLOCIndex{prefix: make([]int, len(lines)+1)}
 	inBlockComment := false
 	for line, raw := range lines {
-		hasCode := false
-		hasCode, inBlockComment = lineHasCode(raw, inBlockComment)
+		hasCode, blockAfter := lineHasCode(raw, inBlockComment)
+		inBlockComment = blockAfter
 		index.prefix[line+1] = index.prefix[line]
 		if hasCode {
 			index.prefix[line+1]++
@@ -263,18 +263,12 @@ func NewEffectiveLOCIndex(src []byte) *EffectiveLOCIndex {
 // LinesOfCode returns the effective code-line count in the inclusive source
 // span. Positions use physical lines so //line directives do not alter spans.
 func (index *EffectiveLOCIndex) LinesOfCode(fset *token.FileSet, start, end token.Pos) int {
-	if index == nil || len(index.prefix) == 0 {
+	if index == nil {
 		return 0
 	}
-	first := fset.PositionFor(start, false).Line
-	last := fset.PositionFor(end, false).Line
-	if first < 1 {
-		first = 1
-	}
+	first := max(fset.PositionFor(start, false).Line, 1)
 	lineCount := len(index.prefix) - 1
-	if last > lineCount {
-		last = lineCount
-	}
+	last := min(fset.PositionFor(end, false).Line, lineCount)
 	if last < first {
 		return 0
 	}

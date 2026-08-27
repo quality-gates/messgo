@@ -19,7 +19,7 @@ type refExpander struct {
 	set       *rule.RuleSet
 	active    []string
 	activePos map[string]int
-	expanded  map[string]bool
+	expanded  map[string]struct{}
 }
 
 func newRefExpander(session *loadSession, set *rule.RuleSet) *refExpander {
@@ -27,7 +27,7 @@ func newRefExpander(session *loadSession, set *rule.RuleSet) *refExpander {
 		session:   session,
 		set:       set,
 		activePos: make(map[string]int),
-		expanded:  make(map[string]bool),
+		expanded:  make(map[string]struct{}),
 	}
 }
 
@@ -93,13 +93,13 @@ func (e *refExpander) expandRef(xr xmlRule, wantName string, parentExclude map[s
 	defer e.leave()
 	excluded := mergeExclude(parentExclude, xr.Exclude)
 	expansion := expansionKey(key, ruleName, excluded, ov)
-	if e.expanded[expansion] {
+	if _, alreadyExpanded := e.expanded[expansion]; alreadyExpanded {
 		return nil
 	}
 	if err := e.importSourceRules(src, ruleName, excluded, ov, rulesetDir(key)); err != nil {
 		return err
 	}
-	e.expanded[expansion] = true
+	e.expanded[expansion] = struct{}{}
 	return nil
 }
 

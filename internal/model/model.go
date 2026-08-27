@@ -130,9 +130,29 @@ type Function struct {
 	File       *File
 	Class      *Class // owning class for a method, if resolved
 	DocComment string
+
+	identifierReads identifierReadCache
 }
 
 func (f *Function) IsMethod() bool { return f.Receiver != "" }
+
+type identifierReadCache struct {
+	once       sync.Once
+	names      map[string]bool
+	objects    map[*ast.Object]bool
+	unresolved map[string]bool
+}
+
+func functionIdentifierReadFacts(f *Function) *identifierReadCache {
+	cache := &f.identifierReads
+	cache.once.Do(func() {
+		facts := scanIdentifierReads(f.Body)
+		cache.names = facts.names
+		cache.objects = facts.objects
+		cache.unresolved = facts.unresolved
+	})
+	return cache
+}
 
 func (f *Function) NodeType() NodeType {
 	if f.IsMethod() {

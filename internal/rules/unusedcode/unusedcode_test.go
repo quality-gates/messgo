@@ -90,6 +90,51 @@ func inspect() {
 	}
 }
 
+func TestUnusedVariableRulesHandleBindingAndDeclarationForms(t *testing.T) {
+	f, err := model.ParseSource("unused.go", []byte(`package sample
+
+func inspect(unusedParam, capturedParam int, values []int) {
+	read, writeOnly := 1, 2
+	_ = read
+	writeOnly = 3
+	for usedKey, unusedValue := range values {
+		_ = usedKey
+	}
+	captured := 1
+	closure := func() {
+		unusedParam := 1
+		_ = unusedParam
+		_ = capturedParam
+		_ = captured
+	}
+	_ = closure
+}
+`))
+	if err != nil {
+		t.Fatalf("ParseSource: %v", err)
+	}
+
+	formalRule := &UnusedFormalParameter{Base: rule.NewBase()}
+	localRule := newUnusedLocalVariable().(*UnusedLocalVariable)
+	violations := rule.Analyze(f, []*rule.RuleSet{{Rules: []rule.Rule{formalRule, localRule}}})
+	var formalNames, localNames []string
+	for _, violation := range violations {
+		name := violation.Args[0].(string)
+		switch violation.Rule.(type) {
+		case *UnusedFormalParameter:
+			formalNames = append(formalNames, name)
+		case *UnusedLocalVariable:
+			localNames = append(localNames, name)
+		}
+	}
+	if fmt.Sprint(formalNames) != "[unusedParam]" {
+		t.Fatalf("formal parameter violations = %v, want [unusedParam]", formalNames)
+	}
+	if fmt.Sprint(localNames) != "[writeOnly unusedValue]" {
+		t.Fatalf("local variable violations = %v, want [writeOnly unusedValue]", localNames)
+	}
+}
+
 func TestUnusedMemberRulesRecognizeFileWideMemberUses(t *testing.T) {
 	f, err := model.ParseSource("unused.go", []byte(`package sample
 
@@ -151,16 +196,32 @@ func inspect(w widget) {
 func BenchmarkUnusedMemberRules(b *testing.B) {
 	for _, classes := range []int{100, 200, 400} {
 		b.Run(fmt.Sprintf("classes_%d", classes), func(b *testing.B) {
-			file := unusedMemberFile(b, classes)
 			fieldRule := &UnusedPrivateField{Base: rule.NewBase()}
 			methodRule := &UnusedPrivateMethod{Base: rule.NewBase()}
 			sets := []*rule.RuleSet{{Rules: []rule.Rule{fieldRule, methodRule}}}
-			if got := len(rule.Analyze(file, sets)); got != classes*2 {
-				b.Fatalf("violations = %d, want %d", got, classes*2)
-			}
 			b.ResetTimer()
 			for b.Loop() {
-				rule.Analyze(file, sets)
+				file := unusedMemberFile(b, classes)
+				if got := len(rule.Analyze(file, sets)); got != classes*2 {
+					b.Fatalf("violations = %d, want %d", got, classes*2)
+				}
+			}
+		})
+	}
+}
+
+func BenchmarkUnusedVariableRules(b *testing.B) {
+	for _, variables := range []int{50, 100, 200} {
+		b.Run(fmt.Sprintf("variables_%d", variables), func(b *testing.B) {
+			formalRule := &UnusedFormalParameter{Base: rule.NewBase()}
+			localRule := newUnusedLocalVariable().(*UnusedLocalVariable)
+			sets := []*rule.RuleSet{{Rules: []rule.Rule{formalRule, localRule}}}
+			b.ResetTimer()
+			for b.Loop() {
+				file := unusedVariableFile(b, variables)
+				if got := len(rule.Analyze(file, sets)); got != variables*2 {
+					b.Fatalf("violations = %d, want %d", got, variables*2)
+				}
 			}
 		})
 	}
@@ -174,6 +235,28 @@ func unusedMemberFile(tb testing.TB, classes int) *model.File {
 		fmt.Fprintf(&src, "type type%d struct { field%d int }\n", index, index)
 		fmt.Fprintf(&src, "func (*type%d) method%d() {}\n", index, index)
 	}
+	file, err := model.ParseSource("unused.go", []byte(src.String()))
+	if err != nil {
+		tb.Fatalf("ParseSource: %v", err)
+	}
+	return file
+}
+
+func unusedVariableFile(tb testing.TB, variables int) *model.File {
+	tb.Helper()
+	var src strings.Builder
+	src.WriteString("package sample\nfunc inspect(")
+	for index := range variables {
+		if index > 0 {
+			src.WriteString(", ")
+		}
+		fmt.Fprintf(&src, "param%d int", index)
+	}
+	src.WriteString(") {\n")
+	for index := range variables {
+		fmt.Fprintf(&src, "var local%d int\n", index)
+	}
+	src.WriteString("}\n")
 	file, err := model.ParseSource("unused.go", []byte(src.String()))
 	if err != nil {
 		tb.Fatalf("ParseSource: %v", err)

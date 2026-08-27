@@ -1,6 +1,10 @@
 package model
 
-import "testing"
+import (
+	"go/ast"
+	"go/token"
+	"testing"
+)
 
 func TestFunctionHasGoto(t *testing.T) {
 	src := []byte(`package sample
@@ -259,6 +263,22 @@ func outer(x int) {
 	}
 	if !f.Functions[0].IdentifierRead(f.Functions[0].Params[0].Ident) {
 		t.Fatal("IdentifierRead() missed the captured outer parameter")
+	}
+}
+
+func TestIdentifierReadFallsBackForUnresolvedIdentifiers(t *testing.T) {
+	read := &ast.Ident{Name: "external"}
+	write := &ast.Ident{Name: "writeOnly"}
+	fn := &Function{Body: &ast.BlockStmt{List: []ast.Stmt{
+		&ast.ExprStmt{X: read},
+		&ast.AssignStmt{Lhs: []ast.Expr{write}, Tok: token.ASSIGN, Rhs: []ast.Expr{&ast.BasicLit{Kind: token.INT, Value: "1"}}},
+	}}}
+
+	if !fn.IdentifierRead(&ast.Ident{Name: "external"}) {
+		t.Fatal("IdentifierRead() missed an unresolved read with the same name")
+	}
+	if fn.IdentifierRead(&ast.Ident{Name: "writeOnly"}) {
+		t.Fatal("IdentifierRead() counted an unresolved write target as a read")
 	}
 }
 

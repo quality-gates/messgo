@@ -6,12 +6,21 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 
 ## [Unreleased]
 
+## [0.2.2] - 2026-08-27
+
 ### Changed
-- Removed the repository's secondary local task tracker and its agent hooks. GitHub Issues is now the only project issue tracker.
-- Pinned the module to Go 1.26.6, which contains the standard-library XML decoder vulnerability fix.
 - Made nested ruleset expansion linear by caching loaded XML, deduplicating expansion contexts, and rejecting direct and indirect reference cycles.
 - Cached file-wide selected-member lookups and binding-aware identifier reads so unused-code rules no longer rescan the AST for each candidate.
 - Indexed whitespace-aware effective lines of code once per parsed file so LongMethod and LongClass range measurements are constant-time.
+
+### Fixed
+- Aligned the release workflow with the module's pinned Go 1.26.6 toolchain so release builds explicitly install the toolchain used for their artifacts.
+
+## [0.2.1] - 2026-08-25
+
+### Changed
+- Removed the repository's secondary local task tracker and its agent hooks. GitHub Issues is now the only project issue tracker.
+- Pinned the module to Go 1.26.6, which contains the standard-library XML decoder vulnerability fix.
 
 ### Fixed
 - Expanded nested ruleset references so a team XML file that refs `go` actually loads those rules, resolves bare rule names, errors on unknown single-rule refs, and resolves relative file refs against the ruleset file.

@@ -16,24 +16,16 @@ func init() {
 	rule.Register("PHPMD\\Rule\\UnusedFormalParameter", func() rule.Rule { return &UnusedFormalParameter{Base: rule.NewBase()} })
 }
 
-// selectedNames returns the set of identifiers used as a selector (x.Name) or
-// struct-literal key anywhere in the file. This approximates "is this member
-// referenced" within file scope.
-func selectedNames(f *model.File) map[string]bool {
-	return f.SelectedMemberNames()
-}
-
 // ----- UnusedPrivateField -------------------------------------------------
 
 type UnusedPrivateField struct{ *rule.Base }
 
 func (r *UnusedPrivateField) ApplyClass(c *rule.Context, class *model.Class) {
-	used := selectedNames(c.File)
 	for _, f := range class.Fields {
 		if f.Exported || f.Name == "_" {
 			continue
 		}
-		if !used[f.Name] {
+		if !c.File.MemberSelected(f.Name) {
 			c.Report(f.Line, f.Line, f.Name)
 		}
 	}
@@ -44,12 +36,11 @@ func (r *UnusedPrivateField) ApplyClass(c *rule.Context, class *model.Class) {
 type UnusedPrivateMethod struct{ *rule.Base }
 
 func (r *UnusedPrivateMethod) ApplyClass(c *rule.Context, class *model.Class) {
-	used := selectedNames(c.File)
 	for _, m := range class.Methods {
 		if m.Exported {
 			continue
 		}
-		if !used[m.Name] {
+		if !c.File.MemberSelected(m.Name) {
 			c.ReportFunc(m, m.Name)
 		}
 	}

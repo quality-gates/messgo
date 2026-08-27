@@ -1,6 +1,8 @@
 package unusedcode
 
 import (
+	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/quality-gates/messgo/internal/model"
@@ -86,4 +88,95 @@ func inspect() {
 	if len(violations) != 1 || violations[0].Args[0] != "duplicate" {
 		t.Fatalf("violations = %+v, want one duplicate violation", violations)
 	}
+}
+
+func TestUnusedMemberRulesRecognizeFileWideMemberUses(t *testing.T) {
+	f, err := model.ParseSource("unused.go", []byte(`package sample
+
+const mapKey = "key"
+
+type widget struct {
+	selected int
+	literal  int
+	mapKey  int
+	unused  int
+}
+
+func (w *widget) selectedMethod() {}
+func (w *widget) unusedMethod()   {}
+
+func inspect(w widget) {
+	_ = w.selected
+	w.selectedMethod()
+	_ = widget{literal: 1}
+	_ = map[string]int{mapKey: 1}
+}
+`))
+	if err != nil {
+		t.Fatalf("ParseSource: %v", err)
+	}
+
+	fieldRule := &UnusedPrivateField{Base: rule.NewBase()}
+	methodRule := &UnusedPrivateMethod{Base: rule.NewBase()}
+	violations := rule.Analyze(f, []*rule.RuleSet{{Rules: []rule.Rule{fieldRule, methodRule}}})
+	got := map[string]bool{}
+	for _, violation := range violations {
+		var ruleName string
+		switch violation.Rule.(type) {
+		case *UnusedPrivateField:
+			ruleName = "UnusedPrivateField"
+		case *UnusedPrivateMethod:
+			ruleName = "UnusedPrivateMethod"
+		default:
+			t.Fatalf("unexpected rule type %T", violation.Rule)
+		}
+		got[fmt.Sprintf("%s:%v", ruleName, violation.Args[0])] = true
+	}
+
+	want := []string{
+		"UnusedPrivateField:mapKey",
+		"UnusedPrivateField:unused",
+		"UnusedPrivateMethod:unusedMethod",
+	}
+	if len(got) != len(want) {
+		t.Fatalf("violations = %v, want %v", got, want)
+	}
+	for _, violation := range want {
+		if !got[violation] {
+			t.Errorf("missing violation %s; got %v", violation, got)
+		}
+	}
+}
+
+func BenchmarkUnusedMemberRules(b *testing.B) {
+	for _, classes := range []int{100, 200, 400} {
+		b.Run(fmt.Sprintf("classes_%d", classes), func(b *testing.B) {
+			file := unusedMemberFile(b, classes)
+			fieldRule := &UnusedPrivateField{Base: rule.NewBase()}
+			methodRule := &UnusedPrivateMethod{Base: rule.NewBase()}
+			sets := []*rule.RuleSet{{Rules: []rule.Rule{fieldRule, methodRule}}}
+			if got := len(rule.Analyze(file, sets)); got != classes*2 {
+				b.Fatalf("violations = %d, want %d", got, classes*2)
+			}
+			b.ResetTimer()
+			for b.Loop() {
+				rule.Analyze(file, sets)
+			}
+		})
+	}
+}
+
+func unusedMemberFile(tb testing.TB, classes int) *model.File {
+	tb.Helper()
+	var src strings.Builder
+	src.WriteString("package sample\n")
+	for index := range classes {
+		fmt.Fprintf(&src, "type type%d struct { field%d int }\n", index, index)
+		fmt.Fprintf(&src, "func (*type%d) method%d() {}\n", index, index)
+	}
+	file, err := model.ParseSource("unused.go", []byte(src.String()))
+	if err != nil {
+		tb.Fatalf("ParseSource: %v", err)
+	}
+	return file
 }

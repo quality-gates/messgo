@@ -257,39 +257,6 @@ func (f *File) MutatedPackageGlobals() map[string]bool {
 	return util.MutatedGlobalNames([]*ast.File{f.Syntax})
 }
 
-// SelectedMemberNames returns field or method names selected or used as keyed
-// struct-literal fields anywhere in this file.
-func (f *File) SelectedMemberNames() map[string]bool {
-	set := map[string]bool{}
-	ast.Inspect(f.Syntax, func(n ast.Node) bool {
-		switch e := n.(type) {
-		case *ast.SelectorExpr:
-			set[e.Sel.Name] = true
-		case *ast.CompositeLit:
-			collectCompositeMemberNames(e, set)
-		}
-		return true
-	})
-	return set
-}
-
-func collectCompositeMemberNames(lit *ast.CompositeLit, set map[string]bool) {
-	switch lit.Type.(type) {
-	case *ast.MapType, *ast.ArrayType:
-		return
-	}
-	for _, elt := range lit.Elts {
-		kv, ok := elt.(*ast.KeyValueExpr)
-		if !ok {
-			continue
-		}
-		id, ok := kv.Key.(*ast.Ident)
-		if ok {
-			set[id.Name] = true
-		}
-	}
-}
-
 // LocalVariables returns local variable declarations in this function.
 func (f *Function) LocalVariables() []LocalVariable {
 	if f.Body == nil {

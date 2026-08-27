@@ -7,6 +7,8 @@ package model
 import (
 	"go/ast"
 	"go/token"
+	"maps"
+	"sync"
 )
 
 // NodeType identifies the kind of artifact, used for rule message rendering
@@ -40,6 +42,55 @@ type File struct {
 	// when a file is analyzed in isolation (rules then fall back to single-file
 	// analysis).
 	MutatedGlobals map[string]bool
+
+	selectedMemberNamesOnce sync.Once
+	selectedMemberNames     map[string]bool
+}
+
+// SelectedMemberNames returns a snapshot of field or method names selected or
+// used as keyed struct-literal fields anywhere in this file.
+func (f *File) SelectedMemberNames() map[string]bool {
+	f.collectSelectedMemberNames()
+	return maps.Clone(f.selectedMemberNames)
+}
+
+// MemberSelected reports whether name is selected or used as a keyed struct
+// literal field anywhere in this file. The file-wide AST scan runs once.
+func (f *File) MemberSelected(name string) bool {
+	f.collectSelectedMemberNames()
+	return f.selectedMemberNames[name]
+}
+
+func (f *File) collectSelectedMemberNames() {
+	f.selectedMemberNamesOnce.Do(func() {
+		f.selectedMemberNames = map[string]bool{}
+		ast.Inspect(f.Syntax, func(n ast.Node) bool {
+			switch e := n.(type) {
+			case *ast.SelectorExpr:
+				f.selectedMemberNames[e.Sel.Name] = true
+			case *ast.CompositeLit:
+				collectCompositeMemberNames(e, f.selectedMemberNames)
+			}
+			return true
+		})
+	})
+}
+
+func collectCompositeMemberNames(lit *ast.CompositeLit, set map[string]bool) {
+	switch lit.Type.(type) {
+	case *ast.MapType, *ast.ArrayType:
+		return
+	}
+	for _, elt := range lit.Elts {
+		kv, ok := elt.(*ast.KeyValueExpr)
+		if !ok {
+			continue
+		}
+		id, ok := kv.Key.(*ast.Ident)
+		if ok {
+			set[id.Name] = true
+		}
+	}
 }
 
 // Parameter is a formal parameter of a function or method.

@@ -1,8 +1,10 @@
 package ruleset
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/quality-gates/messgo/internal/model"
@@ -404,6 +406,224 @@ func TestRelativeFileRefResolvesAgainstRulesetDir(t *testing.T) {
 	if ruleByName(set, "CyclomaticComplexity") == nil {
 		t.Fatal("relative ref did not import CyclomaticComplexity")
 	}
+}
+
+func TestDirectRulesetReferenceCycleReturnsError(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "self.xml")
+	if err := os.WriteFile(path, []byte(`<ruleset name="self">
+  <rule ref="self.xml"/>
+</ruleset>
+`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	_, err := (&Loader{}).Load(path)
+	if err == nil {
+		t.Fatal("expected cyclic ruleset reference to fail")
+	}
+	if !strings.Contains(err.Error(), "cyclic ruleset reference") {
+		t.Fatalf("error = %q, want cyclic ruleset reference", err)
+	}
+}
+
+func TestIndirectRulesetReferenceCycleReturnsError(t *testing.T) {
+	dir := t.TempDir()
+	first := filepath.Join(dir, "first.xml")
+	second := filepath.Join(dir, "second.xml")
+	if err := os.WriteFile(first, []byte(`<ruleset name="first">
+  <rule ref="second.xml"/>
+</ruleset>
+`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(second, []byte(`<ruleset name="second">
+  <rule ref="first.xml"/>
+</ruleset>
+`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	_, loadErr := (&Loader{}).Load(first)
+	if loadErr == nil {
+		t.Fatal("expected cyclic ruleset reference to fail")
+	}
+	canonicalFirst, err := filepath.EvalSymlinks(first)
+	if err != nil {
+		t.Fatal(err)
+	}
+	canonicalSecond, err := filepath.EvalSymlinks(second)
+	if err != nil {
+		t.Fatal(err)
+	}
+	wantCycle := strings.Join([]string{canonicalFirst, canonicalSecond, canonicalFirst}, " -> ")
+	if !strings.Contains(loadErr.Error(), wantCycle) {
+		t.Fatalf("error = %q, want cycle %q", loadErr, wantCycle)
+	}
+}
+
+func TestBareRuleOwnersReuseSessionSources(t *testing.T) {
+	session := &loadSession{
+		loader:  &Loader{},
+		sources: make(map[string]xmlRuleSet),
+	}
+	base, ruleName := session.resolveRef("CyclomaticComplexity", "")
+	if base != "codesize" || ruleName != "CyclomaticComplexity" {
+		t.Fatalf("resolved to %q/%q, want codesize/CyclomaticComplexity", base, ruleName)
+	}
+	sourceCount := len(session.sources)
+	ownerCount := len(session.builtinOwners)
+
+	base, ruleName = session.resolveRef("UnusedLocalVariable", "")
+	if base != "unusedcode" || ruleName != "UnusedLocalVariable" {
+		t.Fatalf("resolved to %q/%q, want unusedcode/UnusedLocalVariable", base, ruleName)
+	}
+	if len(session.sources) != sourceCount || len(session.builtinOwners) != ownerCount {
+		t.Fatalf("second bare-rule lookup rebuilt owner index: sources %d -> %d, owners %d -> %d",
+			sourceCount, len(session.sources), ownerCount, len(session.builtinOwners))
+	}
+}
+
+func TestExpansionKeyIncludesSortedContext(t *testing.T) {
+	priority := 2
+	alpha := "first"
+	zulu := "last"
+	override := &xmlRule{
+		Priority: &priority,
+		Properties: xmlProperties{Property: []xmlProperty{
+			{Name: "zulu", Value: &zulu},
+			{Name: "alpha", Value: &alpha},
+		}},
+	}
+	excluded := map[string]bool{"zulu": true, "ignored": false, "alpha": true}
+	context := expansionKey("location", "Sample", excluded, override)
+	want := `"location"|"Sample"|exclude:"alpha"|exclude:"zulu"|priority:2|property:"alpha"="first"|property:"zulu"="last"`
+	if context != want {
+		t.Fatalf("expansion key = %q, want %q", context, want)
+	}
+	withoutOverride := `"location"|""|exclude:"alpha"|exclude:"zulu"`
+	if got := expansionKey("location", "", excluded, override); got != withoutOverride {
+		t.Fatalf("unnamed expansion key = %q, want %q", got, withoutOverride)
+	}
+	if got := expansionKey("location", "Sample", excluded, nil); got != strings.Replace(withoutOverride, `|""|`, `|"Sample"|`, 1) {
+		t.Fatalf("nil-override expansion key = %q", got)
+	}
+}
+
+func TestRefExpanderAppliesPriorityBoundaries(t *testing.T) {
+	cases := []struct {
+		name          string
+		loader        Loader
+		priority      int
+		wantRuleCount int
+	}{
+		{name: "unbounded", priority: 3, wantRuleCount: 1},
+		{name: "minimum boundary included", loader: Loader{MinPriority: 3}, priority: 3, wantRuleCount: 1},
+		{name: "below minimum importance excluded", loader: Loader{MinPriority: 3}, priority: 4},
+		{name: "maximum boundary included", loader: Loader{MaxPriority: 3}, priority: 3, wantRuleCount: 1},
+		{name: "above maximum importance excluded", loader: Loader{MaxPriority: 3}, priority: 2},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			set := &rule.RuleSet{}
+			expander := newRefExpander(&loadSession{loader: &tc.loader}, set)
+			base := rule.NewBase()
+			base.RulePrio = tc.priority
+			expander.appendRule(base)
+			if len(set.Rules) != tc.wantRuleCount {
+				t.Fatalf("rule count = %d, want %d", len(set.Rules), tc.wantRuleCount)
+			}
+		})
+	}
+}
+
+func TestRefExpanderBuildsCompleteRuleMetadata(t *testing.T) {
+	const class = "Messgo\\Test\\Metadata"
+	rule.Register(class, func() rule.Rule { return rule.NewBase() })
+	expander := newRefExpander(&loadSession{loader: &Loader{}}, &rule.RuleSet{})
+	definition := xmlRule{
+		Name:            "Metadata",
+		Message:         " message ",
+		Class:           class,
+		ExternalInfoURL: "https://example.test/rule",
+		Since:           "1.2.3",
+		Description:     " description ",
+	}
+	built, err := expander.buildRule("sample-set", definition, &definition)
+	if err != nil {
+		t.Fatal(err)
+	}
+	base := rule.BaseOf(built)
+	if base.RuleName != "Metadata" || base.RuleMessage != "message" || base.RuleSet != "sample-set" ||
+		base.RuleURL != "https://example.test/rule" || base.RuleSince != "1.2.3" ||
+		base.RuleDesc != "description" || base.RulePrio != 3 {
+		t.Fatalf("built metadata = %+v", base)
+	}
+}
+
+func TestLoadSessionCachesDecodedSources(t *testing.T) {
+	session := &loadSession{sources: make(map[string]xmlRuleSet)}
+	first, key, err := session.decode([]byte(`<ruleset name="first"/>`), "codesize")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if key != "builtin:codesize" || first.Name != "first" {
+		t.Fatalf("first decode = %#v at %q", first, key)
+	}
+	second, secondKey, err := session.decode([]byte(`not xml`), "codesize")
+	if err != nil || secondKey != key || second.Name != first.Name {
+		t.Fatalf("cached decode = %#v at %q, error %v", second, secondKey, err)
+	}
+	if _, _, err := session.decode([]byte(`not xml`), "naming"); err == nil {
+		t.Fatal("uncached invalid XML decoded without error")
+	}
+}
+
+func BenchmarkRepeatedRulesetReferences(b *testing.B) {
+	for _, depth := range []int{4, 8, 12} {
+		b.Run(fmt.Sprintf("depth_%d", depth), func(b *testing.B) {
+			path := repeatedRulesetGraph(b, depth)
+			sets, err := (&Loader{}).Load(path)
+			if err != nil {
+				b.Fatal(err)
+			}
+			if got := len(sets[0].Rules); got != 1 {
+				b.Fatalf("loaded %d rules, want 1", got)
+			}
+			b.ResetTimer()
+			for b.Loop() {
+				if _, err := (&Loader{}).Load(path); err != nil {
+					b.Fatal(err)
+				}
+			}
+		})
+	}
+}
+
+func repeatedRulesetGraph(tb testing.TB, depth int) string {
+	tb.Helper()
+	dir := tb.TempDir()
+	previous := "leaf.xml"
+	path := filepath.Join(dir, previous)
+	if err := os.WriteFile(path, []byte(`<ruleset name="leaf">
+  <rule name="CyclomaticComplexity" class="PHPMD\Rule\CyclomaticComplexity"/>
+</ruleset>
+`), 0o644); err != nil {
+		tb.Fatal(err)
+	}
+	for level := 1; level <= depth; level++ {
+		name := fmt.Sprintf("level-%d.xml", level)
+		path = filepath.Join(dir, name)
+		xml := fmt.Sprintf(`<ruleset name="level-%d">
+  <rule ref="%s"/>
+  <rule ref="%s"/>
+</ruleset>
+`, level, previous, previous)
+		if err := os.WriteFile(path, []byte(xml), 0o644); err != nil {
+			tb.Fatal(err)
+		}
+		previous = name
+	}
+	return path
 }
 
 func thresholdLoaderFile(paramCount int) *model.File {

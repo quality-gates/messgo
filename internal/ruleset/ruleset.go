@@ -96,17 +96,21 @@ type Loader struct {
 // Load resolves a comma-separated list of ruleset identifiers or file paths
 // into RuleSets.
 func (l *Loader) Load(spec string) ([]*rule.RuleSet, error) {
+	session := &loadSession{
+		loader:  l,
+		sources: make(map[string]xmlRuleSet),
+	}
 	var sets []*rule.RuleSet
 	for _, part := range strings.Split(spec, ",") {
 		part = strings.TrimSpace(part)
 		if part == "" {
 			continue
 		}
-		data, loc, err := l.read(part, "")
+		data, loc, err := readRuleset(part, "")
 		if err != nil {
 			return nil, err
 		}
-		set, err := l.parse(data, loc)
+		set, err := session.parse(data, loc)
 		if err != nil {
 			return nil, fmt.Errorf("%s: %w", part, err)
 		}
@@ -114,6 +118,32 @@ func (l *Loader) Load(spec string) ([]*rule.RuleSet, error) {
 	}
 	dedupeRules(sets)
 	return sets, nil
+}
+
+type loadSession struct {
+	loader        *Loader
+	sources       map[string]xmlRuleSet
+	builtinOwners map[string]string
+}
+
+func builtinRuleOwner(session *loadSession, name string) string {
+	if session.builtinOwners == nil {
+		session.builtinOwners = make(map[string]string)
+		for _, id := range leafBuiltinRulesets {
+			source, _, err := readSource(session, id, "")
+			if err != nil {
+				continue
+			}
+			for _, candidate := range source.Rules {
+				if candidate.Class != "" {
+					if _, exists := session.builtinOwners[candidate.Name]; !exists {
+						session.builtinOwners[candidate.Name] = id
+					}
+				}
+			}
+		}
+	}
+	return session.builtinOwners[name]
 }
 
 // FilterRules narrows the loaded rule sets by rule name, in place. When enable
@@ -176,7 +206,7 @@ func dedupeRules(sets []*rule.RuleSet) {
 	}
 }
 
-func (l *Loader) read(part, fromDir string) ([]byte, string, error) {
+func readRuleset(part, fromDir string) ([]byte, string, error) {
 	if file, ok := builtinNames[part]; ok {
 		data, err := builtinFS.ReadFile(file)
 		return data, part, err
@@ -189,101 +219,63 @@ func (l *Loader) read(part, fromDir string) ([]byte, string, error) {
 	return data, path, nil
 }
 
-func (l *Loader) warn(format string, args ...any) {
-	if l.Warn != nil {
-		l.Warn(fmt.Sprintf(format, args...))
-	}
-}
-
-func (l *Loader) parse(data []byte, loc string) (*rule.RuleSet, error) {
-	var xrs xmlRuleSet
-	if err := xml.Unmarshal(data, &xrs); err != nil {
+func (s *loadSession) parse(data []byte, loc string) (*rule.RuleSet, error) {
+	xrs, key, err := s.decode(data, loc)
+	if err != nil {
 		return nil, err
 	}
 	set := &rule.RuleSet{
 		Name:        xrs.Name,
 		Description: strings.TrimSpace(xrs.Description),
 	}
-	fromDir := ""
-	if _, builtin := builtinNames[loc]; !builtin {
-		fromDir = filepath.Dir(loc)
+	expander := newRefExpander(s, set)
+	if err := expander.enter(key); err != nil {
+		return nil, err
 	}
+	defer expander.leave()
 	for _, xr := range xrs.Rules {
-		if err := l.addRule(set, xrs.Name, xr, fromDir); err != nil {
+		if err := addRule(expander, xrs.Name, xr, rulesetDir(key)); err != nil {
 			return nil, err
 		}
 	}
 	return set, nil
 }
 
-// addRule handles one <rule> element: either a direct class-based definition
-// or a <rule ref="..."> reference to another ruleset (optionally with
-// <exclude> children or single-rule property overrides).
-func (l *Loader) addRule(set *rule.RuleSet, setName string, xr xmlRule, fromDir string) error {
-	switch {
-	case xr.Ref != "":
-		return l.addRef(set, xr, fromDir)
-	case xr.Class != "":
-		r, err := l.buildRule(setName, xr, &xr)
-		if err != nil {
-			return err
-		}
-		if r != nil {
-			l.appendRule(set, r)
-		}
+func (s *loadSession) decode(data []byte, loc string) (xmlRuleSet, string, error) {
+	key, err := canonicalRulesetLocation(loc)
+	if err != nil {
+		return xmlRuleSet{}, "", err
 	}
-	return nil
+	if src, ok := s.sources[key]; ok {
+		return src, key, nil
+	}
+	var src xmlRuleSet
+	if err := xml.Unmarshal(data, &src); err != nil {
+		return xmlRuleSet{}, "", err
+	}
+	s.sources[key] = src
+	return src, key, nil
 }
 
-// buildRule constructs a configured rule from a definition (def, which carries
-// message/class/url/since/description) and an override source (ov, which
-// carries priority and property overrides — usually the same element, but for
-// a single-rule ref it is the referencing element).
-func (l *Loader) buildRule(setName string, def xmlRule, ov *xmlRule) (rule.Rule, error) {
-	ctor, ok := rule.Lookup(def.Class)
-	if !ok {
-		l.warn("skipping unimplemented rule %s (%s)", def.Name, def.Class)
-		return nil, nil
+func canonicalRulesetLocation(loc string) (string, error) {
+	if _, builtin := builtinNames[loc]; builtin {
+		return "builtin:" + loc, nil
 	}
-	r := ctor()
-	base := rule.BaseOf(r)
-	if base == nil {
-		l.warn("rule %s does not expose metadata", def.Name)
-		return nil, nil
+	abs, err := filepath.Abs(loc)
+	if err != nil {
+		return "", fmt.Errorf("resolve ruleset path %q: %w", loc, err)
 	}
-	base.RuleName = def.Name
-	base.RuleMessage = strings.TrimSpace(def.Message)
-	base.RuleSet = setName
-	base.RuleURL = def.ExternalInfoURL
-	base.RuleSince = def.Since
-	base.RuleDesc = strings.TrimSpace(def.Description)
-	base.RulePrio = 3
-	if def.Priority != nil {
-		base.RulePrio = *def.Priority
+	if resolved, resolveErr := filepath.EvalSymlinks(abs); resolveErr == nil {
+		abs = resolved
 	}
-	base.RuleProps = mergeProps(def.Properties, ov.Properties)
-	if ov.Priority != nil {
-		base.RulePrio = *ov.Priority
-	}
-	if configurable, ok := r.(rule.Configurable); ok {
-		if err := configurable.Configure(base.RuleProps); err != nil {
-			return nil, fmt.Errorf("configure rule %s: %w", def.Name, err)
-		}
-	}
-	return r, nil
+	return filepath.Clean(abs), nil
 }
 
-// appendRule adds a rule to the set unless it is filtered out by the
-// configured priority bounds.
-func (l *Loader) appendRule(set *rule.RuleSet, r rule.Rule) {
-	prio := rule.BaseOf(r).RulePrio
-	if l.MinPriority > 0 && prio > l.MinPriority {
-		return
+func rulesetDir(key string) string {
+	if strings.HasPrefix(key, "builtin:") {
+		return ""
 	}
-	if l.MaxPriority > 0 && prio < l.MaxPriority {
-		return
-	}
-	set.Rules = append(set.Rules, r)
+	return filepath.Dir(key)
 }
 
 func excludeSet(excludes []xmlExclude) map[string]bool {

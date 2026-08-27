@@ -74,17 +74,8 @@ func findRangeDeclarations(node *ast.RangeStmt, forms *declarationForms) {
 }
 
 func TestIdentifierQueryHelpersRejectUnboundAndWrongScopeObjects(t *testing.T) {
-	fn := parseQueryHelperFixture(t)
 	if (&Function{}).IdentifierRead(&ast.Ident{Name: "missing"}) {
 		t.Fatal("IdentifierRead on a function without a body = true, want false")
-	}
-	objects := map[any]bool{}
-	collectFieldObjects(nil, objects)
-	addDeclaredObject(nil, objects)
-	addRangeObject(nil, nil, objects)
-	addDeclaredObject(&ast.Ident{Name: "not-declared"}, objects)
-	if len(objects) != 0 {
-		t.Fatalf("addDeclaredObject() added an identifier without an object: %v", objects)
 	}
 	if isDeclaredBy(nil, nil) {
 		t.Fatal("isDeclaredBy(nil, nil) = true, want false")
@@ -95,15 +86,6 @@ func TestIdentifierQueryHelpersRejectUnboundAndWrongScopeObjects(t *testing.T) {
 	writeTarget := &ast.Ident{Name: "writeTarget"}
 	if isReadIdentifier(writeTarget, map[*ast.Ident]bool{writeTarget: true}) {
 		t.Fatal("isReadIdentifier() treated a write target as a read")
-	}
-	if sameIdentifierBinding(&ast.Ident{Name: "x"}, &ast.Ident{Name: "x"}) == false {
-		t.Fatal("sameIdentifierBinding() did not match unbound identifiers by name")
-	}
-	if sameIdentifierBinding(&ast.Ident{Name: "x"}, &ast.Ident{Name: "y"}) {
-		t.Fatal("sameIdentifierBinding() matched unbound identifiers with different names")
-	}
-	if sameIdentifierBinding(fn.Params[0].Ident, &ast.Ident{Name: "captured"}) {
-		t.Fatal("sameIdentifierBinding() matched a bound identifier to an unbound identifier")
 	}
 }
 

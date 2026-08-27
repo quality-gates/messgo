@@ -234,24 +234,45 @@ func LinesOfCode(fset *token.FileSet, start, end token.Pos) int {
 // ignore-whitespace option). It is approximate: comment markers inside string
 // literals are not specially handled.
 func EffectiveLinesOfCode(fset *token.FileSet, start, end token.Pos, src []byte) int {
-	first := fset.PositionFor(start, false).Line
-	last := fset.PositionFor(end, false).Line
-	count := 0
+	return NewEffectiveLOCIndex(src).LinesOfCode(fset, start, end)
+}
+
+// EffectiveLOCIndex answers effective-lines-of-code queries after one source
+// scan. Each prefix entry is the number of code-bearing lines through that
+// physical source line.
+type EffectiveLOCIndex struct {
+	prefix []int
+}
+
+// NewEffectiveLOCIndex scans src once and builds an effective-LOC prefix index.
+func NewEffectiveLOCIndex(src []byte) *EffectiveLOCIndex {
+	lines := splitLines(src)
+	index := &EffectiveLOCIndex{prefix: make([]int, len(lines)+1)}
 	inBlockComment := false
-	// Process from line 1 so block-comment state entering the span is correct.
-	line := 1
-	for _, raw := range splitLines(src) {
-		if line > last {
-			break
+	for line, raw := range lines {
+		hasCode, blockAfter := lineHasCode(raw, inBlockComment)
+		inBlockComment = blockAfter
+		index.prefix[line+1] = index.prefix[line]
+		if hasCode {
+			index.prefix[line+1]++
 		}
-		var hasCode bool
-		hasCode, inBlockComment = lineHasCode(raw, inBlockComment)
-		if line >= first && hasCode {
-			count++
-		}
-		line++
 	}
-	return count
+	return index
+}
+
+// LinesOfCode returns the effective code-line count in the inclusive source
+// span. Positions use physical lines so //line directives do not alter spans.
+func (index *EffectiveLOCIndex) LinesOfCode(fset *token.FileSet, start, end token.Pos) int {
+	if index == nil {
+		return 0
+	}
+	first := max(fset.PositionFor(start, false).Line, 1)
+	lineCount := len(index.prefix) - 1
+	last := min(fset.PositionFor(end, false).Line, lineCount)
+	if last < first {
+		return 0
+	}
+	return index.prefix[last] - index.prefix[first-1]
 }
 
 // splitLines splits source into individual lines without their terminators.

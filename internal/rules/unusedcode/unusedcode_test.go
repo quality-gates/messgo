@@ -1,6 +1,8 @@
 package unusedcode
 
 import (
+	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/quality-gates/messgo/internal/model"
@@ -86,4 +88,75 @@ func inspect() {
 	if len(violations) != 1 || violations[0].Args[0] != "duplicate" {
 		t.Fatalf("violations = %+v, want one duplicate violation", violations)
 	}
+}
+
+func BenchmarkUnusedMemberRules(b *testing.B) {
+	for _, classes := range []int{100, 200, 400} {
+		b.Run(fmt.Sprintf("classes_%d", classes), func(b *testing.B) {
+			fieldRule := &UnusedPrivateField{Base: rule.NewBase()}
+			methodRule := &UnusedPrivateMethod{Base: rule.NewBase()}
+			sets := []*rule.RuleSet{{Rules: []rule.Rule{fieldRule, methodRule}}}
+			b.ResetTimer()
+			for b.Loop() {
+				file := unusedMemberFile(b, classes)
+				if got := len(rule.Analyze(file, sets)); got != classes*2 {
+					b.Fatalf("violations = %d, want %d", got, classes*2)
+				}
+			}
+		})
+	}
+}
+
+func BenchmarkUnusedVariableRules(b *testing.B) {
+	for _, variables := range []int{50, 100, 200} {
+		b.Run(fmt.Sprintf("variables_%d", variables), func(b *testing.B) {
+			formalRule := &UnusedFormalParameter{Base: rule.NewBase()}
+			localRule := newUnusedLocalVariable().(*UnusedLocalVariable)
+			sets := []*rule.RuleSet{{Rules: []rule.Rule{formalRule, localRule}}}
+			b.ResetTimer()
+			for b.Loop() {
+				file := unusedVariableFile(b, variables)
+				if got := len(rule.Analyze(file, sets)); got != variables*2 {
+					b.Fatalf("violations = %d, want %d", got, variables*2)
+				}
+			}
+		})
+	}
+}
+
+func unusedMemberFile(tb testing.TB, classes int) *model.File {
+	tb.Helper()
+	var src strings.Builder
+	src.WriteString("package sample\n")
+	for index := range classes {
+		fmt.Fprintf(&src, "type type%d struct { field%d int }\n", index, index)
+		fmt.Fprintf(&src, "func (*type%d) method%d() {}\n", index, index)
+	}
+	file, err := model.ParseSource("unused.go", []byte(src.String()))
+	if err != nil {
+		tb.Fatalf("ParseSource: %v", err)
+	}
+	return file
+}
+
+func unusedVariableFile(tb testing.TB, variables int) *model.File {
+	tb.Helper()
+	var src strings.Builder
+	src.WriteString("package sample\nfunc inspect(")
+	for index := range variables {
+		if index > 0 {
+			src.WriteString(", ")
+		}
+		fmt.Fprintf(&src, "param%d int", index)
+	}
+	src.WriteString(") {\n")
+	for index := range variables {
+		fmt.Fprintf(&src, "var local%d int\n", index)
+	}
+	src.WriteString("}\n")
+	file, err := model.ParseSource("unused.go", []byte(src.String()))
+	if err != nil {
+		tb.Fatalf("ParseSource: %v", err)
+	}
+	return file
 }

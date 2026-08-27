@@ -31,7 +31,7 @@ func funcLOC(fn *model.Function, ignoreWhitespace ignoreWhitespaceOption) int {
 		return fn.EndLine - fn.Line + 1
 	}
 	if ignoreWhitespace {
-		return metrics.EffectiveLinesOfCode(fn.File.Fset, fn.Decl.Pos(), fn.Decl.End(), fn.File.Src)
+		return fn.File.EffectiveLinesOfCode(fn.Decl.Pos(), fn.Decl.End())
 	}
 	return fn.EndLine - fn.Line + 1
 }
@@ -39,7 +39,7 @@ func funcLOC(fn *model.Function, ignoreWhitespace ignoreWhitespaceOption) int {
 func classLOC(c *model.Class, ignoreWhitespace ignoreWhitespaceOption) int {
 	loc := c.EndLine - c.Line + 1
 	if ignoreWhitespace {
-		loc = metrics.EffectiveLinesOfCode(c.File.Fset, c.Spec.Pos(), c.Spec.End(), c.File.Src)
+		loc = c.File.EffectiveLinesOfCode(c.Spec.Pos(), c.Spec.End())
 	}
 	for _, m := range c.Methods {
 		loc += funcLOC(m, ignoreWhitespace)

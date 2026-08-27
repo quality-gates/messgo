@@ -7,6 +7,10 @@ package model
 import (
 	"go/ast"
 	"go/token"
+	"maps"
+	"sync"
+
+	"github.com/quality-gates/messgo/internal/metrics"
 )
 
 // NodeType identifies the kind of artifact, used for rule message rendering
@@ -40,6 +44,70 @@ type File struct {
 	// when a file is analyzed in isolation (rules then fall back to single-file
 	// analysis).
 	MutatedGlobals map[string]bool
+
+	analysis fileAnalysisCache
+}
+
+type fileAnalysisCache struct {
+	selectedMembersOnce sync.Once
+	selectedMembers     map[string]bool
+	effectiveLOCOnce    sync.Once
+	effectiveLOC        *metrics.EffectiveLOCIndex
+}
+
+// SelectedMemberNames returns a snapshot of field or method names selected or
+// used as keyed struct-literal fields anywhere in this file.
+func (f *File) SelectedMemberNames() map[string]bool {
+	f.collectSelectedMemberNames()
+	return maps.Clone(f.analysis.selectedMembers)
+}
+
+// MemberSelected reports whether name is selected or used as a keyed struct
+// literal field anywhere in this file. The file-wide AST scan runs once.
+func (f *File) MemberSelected(name string) bool {
+	f.collectSelectedMemberNames()
+	return f.analysis.selectedMembers[name]
+}
+
+func (f *File) collectSelectedMemberNames() {
+	f.analysis.selectedMembersOnce.Do(func() {
+		f.analysis.selectedMembers = map[string]bool{}
+		ast.Inspect(f.Syntax, func(n ast.Node) bool {
+			switch e := n.(type) {
+			case *ast.SelectorExpr:
+				f.analysis.selectedMembers[e.Sel.Name] = true
+			case *ast.CompositeLit:
+				collectCompositeMemberNames(e, f.analysis.selectedMembers)
+			}
+			return true
+		})
+	})
+}
+
+// EffectiveLinesOfCode returns the number of code-bearing physical source
+// lines in the requested span. The source is indexed at most once per file.
+func (f *File) EffectiveLinesOfCode(start, end token.Pos) int {
+	f.analysis.effectiveLOCOnce.Do(func() {
+		f.analysis.effectiveLOC = metrics.NewEffectiveLOCIndex(f.Src)
+	})
+	return f.analysis.effectiveLOC.LinesOfCode(f.Fset, start, end)
+}
+
+func collectCompositeMemberNames(lit *ast.CompositeLit, set map[string]bool) {
+	switch lit.Type.(type) {
+	case *ast.MapType, *ast.ArrayType:
+		return
+	}
+	for _, elt := range lit.Elts {
+		kv, ok := elt.(*ast.KeyValueExpr)
+		if !ok {
+			continue
+		}
+		id, ok := kv.Key.(*ast.Ident)
+		if ok {
+			set[id.Name] = true
+		}
+	}
 }
 
 // Parameter is a formal parameter of a function or method.
@@ -79,9 +147,29 @@ type Function struct {
 	File       *File
 	Class      *Class // owning class for a method, if resolved
 	DocComment string
+
+	identifierReads identifierReadCache
 }
 
 func (f *Function) IsMethod() bool { return f.Receiver != "" }
+
+type identifierReadCache struct {
+	once       sync.Once
+	names      map[string]bool
+	objects    map[*ast.Object]bool
+	unresolved map[string]bool
+}
+
+func functionIdentifierReadFacts(f *Function) *identifierReadCache {
+	cache := &f.identifierReads
+	cache.once.Do(func() {
+		facts := scanIdentifierReads(f.Body)
+		cache.names = facts.names
+		cache.objects = facts.objects
+		cache.unresolved = facts.unresolved
+	})
+	return cache
+}
 
 func (f *Function) NodeType() NodeType {
 	if f.IsMethod() {

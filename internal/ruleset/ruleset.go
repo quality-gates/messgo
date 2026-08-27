@@ -121,8 +121,29 @@ func (l *Loader) Load(spec string) ([]*rule.RuleSet, error) {
 }
 
 type loadSession struct {
-	loader  *Loader
-	sources map[string]xmlRuleSet
+	loader        *Loader
+	sources       map[string]xmlRuleSet
+	builtinOwners map[string]string
+}
+
+func builtinRuleOwner(session *loadSession, name string) string {
+	if session.builtinOwners == nil {
+		session.builtinOwners = make(map[string]string)
+		for _, id := range leafBuiltinRulesets {
+			source, _, err := readSource(session, id, "")
+			if err != nil {
+				continue
+			}
+			for _, candidate := range source.Rules {
+				if candidate.Class != "" {
+					if _, exists := session.builtinOwners[candidate.Name]; !exists {
+						session.builtinOwners[candidate.Name] = id
+					}
+				}
+			}
+		}
+	}
+	return session.builtinOwners[name]
 }
 
 // FilterRules narrows the loaded rule sets by rule name, in place. When enable
@@ -198,12 +219,6 @@ func readRuleset(part, fromDir string) ([]byte, string, error) {
 	return data, path, nil
 }
 
-func warn(l *Loader, format string, args ...any) {
-	if l.Warn != nil {
-		l.Warn(fmt.Sprintf(format, args...))
-	}
-}
-
 func (s *loadSession) parse(data []byte, loc string) (*rule.RuleSet, error) {
 	xrs, key, err := s.decode(data, loc)
 	if err != nil {
@@ -261,57 +276,6 @@ func rulesetDir(key string) string {
 		return ""
 	}
 	return filepath.Dir(key)
-}
-
-// buildRule constructs a configured rule from a definition (def, which carries
-// message/class/url/since/description) and an override source (ov, which
-// carries priority and property overrides — usually the same element, but for
-// a single-rule ref it is the referencing element).
-func buildRule(l *Loader, setName string, def xmlRule, ov *xmlRule) (rule.Rule, error) {
-	ctor, ok := rule.Lookup(def.Class)
-	if !ok {
-		warn(l, "skipping unimplemented rule %s (%s)", def.Name, def.Class)
-		return nil, nil
-	}
-	r := ctor()
-	base := rule.BaseOf(r)
-	if base == nil {
-		warn(l, "rule %s does not expose metadata", def.Name)
-		return nil, nil
-	}
-	base.RuleName = def.Name
-	base.RuleMessage = strings.TrimSpace(def.Message)
-	base.RuleSet = setName
-	base.RuleURL = def.ExternalInfoURL
-	base.RuleSince = def.Since
-	base.RuleDesc = strings.TrimSpace(def.Description)
-	base.RulePrio = 3
-	if def.Priority != nil {
-		base.RulePrio = *def.Priority
-	}
-	base.RuleProps = mergeProps(def.Properties, ov.Properties)
-	if ov.Priority != nil {
-		base.RulePrio = *ov.Priority
-	}
-	if configurable, ok := r.(rule.Configurable); ok {
-		if err := configurable.Configure(base.RuleProps); err != nil {
-			return nil, fmt.Errorf("configure rule %s: %w", def.Name, err)
-		}
-	}
-	return r, nil
-}
-
-// appendRule adds a rule to the set unless it is filtered out by the
-// configured priority bounds.
-func appendRule(l *Loader, set *rule.RuleSet, r rule.Rule) {
-	prio := rule.BaseOf(r).RulePrio
-	if l.MinPriority > 0 && prio > l.MinPriority {
-		return
-	}
-	if l.MaxPriority > 0 && prio < l.MaxPriority {
-		return
-	}
-	set.Rules = append(set.Rules, r)
 }
 
 func excludeSet(excludes []xmlExclude) map[string]bool {

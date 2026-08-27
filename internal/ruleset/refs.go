@@ -1,7 +1,6 @@
 package ruleset
 
 import (
-	"encoding/xml"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -56,12 +55,12 @@ func addRule(e *refExpander, setName string, xr xmlRule, fromDir string) error {
 	case xr.Ref != "":
 		return e.addRef(xr, fromDir)
 	case xr.Class != "":
-		r, err := buildRule(e.session.loader, setName, xr, &xr)
+		r, err := e.buildRule(setName, xr, &xr)
 		if err != nil {
 			return err
 		}
 		if r != nil {
-			appendRule(e.session.loader, e.set, r)
+			e.appendRule(r)
 		}
 	}
 	return nil
@@ -71,7 +70,7 @@ func (e *refExpander) addRef(xr xmlRule, fromDir string) error {
 	if err := e.expandRef(xr, "", excludeSet(xr.Exclude), &xr, fromDir); err != nil {
 		return err
 	}
-	_, ruleName := resolveRef(xr.Ref, fromDir)
+	_, ruleName := e.session.resolveRef(xr.Ref, fromDir)
 	if ruleName != "" && !setHasRule(e.set, ruleName) {
 		return fmt.Errorf("unknown rule %q", xr.Ref)
 	}
@@ -79,7 +78,7 @@ func (e *refExpander) addRef(xr xmlRule, fromDir string) error {
 }
 
 func (e *refExpander) expandRef(xr xmlRule, wantName string, parentExclude map[string]bool, ov *xmlRule, fromDir string) error {
-	base, ruleName := resolveRef(xr.Ref, fromDir)
+	base, ruleName := e.session.resolveRef(xr.Ref, fromDir)
 	if skipFilteredRef(ruleName, wantName) {
 		return nil
 	}
@@ -179,12 +178,12 @@ func (e *refExpander) expandSourceRule(srcName string, sr xmlRule, ruleName stri
 	if sr.Class == "" || excluded[sr.Name] || (ruleName != "" && sr.Name != ruleName) {
 		return nil
 	}
-	r, err := buildRule(e.session.loader, srcName, sr, refOverride(sr, ov, ruleName))
+	r, err := e.buildRule(srcName, sr, refOverride(sr, ov, ruleName))
 	if err != nil {
 		return err
 	}
 	if r != nil {
-		appendRule(e.session.loader, e.set, r)
+		e.appendRule(r)
 	}
 	return nil
 }
@@ -209,7 +208,7 @@ func mergeExclude(parent map[string]bool, extra []xmlExclude) map[string]bool {
 	return out
 }
 
-func resolveRef(ref, fromDir string) (base, ruleName string) {
+func (s *loadSession) resolveRef(ref, fromDir string) (base, ruleName string) {
 	if resolvable(ref, fromDir) {
 		return ref, ""
 	}
@@ -218,7 +217,7 @@ func resolveRef(ref, fromDir string) (base, ruleName string) {
 			return left, ref[i+1:]
 		}
 	}
-	if owner := builtinRuleOwner(ref); owner != "" {
+	if owner := builtinRuleOwner(s, ref); owner != "" {
 		return owner, ref
 	}
 	return ref, ""
@@ -239,28 +238,60 @@ func resolvePath(part, fromDir string) string {
 	return part
 }
 
-func builtinRuleOwner(name string) string {
-	for _, id := range leafBuiltinRulesets {
-		if ruleDefinedInBuiltin(id, name) {
-			return id
+// buildRule constructs a configured rule from a definition (def, which carries
+// message/class/url/since/description) and an override source (ov, which
+// carries priority and property overrides — usually the same element, but for
+// a single-rule ref it is the referencing element).
+func (e *refExpander) buildRule(setName string, def xmlRule, ov *xmlRule) (rule.Rule, error) {
+	ctor, ok := rule.Lookup(def.Class)
+	if !ok {
+		e.warn("skipping unimplemented rule %s (%s)", def.Name, def.Class)
+		return nil, nil
+	}
+	r := ctor()
+	base := rule.BaseOf(r)
+	if base == nil {
+		e.warn("rule %s does not expose metadata", def.Name)
+		return nil, nil
+	}
+	base.RuleName = def.Name
+	base.RuleMessage = strings.TrimSpace(def.Message)
+	base.RuleSet = setName
+	base.RuleURL = def.ExternalInfoURL
+	base.RuleSince = def.Since
+	base.RuleDesc = strings.TrimSpace(def.Description)
+	base.RulePrio = 3
+	if def.Priority != nil {
+		base.RulePrio = *def.Priority
+	}
+	base.RuleProps = mergeProps(def.Properties, ov.Properties)
+	if ov.Priority != nil {
+		base.RulePrio = *ov.Priority
+	}
+	if configurable, configurableRule := r.(rule.Configurable); configurableRule {
+		if err := configurable.Configure(base.RuleProps); err != nil {
+			return nil, fmt.Errorf("configure rule %s: %w", def.Name, err)
 		}
 	}
-	return ""
+	return r, nil
 }
 
-func ruleDefinedInBuiltin(id, name string) bool {
-	data, err := builtinFS.ReadFile(builtinNames[id])
-	if err != nil {
-		return false
+// appendRule adds a rule unless it is filtered out by the configured priority
+// bounds.
+func (e *refExpander) appendRule(r rule.Rule) {
+	priority := rule.BaseOf(r).RulePrio
+	loader := e.session.loader
+	if loader.MinPriority > 0 && priority > loader.MinPriority {
+		return
 	}
-	var src xmlRuleSet
-	if xml.Unmarshal(data, &src) != nil {
-		return false
+	if loader.MaxPriority > 0 && priority < loader.MaxPriority {
+		return
 	}
-	for _, r := range src.Rules {
-		if r.Class != "" && r.Name == name {
-			return true
-		}
+	e.set.Rules = append(e.set.Rules, r)
+}
+
+func (e *refExpander) warn(format string, args ...any) {
+	if e.session.loader.Warn != nil {
+		e.session.loader.Warn(fmt.Sprintf(format, args...))
 	}
-	return false
 }

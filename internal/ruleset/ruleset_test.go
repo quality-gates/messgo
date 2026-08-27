@@ -461,6 +461,28 @@ func TestIndirectRulesetReferenceCycleReturnsError(t *testing.T) {
 	}
 }
 
+func TestBareRuleOwnersReuseSessionSources(t *testing.T) {
+	session := &loadSession{
+		loader:  &Loader{},
+		sources: make(map[string]xmlRuleSet),
+	}
+	base, ruleName := session.resolveRef("CyclomaticComplexity", "")
+	if base != "codesize" || ruleName != "CyclomaticComplexity" {
+		t.Fatalf("resolved to %q/%q, want codesize/CyclomaticComplexity", base, ruleName)
+	}
+	sourceCount := len(session.sources)
+	ownerCount := len(session.builtinOwners)
+
+	base, ruleName = session.resolveRef("UnusedLocalVariable", "")
+	if base != "unusedcode" || ruleName != "UnusedLocalVariable" {
+		t.Fatalf("resolved to %q/%q, want unusedcode/UnusedLocalVariable", base, ruleName)
+	}
+	if len(session.sources) != sourceCount || len(session.builtinOwners) != ownerCount {
+		t.Fatalf("second bare-rule lookup rebuilt owner index: sources %d -> %d, owners %d -> %d",
+			sourceCount, len(session.sources), ownerCount, len(session.builtinOwners))
+	}
+}
+
 func BenchmarkRepeatedRulesetReferences(b *testing.B) {
 	for _, depth := range []int{4, 8, 12} {
 		b.Run(fmt.Sprintf("depth_%d", depth), func(b *testing.B) {

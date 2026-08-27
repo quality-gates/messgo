@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"testing"
 
@@ -148,6 +149,70 @@ func compute(a int, spare int) int {
 		if h.rule == "UnusedPrivateField" && h.line == 3 {
 			t.Errorf("used field wrongly flagged: %v", hits)
 		}
+	}
+}
+
+func TestUnusedVariableRulesPreserveBindingAndDeclarationForms(t *testing.T) {
+	src := `
+func inspect(unusedParam, capturedParam int, values []int) {
+	read, writeOnly := 1, 2
+	_ = read
+	writeOnly = 3
+	for usedKey, unusedValue := range values {
+		_ = usedKey
+	}
+	captured := 1
+	closure := func() {
+		unusedParam := 1
+		_ = unusedParam
+		_ = capturedParam
+		_ = captured
+	}
+	_ = closure
+}
+`
+	hits := analyze(t, src, "unusedcode")
+	mustHave(t, hits, "UnusedFormalParameter", "UnusedLocalVariable")
+	want := []hit{
+		{rule: "UnusedFormalParameter", line: 2},
+		{rule: "UnusedLocalVariable", line: 3},
+		{rule: "UnusedLocalVariable", line: 6},
+	}
+	if !slices.Equal(hits, want) {
+		t.Fatalf("unused-variable hits = %v, want %v", hits, want)
+	}
+}
+
+func TestUnusedMemberRulesPreserveFileWideSelectionForms(t *testing.T) {
+	src := `
+const mapKey = "key"
+
+type widget struct {
+	selected int
+	literal  int
+	mapKey   int
+	unused   int
+}
+
+func (w *widget) selectedMethod() {}
+func (w *widget) unusedMethod()   {}
+
+func inspect(w widget) {
+	_ = w.selected
+	w.selectedMethod()
+	_ = widget{literal: 1}
+	_ = map[string]int{mapKey: 1}
+}
+`
+	hits := analyze(t, src, "unusedcode")
+	mustHave(t, hits, "UnusedPrivateField", "UnusedPrivateMethod")
+	want := []hit{
+		{rule: "UnusedPrivateField", line: 7},
+		{rule: "UnusedPrivateField", line: 8},
+		{rule: "UnusedPrivateMethod", line: 12},
+	}
+	if !slices.Equal(hits, want) {
+		t.Fatalf("unused-member hits = %v, want %v", hits, want)
 	}
 }
 

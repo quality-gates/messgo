@@ -186,6 +186,40 @@ func TestEffectiveLinesOfCodeIgnoresLineDirectives(t *testing.T) {
 	}
 }
 
+func TestEffectiveLOCIndexAnswersSourceSpans(t *testing.T) {
+	src := []byte(`package p
+/*
+package comment
+*/
+func first() {
+	// line comment
+
+	value := 1 /* inline comment */
+	_ = value
+}
+/* between declarations */
+func second() {}
+`)
+	fset := token.NewFileSet()
+	file, err := parser.ParseFile(fset, "x.go", src, parser.ParseComments)
+	if err != nil {
+		t.Fatal(err)
+	}
+	index := NewEffectiveLOCIndex(src)
+	wants := []int{4, 1}
+	for declaration, want := range wants {
+		decl := file.Decls[declaration]
+		if got := index.LinesOfCode(fset, decl.Pos(), decl.End()); got != want {
+			t.Errorf("declaration %d effective LOC = %d, want %d", declaration, got, want)
+		}
+	}
+	// Repeated range queries must remain stable after the source is indexed.
+	first := file.Decls[0]
+	if got := index.LinesOfCode(fset, first.Pos(), first.End()); got != wants[0] {
+		t.Errorf("repeated first declaration effective LOC = %d, want %d", got, wants[0])
+	}
+}
+
 func TestNPathCoversRangeSwitchSelectLoopAndReturnForms(t *testing.T) {
 	body := parseFuncBody(t, `func f(items []int, ch <-chan int, value any, a, b bool) int {
 	total := 0

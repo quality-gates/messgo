@@ -9,6 +9,8 @@ import (
 	"go/token"
 	"maps"
 	"sync"
+
+	"github.com/quality-gates/messgo/internal/metrics"
 )
 
 // NodeType identifies the kind of artifact, used for rule message rendering
@@ -43,37 +45,52 @@ type File struct {
 	// analysis).
 	MutatedGlobals map[string]bool
 
-	selectedMemberNamesOnce sync.Once
-	selectedMemberNames     map[string]bool
+	analysis fileAnalysisCache
+}
+
+type fileAnalysisCache struct {
+	selectedMembersOnce sync.Once
+	selectedMembers     map[string]bool
+	effectiveLOCOnce    sync.Once
+	effectiveLOC        *metrics.EffectiveLOCIndex
 }
 
 // SelectedMemberNames returns a snapshot of field or method names selected or
 // used as keyed struct-literal fields anywhere in this file.
 func (f *File) SelectedMemberNames() map[string]bool {
 	f.collectSelectedMemberNames()
-	return maps.Clone(f.selectedMemberNames)
+	return maps.Clone(f.analysis.selectedMembers)
 }
 
 // MemberSelected reports whether name is selected or used as a keyed struct
 // literal field anywhere in this file. The file-wide AST scan runs once.
 func (f *File) MemberSelected(name string) bool {
 	f.collectSelectedMemberNames()
-	return f.selectedMemberNames[name]
+	return f.analysis.selectedMembers[name]
 }
 
 func (f *File) collectSelectedMemberNames() {
-	f.selectedMemberNamesOnce.Do(func() {
-		f.selectedMemberNames = map[string]bool{}
+	f.analysis.selectedMembersOnce.Do(func() {
+		f.analysis.selectedMembers = map[string]bool{}
 		ast.Inspect(f.Syntax, func(n ast.Node) bool {
 			switch e := n.(type) {
 			case *ast.SelectorExpr:
-				f.selectedMemberNames[e.Sel.Name] = true
+				f.analysis.selectedMembers[e.Sel.Name] = true
 			case *ast.CompositeLit:
-				collectCompositeMemberNames(e, f.selectedMemberNames)
+				collectCompositeMemberNames(e, f.analysis.selectedMembers)
 			}
 			return true
 		})
 	})
+}
+
+// EffectiveLinesOfCode returns the number of code-bearing physical source
+// lines in the requested span. The source is indexed at most once per file.
+func (f *File) EffectiveLinesOfCode(start, end token.Pos) int {
+	f.analysis.effectiveLOCOnce.Do(func() {
+		f.analysis.effectiveLOC = metrics.NewEffectiveLOCIndex(f.Src)
+	})
+	return f.analysis.effectiveLOC.LinesOfCode(f.Fset, start, end)
 }
 
 func collectCompositeMemberNames(lit *ast.CompositeLit, set map[string]bool) {

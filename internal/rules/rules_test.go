@@ -5,6 +5,7 @@
 package rules_test
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"sort"
@@ -651,4 +652,77 @@ func ok(items []int) int {
 		"ElseExpression",
 		"DuplicatedArrayKey",
 	)
+}
+
+func TestLongMethodIgnoreWhitespaceOverride(t *testing.T) {
+	src := `
+func spaced() {
+	// explanation
+
+	value := 1
+	_ = value
+}
+`
+	for _, tc := range []struct {
+		ignoreWhitespace bool
+		wantViolation    bool
+	}{
+		{ignoreWhitespace: false, wantViolation: true},
+		{ignoreWhitespace: true, wantViolation: false},
+	} {
+		t.Run(fmt.Sprintf("ignore-whitespace=%t", tc.ignoreWhitespace), func(t *testing.T) {
+			hits := analyze(t, src, codesizeRuleset(t, "LongMethod", 6, tc.ignoreWhitespace))
+			if got := has(hits, "LongMethod"); got != tc.wantViolation {
+				t.Fatalf("LongMethod violation = %t, want %t; hits = %v", got, tc.wantViolation, hits)
+			}
+		})
+	}
+}
+
+func TestLongClassIgnoreWhitespaceOverride(t *testing.T) {
+	src := `
+type widget struct {
+	// explanation
+
+	value int
+}
+
+func (w widget) method() {
+	// explanation
+
+	_ = w.value
+}
+`
+	for _, tc := range []struct {
+		ignoreWhitespace bool
+		wantViolation    bool
+	}{
+		{ignoreWhitespace: false, wantViolation: true},
+		{ignoreWhitespace: true, wantViolation: false},
+	} {
+		t.Run(fmt.Sprintf("ignore-whitespace=%t", tc.ignoreWhitespace), func(t *testing.T) {
+			hits := analyze(t, src, codesizeRuleset(t, "LongClass", 8, tc.ignoreWhitespace))
+			if got := has(hits, "LongClass"); got != tc.wantViolation {
+				t.Fatalf("LongClass violation = %t, want %t; hits = %v", got, tc.wantViolation, hits)
+			}
+		})
+	}
+}
+
+func codesizeRuleset(t *testing.T, ruleName string, minimum int, ignoreWhitespace bool) string {
+	t.Helper()
+	path := filepath.Join(t.TempDir(), "ruleset.xml")
+	xml := fmt.Sprintf(`<ruleset name="test">
+  <rule name="%s" class="PHPMD\Rule\Design\%s">
+    <properties>
+      <property name="minimum" value="%d"/>
+      <property name="ignore-whitespace" value="%t"/>
+    </properties>
+  </rule>
+</ruleset>
+`, ruleName, ruleName, minimum, ignoreWhitespace)
+	if err := os.WriteFile(path, []byte(xml), 0o644); err != nil {
+		t.Fatalf("write ruleset: %v", err)
+	}
+	return path
 }

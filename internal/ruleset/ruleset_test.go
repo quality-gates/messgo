@@ -1,8 +1,10 @@
 package ruleset
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/quality-gates/messgo/internal/model"
@@ -404,6 +406,107 @@ func TestRelativeFileRefResolvesAgainstRulesetDir(t *testing.T) {
 	if ruleByName(set, "CyclomaticComplexity") == nil {
 		t.Fatal("relative ref did not import CyclomaticComplexity")
 	}
+}
+
+func TestDirectRulesetReferenceCycleReturnsError(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "self.xml")
+	if err := os.WriteFile(path, []byte(`<ruleset name="self">
+  <rule ref="self.xml"/>
+</ruleset>
+`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	_, err := (&Loader{}).Load(path)
+	if err == nil {
+		t.Fatal("expected cyclic ruleset reference to fail")
+	}
+	if !strings.Contains(err.Error(), "cyclic ruleset reference") {
+		t.Fatalf("error = %q, want cyclic ruleset reference", err)
+	}
+}
+
+func TestIndirectRulesetReferenceCycleReturnsError(t *testing.T) {
+	dir := t.TempDir()
+	first := filepath.Join(dir, "first.xml")
+	second := filepath.Join(dir, "second.xml")
+	if err := os.WriteFile(first, []byte(`<ruleset name="first">
+  <rule ref="second.xml"/>
+</ruleset>
+`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(second, []byte(`<ruleset name="second">
+  <rule ref="first.xml"/>
+</ruleset>
+`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	_, loadErr := (&Loader{}).Load(first)
+	if loadErr == nil {
+		t.Fatal("expected cyclic ruleset reference to fail")
+	}
+	canonicalFirst, err := filepath.EvalSymlinks(first)
+	if err != nil {
+		t.Fatal(err)
+	}
+	canonicalSecond, err := filepath.EvalSymlinks(second)
+	if err != nil {
+		t.Fatal(err)
+	}
+	wantCycle := strings.Join([]string{canonicalFirst, canonicalSecond, canonicalFirst}, " -> ")
+	if !strings.Contains(loadErr.Error(), wantCycle) {
+		t.Fatalf("error = %q, want cycle %q", loadErr, wantCycle)
+	}
+}
+
+func BenchmarkRepeatedRulesetReferences(b *testing.B) {
+	for _, depth := range []int{4, 8, 12} {
+		b.Run(fmt.Sprintf("depth_%d", depth), func(b *testing.B) {
+			path := repeatedRulesetGraph(b, depth)
+			sets, err := (&Loader{}).Load(path)
+			if err != nil {
+				b.Fatal(err)
+			}
+			if got := len(sets[0].Rules); got != 1 {
+				b.Fatalf("loaded %d rules, want 1", got)
+			}
+			b.ResetTimer()
+			for b.Loop() {
+				if _, err := (&Loader{}).Load(path); err != nil {
+					b.Fatal(err)
+				}
+			}
+		})
+	}
+}
+
+func repeatedRulesetGraph(tb testing.TB, depth int) string {
+	tb.Helper()
+	dir := tb.TempDir()
+	previous := "leaf.xml"
+	path := filepath.Join(dir, previous)
+	if err := os.WriteFile(path, []byte(`<ruleset name="leaf">
+  <rule name="CyclomaticComplexity" class="PHPMD\Rule\CyclomaticComplexity"/>
+</ruleset>
+`), 0o644); err != nil {
+		tb.Fatal(err)
+	}
+	for level := 1; level <= depth; level++ {
+		name := fmt.Sprintf("level-%d.xml", level)
+		path = filepath.Join(dir, name)
+		xml := fmt.Sprintf(`<ruleset name="level-%d">
+  <rule ref="%s"/>
+  <rule ref="%s"/>
+</ruleset>
+`, level, previous, previous)
+		if err := os.WriteFile(path, []byte(xml), 0o644); err != nil {
+			tb.Fatal(err)
+		}
+		previous = name
+	}
+	return path
 }
 
 func thresholdLoaderFile(paramCount int) *model.File {

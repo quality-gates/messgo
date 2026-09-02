@@ -1,10 +1,24 @@
 # messgo
 
-A PHP Mess Detector (phpmd) port for Go: parses Go source with `go/ast`, applies
-rules faithful to Go semantics, and distributes stable command-line releases
-through Go tooling and a project-owned Homebrew tap.
+A Go-native mess detector with PHPMD as its lineage: parses Go source with
+`go/ast`, applies rules faithful to Go semantics, and distributes stable
+command-line releases through Go tooling and a project-owned Homebrew tap.
 
 ## Language
+
+**Mess sign**:
+A structural maintainability problem detectable from the AST alone — oversized
+functions or types, tangled coupling, dead private code, muddy naming, deeply
+nested control flow, unchecked type assertions, and the like. The unit messgo
+reports. PHPMD is the rule taxonomy and inspiration, not the scope ceiling:
+Go-specific mess signs are in scope on their own merits.
+_Avoid_: bug, defect, correctness issue (the Go toolchain's job, not messgo's);
+"port" used to mean "faithful reimplementation of PHPMD's ruleset only".
+
+**Gap, filled**:
+A mess sign a Go linter or PHPMD catches that messgo does not, and that messgo
+subsequently gains a rule or metric for. "Filling" a gap is adding detection,
+not changing the AST-only, no-build contract.
 
 **Git hooks**:
 The mechanism delivering local quality checks — committed shell scripts in `githooks/`, activated per-clone via `git config core.hooksPath githooks`.

@@ -84,3 +84,21 @@ Default five-role vocabulary (`needs-triage`, `needs-info`, `ready-for-agent`, `
 ### Domain docs
 
 Single-context layout — `CONTEXT.md` + `docs/adr/` at the repo root (not yet created). See `docs/agents/domain.md`.
+
+## Releasing: Homebrew tap approval gate
+
+The release workflow dispatches to `quality-gates/homebrew-tap` to publish a formula. The tap's **Test tap** workflow requires manual approval for automation branches. The publish action polls for checks for ~5 minutes then fails if none are registered.
+
+Approve the pending run on the tap repo early:
+
+```bash
+gh run list --repo quality-gates/homebrew-tap --limit 3
+gh api repos/quality-gates/homebrew-tap/actions/runs/<RUN_ID>/approve --method POST
+```
+
+If the window already expired, re-run the failed messgo release job after approving, then merge the tap PR once checks pass:
+
+```bash
+gh run rerun <MESSGO_RELEASE_RUN_ID> --failed
+gh pr merge <PR_NUMBER> --repo quality-gates/homebrew-tap --squash
+```

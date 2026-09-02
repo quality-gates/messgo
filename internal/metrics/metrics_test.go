@@ -345,6 +345,29 @@ func TestNestingDepth(t *testing.T) {
 			want: 3,
 		},
 		{
+			name: "for loop",
+			src: `func f(n int) {
+				for i := 0; i < n; i++ {
+					if i > 0 {
+						return
+					}
+				}
+			}`,
+			want: 2,
+		},
+		{
+			name: "switch with nested if",
+			src: `func f(n int) {
+				switch n {
+				case 1:
+					if n > 0 {
+						return
+					}
+				}
+			}`,
+			want: 2,
+		},
+		{
 			name: "nil body",
 			src:  `func f()`,
 			want: 0,
@@ -400,6 +423,12 @@ func TestCognitiveComplexity(t *testing.T) {
 		{"binary chain mixed ops", `func f(a, b, c bool) bool { return a && b || c }`, 2},
 		{"switch with cases", `func f(n int) { switch n { case 1: case 2: default: } }`, 1},
 		{"labeled break", `func f() { outer: for { break outer } }`, 2},
+		{"for with init cond post", `func f(n int) { for i := 0; i < n; i++ { if i > 0 { } } }`, 3},
+		{"type switch", `func f(v any) { switch v.(type) { case int: if v.(int) > 0 { } } }`, 3},
+		{"select with nested if", `func f(ch chan int) { select { case x := <-ch: if x > 0 { }; default: } }`, 3},
+		{"func literal with nested if", `func f() { fn := func(a bool) { if a { } }; fn() }`, 2},
+		{"direct recursion", `func f(n int) int { if n > 0 { return f(n - 1) }; return 0 }`, 2},
+		{"nesting decrement after if", `func f(a, b bool) { if a { if b { } }; if a { } }`, 4},
 		{"nil decl", `func f()`, 0},
 	}
 	for _, tc := range tests {

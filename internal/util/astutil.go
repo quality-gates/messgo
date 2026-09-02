@@ -84,17 +84,20 @@ func collectLoopIdents(body *ast.BlockStmt) map[*ast.Ident]bool {
 			}
 		case *ast.RangeStmt:
 			if fs.Tok == token.DEFINE {
-				if id := identOf(fs.Key); id != nil {
-					set[id] = true
-				}
-				if id := identOf(fs.Value); id != nil {
-					set[id] = true
-				}
+				addLoopIdent(set, fs.Key)
+				addLoopIdent(set, fs.Value)
 			}
 		}
 		return true
 	})
 	return set
+}
+
+// addLoopIdent adds e's identifier to set if e is an identifier.
+func addLoopIdent(set map[*ast.Ident]bool, e ast.Expr) {
+	if id := identOf(e); id != nil {
+		set[id] = true
+	}
 }
 
 // defineIdents returns the LHS identifiers of a `:=` assignment.
@@ -225,19 +228,24 @@ func topLevelVarNames(files []*ast.File) map[string]bool {
 				continue
 			}
 			for _, spec := range gd.Specs {
-				vs, ok := spec.(*ast.ValueSpec)
-				if !ok {
-					continue
-				}
-				for _, name := range vs.Names {
-					if name.Name != "_" {
-						names[name.Name] = true
-					}
-				}
+				collectVarSpecNames(spec, names)
 			}
 		}
 	}
 	return names
+}
+
+// collectVarSpecNames adds the non-blank names from a var spec to the set.
+func collectVarSpecNames(spec ast.Spec, names map[string]bool) {
+	vs, ok := spec.(*ast.ValueSpec)
+	if !ok {
+		return
+	}
+	for _, name := range vs.Names {
+		if name.Name != "_" {
+			names[name.Name] = true
+		}
+	}
 }
 
 // rootIdent peels selector, index, star and paren wrappers off an lvalue to its

@@ -2,6 +2,7 @@
 package codesize
 
 import (
+	"go/ast"
 	"regexp"
 
 	"github.com/quality-gates/messgo/internal/metrics"
@@ -20,6 +21,10 @@ func init() {
 	rule.Register("PHPMD\\Rule\\Design\\TooManyMethods", newTooManyMethods)
 	rule.Register("PHPMD\\Rule\\Design\\TooManyPublicMethods", newTooManyPublicMethods)
 	rule.Register("PHPMD\\Rule\\Design\\WeightedMethodCount", newWeightedMethodCount)
+	rule.Register("messgo\\Rule\\NestingDepth", newNestingDepth)
+	rule.Register("messgo\\Rule\\ExcessiveReturnCount", newExcessiveReturnCount)
+	rule.Register("messgo\\Rule\\NakedReturn", newNakedReturn)
+	rule.Register("messgo\\Rule\\CognitiveComplexity", newCognitiveComplexity)
 }
 
 // ----- helpers ------------------------------------------------------------
@@ -59,6 +64,10 @@ func classNameMeasurement(class *model.Class, value int) rule.ThresholdMeasureme
 	return rule.ThresholdMeasurement{Value: value, Args: []any{class.Name}}
 }
 
+func interfaceNodeMeasurement(iface *model.Interface, value int) rule.ThresholdMeasurement {
+	return rule.ThresholdMeasurement{Value: value, Args: []any{string(iface.NodeType()), iface.Name}}
+}
+
 // ----- CyclomaticComplexity ----------------------------------------------
 
 type CyclomaticComplexity struct {
@@ -80,6 +89,157 @@ func newCyclomaticComplexity() rule.Rule {
 
 func (r *CyclomaticComplexity) measure(_ *rule.Context, fn *model.Function) (rule.ThresholdMeasurement, bool) {
 	return funcMeasurement(fn, metrics.CyclomaticComplexity(fn.Body)), true
+}
+
+// ----- CognitiveComplexity -----------------------------------------------
+
+// CognitiveComplexity flags functions whose cognitive complexity (SonarSource
+// algorithm) exceeds a threshold (default 20). Unlike cyclomatic complexity,
+// cognitive complexity penalises nesting — deeply nested control flow scores
+// higher than flat code with the same number of branches. Go-specific (no PHPMD
+// analog); mirrors gocognit's convention. See docs/adr/0001-go-mess-sign-backlog.md.
+type CognitiveComplexity struct {
+	*rule.Base
+	*rule.ThresholdRule
+}
+
+func newCognitiveComplexity() rule.Rule {
+	r := &CognitiveComplexity{Base: rule.NewBase()}
+	r.ThresholdRule = rule.NewThresholdRule(rule.ThresholdDeclaration{
+		Property:   "reportLevel",
+		Default:    20,
+		Boundary:   rule.AtOrAbove,
+		NodeKind:   rule.ThresholdFunction,
+		FuncMetric: r.measure,
+	})
+	return r
+}
+
+func (r *CognitiveComplexity) measure(_ *rule.Context, fn *model.Function) (rule.ThresholdMeasurement, bool) {
+	return funcMeasurement(fn, metrics.CognitiveComplexity(fn.Decl)), true
+}
+
+// ----- NestingDepth -------------------------------------------------------
+
+// NestingDepth flags functions whose deepest control-flow nesting exceeds a
+// threshold (default 5). It is a Go-specific rule (no PHPMD analog) targeting
+// the "arrow code" readability smell that cyclomatic and NPath complexity do
+// not capture. See docs/adr/0001-go-mess-sign-backlog.md.
+type NestingDepth struct {
+	*rule.Base
+	*rule.ThresholdRule
+}
+
+func newNestingDepth() rule.Rule {
+	r := &NestingDepth{Base: rule.NewBase()}
+	r.ThresholdRule = rule.NewThresholdRule(rule.ThresholdDeclaration{
+		Property:   "maxdepth",
+		Default:    5,
+		Boundary:   rule.Above,
+		NodeKind:   rule.ThresholdFunction,
+		FuncMetric: r.measure,
+	})
+	return r
+}
+
+func (r *NestingDepth) measure(_ *rule.Context, fn *model.Function) (rule.ThresholdMeasurement, bool) {
+	return funcMeasurement(fn, metrics.NestingDepth(fn.Body)), true
+}
+
+// ----- ExcessiveReturnCount -----------------------------------------------
+
+// ExcessiveReturnCount flags functions returning more values than a threshold
+// (default 3). Go allows multiple returns, but a function returning many values
+// is a smell that begs a struct result. Go-specific (no PHPMD analog); mirrors
+// revive's function-result-limit. See docs/adr/0001-go-mess-sign-backlog.md.
+type ExcessiveReturnCount struct {
+	*rule.Base
+	*rule.ThresholdRule
+}
+
+func newExcessiveReturnCount() rule.Rule {
+	r := &ExcessiveReturnCount{Base: rule.NewBase()}
+	r.ThresholdRule = rule.NewThresholdRule(rule.ThresholdDeclaration{
+		Property:   "maxresults",
+		Default:    3,
+		Boundary:   rule.Above,
+		NodeKind:   rule.ThresholdFunction,
+		FuncMetric: r.measure,
+	})
+	return r
+}
+
+func (r *ExcessiveReturnCount) measure(_ *rule.Context, fn *model.Function) (rule.ThresholdMeasurement, bool) {
+	return funcMeasurement(fn, len(fn.Results)), true
+}
+
+// ----- NakedReturn --------------------------------------------------------
+
+// NakedReturn flags functions with named results that use a bare return when
+// the function is long or complex enough for the implicit return values to
+// hurt readability. A naked return in a 3-line helper is idiomatic; in a
+// 50-line function it hides what is being returned. The rule fires only when
+// both conditions hold: a bare return is present AND (LOC ≥ minloc OR
+// CCN ≥ minccn). Void functions are unaffected — a bare return with no named
+// results is not the naked-return smell. Go-specific (no PHPMD analog);
+// combines revive's bare-return with the existing LOC/CCN metrics.
+// See docs/adr/0001-go-mess-sign-backlog.md.
+type NakedReturn struct {
+	*rule.Base
+	minLOC int
+	minCCN int
+}
+
+func newNakedReturn() rule.Rule {
+	return &NakedReturn{Base: rule.NewBase(), minLOC: 50, minCCN: 10}
+}
+
+func (r *NakedReturn) Configure(props rule.Properties) error {
+	r.minLOC = props.Int("minloc", 50)
+	r.minCCN = props.Int("minccn", 10)
+	return nil
+}
+
+func (r *NakedReturn) ApplyFunc(c *rule.Context, fn *model.Function) {
+	if !hasNamedResults(fn) {
+		return
+	}
+	if !hasNakedReturn(fn) {
+		return
+	}
+	loc := funcLOC(fn, false)
+	ccn := metrics.CyclomaticComplexity(fn.Body)
+	if loc < r.minLOC && ccn < r.minCCN {
+		return
+	}
+	c.ReportFunc(fn, string(fn.NodeType()), fn.Name, loc, ccn)
+}
+
+// hasNamedResults reports whether fn declares at least one named result.
+func hasNamedResults(fn *model.Function) bool {
+	for _, res := range fn.Results {
+		if res.Name != "" {
+			return true
+		}
+	}
+	return false
+}
+
+// hasNakedReturn reports whether fn's body contains a bare return (a return
+// with no result expressions).
+func hasNakedReturn(fn *model.Function) bool {
+	if fn.Body == nil {
+		return false
+	}
+	found := false
+	ast.Inspect(fn.Body, func(n ast.Node) bool {
+		if ret, ok := n.(*ast.ReturnStmt); ok && ret.Results == nil {
+			found = true
+			return false
+		}
+		return true
+	})
+	return found
 }
 
 // ----- NPathComplexity ----------------------------------------------------
@@ -260,11 +420,14 @@ type TooManyMethods struct {
 func newTooManyMethods() rule.Rule {
 	r := &TooManyMethods{Base: rule.NewBase()}
 	r.ThresholdRule = rule.NewThresholdRule(rule.ThresholdDeclaration{
-		Property:    "maxmethods",
-		Default:     25,
-		Boundary:    rule.Above,
-		NodeKind:    rule.ThresholdClass,
-		ClassMetric: r.measure,
+		Property:          "maxmethods",
+		Default:           25,
+		Boundary:          rule.Above,
+		NodeKind:          rule.ThresholdClass,
+		ClassMetric:       r.measure,
+		InterfaceMetric:   r.measureInterface,
+		InterfaceProperty: "maxifacemethods",
+		InterfaceDefault:  10,
 	})
 	return r
 }
@@ -286,6 +449,17 @@ func (r *TooManyMethods) measure(_ *rule.Context, class *model.Class) (rule.Thre
 		nom++
 	}
 	return classNodeMeasurement(class, nom), true
+}
+
+func (r *TooManyMethods) measureInterface(_ *rule.Context, iface *model.Interface) (rule.ThresholdMeasurement, bool) {
+	nom := 0
+	for _, m := range iface.Methods {
+		if r.ignorePattern != nil && r.ignorePattern.MatchString(m.Name) {
+			continue
+		}
+		nom++
+	}
+	return interfaceNodeMeasurement(iface, nom), true
 }
 
 // ----- TooManyPublicMethods ----------------------------------------------

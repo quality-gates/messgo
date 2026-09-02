@@ -343,11 +343,18 @@ order to reduce its complexity and find a way to have more fine grained objects.
 By default it ignores methods starting with 'get' or 'set'.
 
 The default was changed from 10 to 25 in PHPMD 2.3.
+
+This rule also applies to interfaces (interface pollution), using a separate
+lower threshold (maxifacemethods, default 10). TooManyPublicMethods and
+ExcessivePublicCount intentionally do not fire on interfaces: on an interface
+every method is part of the contract, so all three rules would collapse to the
+same method count and report the same smell three times.
             ]]>
         </description>
         <priority>3</priority>
         <properties>
-            <property name="maxmethods" description="The method count reporting threshold"/>
+            <property name="maxmethods" description="The method count reporting threshold (classes)"/>
+            <property name="maxifacemethods" description="The method count reporting threshold (interfaces), default 10"/>
             <property name="ignorepattern" description="Ignore methods matching this regex"/>
         </properties>
     </rule>
@@ -413,6 +420,150 @@ class Foo {
         }
     }
     // Several other complex methods
+}
+            ]]>
+        </example>
+    </rule>
+
+    <rule name="NestingDepth"
+          since="0.3.0"
+          class="messgo\Rule\NestingDepth"
+          message="The {0} {1}() has a nesting depth of {2}. The configured nesting depth threshold is {3}. Avoid deeply nested control flow.">
+        <description>
+            <![CDATA[
+A Go-specific rule (no PHPMD analog). Flags functions whose deepest control-flow
+nesting — the deepest stack of nested if/for/range/switch/type-switch/select
+statements — exceeds a threshold (default 5). This is the "arrow code" smell:
+deeply nested control flow is hard to read and a candidate for early returns or
+guard clauses. It is independent of cyclomatic and NPath complexity, which do
+not penalise nesting. An else-if chain does not add depth; an else block does.
+
+Mirrors the intent of nestif and revive's max-control-nesting.
+            ]]>
+        </description>
+        <priority>3</priority>
+        <properties>
+            <property name="maxdepth" description="The maximum control-flow nesting depth (default 5)"/>
+        </properties>
+        <example>
+            <![CDATA[
+// Nesting depth = 3
+func arrow(a, b, c bool) {
+	if a {
+		if b {
+			if c {
+				return
+			}
+		}
+	}
+}
+            ]]>
+        </example>
+    </rule>
+
+    <rule name="ExcessiveReturnCount"
+          since="0.3.0"
+          class="messgo\Rule\ExcessiveReturnCount"
+          message="The {0} {1}() has {2} return values. Consider reducing the number of results to less than {3}, or returning a struct.">
+        <description>
+            <![CDATA[
+A Go-specific rule (no PHPMD analog). Flags functions returning more values than a
+threshold (default 3). Go allows multiple returns, but a function returning many
+values is a smell that begs a struct result — callers must remember positional
+ordering and the signature is hard to extend without breaking call sites.
+
+Mirrors revive's function-result-limit.
+            ]]>
+        </description>
+        <priority>3</priority>
+        <properties>
+            <property name="maxresults" description="The maximum number of return values (default 3)"/>
+        </properties>
+        <example>
+            <![CDATA[
+// 4 return values — flag
+func parse(s string) (int, int, int, int) {
+	return 1, 2, 3, 4
+}
+
+// prefer a struct result
+type Result struct{ A, B, C, D int }
+func parse(s string) Result { return Result{1, 2, 3, 4} }
+            ]]>
+        </example>
+    </rule>
+
+    <rule name="NakedReturn"
+          since="0.3.0"
+          class="messgo\Rule\NakedReturn"
+          message="The {0} {1}() uses a naked return with {2} lines of code and cyclomatic complexity {3}. Avoid naked returns in long or complex functions.">
+        <description>
+            <![CDATA[
+A Go-specific rule (no PHPMD analog). Flags functions with named results that use a
+bare return (no explicit result values) when the function is long or complex enough
+for the implicit return to hurt readability. A naked return in a 3-line helper is
+idiomatic; in a 50-line function it hides what is being returned.
+
+The rule fires only when both conditions hold: a bare return is present AND
+(LOC ≥ minloc OR CCN ≥ minccn). Void functions are unaffected — a bare return with
+no named results is not the naked-return smell.
+
+Combines revive's bare-return with messgo's existing LOC and cyclomatic complexity
+metrics.
+            ]]>
+        </description>
+        <priority>3</priority>
+        <properties>
+            <property name="minloc" description="The LOC above which a naked return is flagged (default 50)"/>
+            <property name="minccn" description="The cyclomatic complexity above which a naked return is flagged (default 10)"/>
+        </properties>
+        <example>
+            <![CDATA[
+// naked return in a long function — flag
+func process(items []int) (sum, count, max int) {
+	// ... 50+ lines ...
+	return
+}
+            ]]>
+        </example>
+    </rule>
+
+    <rule name="CognitiveComplexity"
+          since="0.3.0"
+          class="messgo\Rule\CognitiveComplexity"
+          message="The {0} {1}() has a cognitive complexity of {2}. The configured cognitive complexity threshold is {3}.">
+        <description>
+            <![CDATA[
+A Go-specific rule (no PHPMD analog). Flags functions whose cognitive complexity
+exceeds a threshold (default 20). Cognitive complexity (SonarSource algorithm)
+penalises nesting: a control-flow structure nested inside another scores
+nesting+1, not just 1. An else-if chain does not add nesting; an else block does.
+Boolean && and || sequences add 1 per operator change. Direct recursion adds 1.
+Labeled break/continue adds 1. This catches "hard to read" functions that
+cyclomatic complexity misses — a flat 10-branch switch and a 3-deep nested if
+have the same CCN but very different cognitive load.
+
+Mirrors gocognit's convention.
+            ]]>
+        </description>
+        <priority>3</priority>
+        <properties>
+            <property name="reportLevel" description="The cognitive complexity reporting threshold (default 20)"/>
+        </properties>
+        <example>
+            <![CDATA[
+// Cognitive complexity = 6 (nesting penalised)
+func process(items []int) {
+	for _, x := range items {
+		if x > 0 {
+			switch x {
+			case 1:
+				if x > 1 {
+					return
+				}
+			}
+		}
+	}
 }
             ]]>
         </example>

@@ -264,3 +264,199 @@ func TestNPathCoversRangeSwitchSelectLoopAndReturnForms(t *testing.T) {
 		t.Fatalf("NPathComplexity(mixed control flow) = %d, want 32", got)
 	}
 }
+
+func TestNestingDepth(t *testing.T) {
+	tests := []struct {
+		name string
+		src  string
+		want int
+	}{
+		{
+			name: "flat",
+			src:  `func f() { x := 1; _ = x }`,
+			want: 0,
+		},
+		{
+			name: "single if",
+			src:  `func f(a bool) { if a { return } }`,
+			want: 1,
+		},
+		{
+			name: "three deep if",
+			src: `func f(a, b, c bool) {
+				if a {
+					if b {
+						if c {
+							return
+						}
+					}
+				}
+			}`,
+			want: 3,
+		},
+		{
+			name: "else-if chain does not add depth",
+			src: `func f(a, b, c bool) {
+				if a {
+					return
+				} else if b {
+					return
+				} else if c {
+					return
+				}
+			}`,
+			want: 1,
+		},
+		{
+			name: "else block adds depth",
+			src: `func f(a bool) {
+				if a {
+					if a {
+						return
+					}
+				} else {
+					if a {
+						return
+					}
+				}
+			}`,
+			want: 2,
+		},
+		{
+			name: "for-range-switch-select mixed",
+			src: `func f(items []int, ch <-chan int, v any) {
+				for _, x := range items {
+					switch v.(type) {
+					case int:
+						if x > 0 {
+							return
+						}
+					}
+					select {
+					case <-ch:
+						if x < 0 {
+							return
+						}
+					default:
+					}
+				}
+			}`,
+			// for(1) > switch(2) > case > if(3); the select branch also reaches 3
+			want: 3,
+		},
+		{
+			name: "for loop",
+			src: `func f(n int) {
+				for i := 0; i < n; i++ {
+					if i > 0 {
+						return
+					}
+				}
+			}`,
+			want: 2,
+		},
+		{
+			name: "switch with nested if",
+			src: `func f(n int) {
+				switch n {
+				case 1:
+					if n > 0 {
+						return
+					}
+				}
+			}`,
+			want: 2,
+		},
+		{
+			name: "nil body",
+			src:  `func f()`,
+			want: 0,
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			// parseFuncBody expects a body; the "nil body" case needs special handling.
+			if tc.src == `func f()` {
+				if got := NestingDepth(nil); got != tc.want {
+					t.Errorf("NestingDepth(nil) = %d, want %d", got, tc.want)
+				}
+				return
+			}
+			body := parseFuncBody(t, tc.src)
+			if got := NestingDepth(body); got != tc.want {
+				t.Errorf("NestingDepth = %d, want %d", got, tc.want)
+			}
+		})
+	}
+}
+
+func parseFuncDecl(t *testing.T, src string) *ast.FuncDecl {
+	t.Helper()
+	fset := token.NewFileSet()
+	f, err := parser.ParseFile(fset, "x.go", "package p\n"+src, 0)
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+	for _, d := range f.Decls {
+		if fd, ok := d.(*ast.FuncDecl); ok {
+			return fd
+		}
+	}
+	t.Fatal("no function found")
+	return nil
+}
+
+func TestCognitiveComplexity(t *testing.T) {
+	tests := []struct {
+		name string
+		src  string
+		want int
+	}{
+		{"empty", `func f() {}`, 0},
+		{"single if", `func f(a bool) { if a { } }`, 1},
+		{"nested if", `func f(a, b bool) { if a { if b { } } }`, 3},
+		{"if else block", `func f(a bool) { if a { } else { } }`, 2},
+		{"if else-if chain", `func f(a, b bool) { if a { } else if b { } }`, 2},
+		{"for with nested if", `func f(items []int) { for _, x := range items { if x > 0 { } } }`, 3},
+		{"binary and", `func f(a, b bool) bool { return a && b }`, 1},
+		{"binary chain same op", `func f(a, b, c bool) bool { return a && b && c }`, 1},
+		{"binary chain mixed ops", `func f(a, b, c bool) bool { return a && b || c }`, 2},
+		{"switch with cases", `func f(n int) { switch n { case 1: case 2: default: } }`, 1},
+		{"labeled break", `func f() { outer: for { break outer } }`, 2},
+		{"for with init cond post", `func f(n int) { for i := 0; i < n; i++ { if i > 0 { } } }`, 3},
+		{"type switch", `func f(v any) { switch v.(type) { case int: if v.(int) > 0 { } } }`, 3},
+		{"select with nested if", `func f(ch chan int) { select { case x := <-ch: if x > 0 { }; default: } }`, 3},
+		{"func literal with nested if", `func f() { fn := func(a bool) { if a { } }; fn() }`, 2},
+		{"direct recursion", `func f(n int) int { if n > 0 { return f(n - 1) }; return 0 }`, 2},
+		{"nesting decrement after if", `func f(a, b bool) { if a { if b { } }; if a { } }`, 4},
+		{"select then if", `func f(ch chan int, a bool) { select { case <-ch: }; if a { } }`, 2},
+		{"for with binary in init", `func f(a, b bool) { for x := a && b; x; { } }`, 2},
+		{"for with binary in cond", `func f(n int, a bool) { for i := 0; i < n && a; i++ { } }`, 2},
+		{"for with binary in post", `func f(a, b bool) { for ; a; a = a && b { } }`, 2},
+		{"for then if", `func f(a bool) { for { break }; if a { } }`, 2},
+		{"range then if", `func f(items []int, a bool) { for _, x := range items { _ = x }; if a { } }`, 2},
+		{"range with binary in expr", `func f(a, b bool) { for _, v := range []bool{a && b} { _ = v } }`, 2},
+		{"func literal then if", `func f(a bool) { fn := func() {}; fn(); if a { } }`, 1},
+		{"if with binary in cond", `func f(a, b bool) { if a && b { } }`, 2},
+		{"if with binary in init", `func f(a, b bool) { if x := a && b; x { } }`, 2},
+		{"else-if chain in loop", `func f(a, b bool) { for { if a { } else if b { } } }`, 4},
+		{"switch with binary in init", `func f(a, b bool) { switch x := a && b; x { case 1: } }`, 2},
+		{"switch with binary in tag", `func f(a, b bool) { switch a && b { case 1: } }`, 2},
+		{"switch then if", `func f(n int, a bool) { switch n { case 1: }; if a { } }`, 2},
+		{"nil decl", `func f()`, 0},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			if tc.src == `func f()` {
+				if got := CognitiveComplexity(nil); got != tc.want {
+					t.Errorf("CognitiveComplexity(nil) = %d, want %d", got, tc.want)
+				}
+				return
+			}
+			fn := parseFuncDecl(t, tc.src)
+			if got := CognitiveComplexity(fn); got != tc.want {
+				t.Errorf("CognitiveComplexity = %d, want %d", got, tc.want)
+			}
+		})
+	}
+}

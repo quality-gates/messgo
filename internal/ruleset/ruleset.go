@@ -20,6 +20,7 @@ import (
 	_ "github.com/quality-gates/messgo/internal/rules/controversial"
 	_ "github.com/quality-gates/messgo/internal/rules/design"
 	_ "github.com/quality-gates/messgo/internal/rules/naming"
+	_ "github.com/quality-gates/messgo/internal/rules/opinionated"
 	_ "github.com/quality-gates/messgo/internal/rules/unusedcode"
 )
 

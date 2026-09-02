@@ -6,6 +6,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-09-02
+
 ### Added
 - Extended `TooManyMethods` to fire on interfaces (interface pollution) with a separate `maxifacemethods` threshold (default 10). `TooManyPublicMethods` and `ExcessivePublicCount` intentionally do not fire on interfaces.
 - Added `NestingDepth` rule (codesize, `go` ruleset): flags functions whose deepest control-flow nesting exceeds `maxdepth` (default 5). The "arrow code" smell that cyclomatic and NPath complexity do not capture.
@@ -15,6 +17,9 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 - Added `UncheckedTypeAssertion` rule (opinionated): flags type assertions without the comma-ok form that panic on failure.
 - Added `IdenticalBranches` rule (opinionated): flags if/else and switch cases with textually identical bodies.
 - Added `StructEmbeddingDepth` rule (opinionated): flags structs whose transitive embedding chain exceeds `maxdepth` (default 3).
+
+### Changed
+- Sharpened the project charter in `CONTEXT.md` to describe messgo as Go-native mess detection (PHPMD as lineage, not target) and added "mess sign" / "gap, filled" glossary terms supporting the gap-analysis research.
 
 ## [0.2.2] - 2026-08-27
 

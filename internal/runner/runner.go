@@ -78,8 +78,13 @@ func annotatePackages(parsed []*model.File) {
 			asts[i] = f.Syntax
 		}
 		mutated := util.MutatedGlobalNames(asts)
+		var pkgClasses []*model.Class
+		for _, f := range group {
+			pkgClasses = append(pkgClasses, f.Classes...)
+		}
 		for _, f := range group {
 			f.MutatedGlobals = mutated
+			f.PackageClasses = pkgClasses
 		}
 	}
 }

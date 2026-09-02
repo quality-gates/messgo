@@ -88,6 +88,407 @@ type Big struct {
 	mustHave(t, hits, "ExcessiveParameterList", "TooManyFields")
 }
 
+func TestInterfaceSizeFiresTooManyMethods(t *testing.T) {
+	// An interface with more than 10 methods fires TooManyMethods (the
+	// interface-size defect fix: the rule now implements ApplyInterface).
+	// TooManyPublicMethods and ExcessivePublicCount short-circuit on
+	// interfaces — their measures collapse to method count and would
+	// duplicate the single smell.
+	src := `
+type Fat interface {
+	Method01()
+	Method02()
+	Method03()
+	Method04()
+	Method05()
+	Method06()
+	Method07()
+	Method08()
+	Method09()
+	Method10()
+	Method11()
+}
+`
+	hits := analyze(t, src, "codesize")
+	mustHave(t, hits, "TooManyMethods")
+	mustNotHave(t, hits, "TooManyPublicMethods", "ExcessivePublicCount")
+}
+
+func TestInterfaceSizeUnderThresholdDoesNotFire(t *testing.T) {
+	src := `
+type Lean interface {
+	Method01()
+	Method02()
+	Method03()
+}
+`
+	hits := analyze(t, src, "codesize")
+	mustNotHave(t, hits, "TooManyMethods")
+}
+
+func TestInterfaceSizeThresholdConfigurable(t *testing.T) {
+	// The interface threshold is configurable via the maxifacemethods
+	// property and defaults to 10; lowering it to 2 makes a 3-method
+	// interface fire.
+	src := `
+type Trio interface {
+	A()
+	B()
+	C()
+}
+`
+	f, err := model.ParseSource("fixture.go", []byte("package fixture\n"+src))
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+	loader := &ruleset.Loader{}
+	sets, err := loader.Load("codesize")
+	if err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	for _, r := range sets[0].Rules {
+		if r.Name() == "TooManyMethods" {
+			cfg, ok := r.(rule.Configurable)
+			if !ok {
+				t.Fatalf("TooManyMethods is not Configurable")
+			}
+			if err := cfg.Configure(rule.Properties{"maxifacemethods": "2"}); err != nil {
+				t.Fatalf("configure: %v", err)
+			}
+		}
+	}
+	vs := rule.Analyze(f, sets)
+	var found bool
+	for _, v := range vs {
+		if v.Rule.Name() == "TooManyMethods" {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("expected TooManyMethods to fire with maxifacemethods=2; it did not")
+	}
+}
+
+func TestNestingDepthFiresOnDeepControlFlow(t *testing.T) {
+	// Six levels of nested if: depth 6 > default threshold 5.
+	src := `
+func arrow(a, b, c, d, e, f bool) {
+	if a {
+		if b {
+			if c {
+				if d {
+					if e {
+						if f {
+							return
+						}
+					}
+				}
+			}
+		}
+	}
+}
+`
+	hits := analyze(t, src, "codesize")
+	mustHave(t, hits, "NestingDepth")
+}
+
+func TestNestingDepthDoesNotFireOnShallowFlow(t *testing.T) {
+	src := `
+func shallow(a, b bool) {
+	if a {
+		if b {
+			return
+		}
+	}
+}
+`
+	hits := analyze(t, src, "codesize")
+	mustNotHave(t, hits, "NestingDepth")
+}
+
+func TestFunctionResultCountFiresOnManyReturns(t *testing.T) {
+	// Four return values > default threshold 3.
+	src := `
+func many() (int, int, int, int) {
+	return 1, 2, 3, 4
+}
+`
+	hits := analyze(t, src, "codesize")
+	mustHave(t, hits, "ExcessiveReturnCount")
+}
+
+func TestFunctionResultCountDoesNotFireOnFewReturns(t *testing.T) {
+	src := `
+func few() (int, error) {
+	return 0, nil
+}
+`
+	hits := analyze(t, src, "codesize")
+	mustNotHave(t, hits, "ExcessiveReturnCount")
+}
+
+func TestNakedReturnFiresOnComplexNamedResultFunc(t *testing.T) {
+	// Named results + naked return + CCN ≥ 10 (10 ifs → CCN 11).
+	src := `
+func complex() (a, b, c, d, e, f, g, h, i, j, k int) {
+	if a > 0 { b++ }
+	if b > 0 { c++ }
+	if c > 0 { d++ }
+	if d > 0 { e++ }
+	if e > 0 { f++ }
+	if f > 0 { g++ }
+	if g > 0 { h++ }
+	if h > 0 { i++ }
+	if i > 0 { j++ }
+	if j > 0 { k++ }
+	return
+}
+`
+	hits := analyze(t, src, "codesize")
+	mustHave(t, hits, "NakedReturn")
+}
+
+func TestNakedReturnDoesNotFireOnShortNamedResultFunc(t *testing.T) {
+	src := `
+func simple() (a, b int) {
+	a, b = 1, 2
+	return
+}
+`
+	hits := analyze(t, src, "codesize")
+	mustNotHave(t, hits, "NakedReturn")
+}
+
+func TestNakedReturnDoesNotFireOnExplicitReturn(t *testing.T) {
+	// High CCN but explicit return values — not a naked return.
+	src := `
+func explicit() (a, b, c, d, e, f, g, h, i, j, k int) {
+	if a > 0 { b++ }
+	if b > 0 { c++ }
+	if c > 0 { d++ }
+	if d > 0 { e++ }
+	if e > 0 { f++ }
+	if f > 0 { g++ }
+	if g > 0 { h++ }
+	if h > 0 { i++ }
+	if i > 0 { j++ }
+	if j > 0 { k++ }
+	return a, b, c, d, e, f, g, h, i, j, k
+}
+`
+	hits := analyze(t, src, "codesize")
+	mustNotHave(t, hits, "NakedReturn")
+}
+
+func TestNakedReturnIgnoresVoidFuncWithBareReturn(t *testing.T) {
+	// High CCN but no named results — bare return is not the naked-return smell.
+	src := `
+func voidComplex() {
+	a := 1
+	if a > 0 { a++ }
+	if a > 0 { a++ }
+	if a > 0 { a++ }
+	if a > 0 { a++ }
+	if a > 0 { a++ }
+	if a > 0 { a++ }
+	if a > 0 { a++ }
+	if a > 0 { a++ }
+	if a > 0 { a++ }
+	if a > 0 { a++ }
+	return
+}
+`
+	hits := analyze(t, src, "codesize")
+	mustNotHave(t, hits, "NakedReturn")
+}
+
+func TestCognitiveComplexityFiresOnDeepNesting(t *testing.T) {
+	// Six nested ifs: cognitive complexity = 1+2+3+4+5+6 = 21 (>= default 20),
+	// but CCN = 7 (< 10) — so CognitiveComplexity fires but CyclomaticComplexity
+	// does not. This is the key difference: cognitive complexity penalises nesting.
+	src := `
+func deepNest(a, b, c, d, e, f bool) {
+	if a {
+		if b {
+			if c {
+				if d {
+					if e {
+						if f {
+							return
+						}
+					}
+				}
+			}
+		}
+	}
+}
+`
+	hits := analyze(t, src, "codesize")
+	mustHave(t, hits, "CognitiveComplexity")
+	mustNotHave(t, hits, "CyclomaticComplexity")
+}
+
+func TestCognitiveComplexityDoesNotFireOnSimpleFunc(t *testing.T) {
+	src := `
+func simple(a bool) {
+	if a {
+		return
+	}
+}
+`
+	hits := analyze(t, src, "codesize")
+	mustNotHave(t, hits, "CognitiveComplexity")
+}
+
+func TestCognitiveComplexityThresholdConfigurable(t *testing.T) {
+	// Cognitive complexity of this function is 3 (if=1, nested if=2).
+	// Lowering the threshold to 2 makes it fire.
+	src := `
+func mild(a, b bool) {
+	if a {
+		if b {
+			return
+		}
+	}
+}
+`
+	f, err := model.ParseSource("fixture.go", []byte("package fixture\n"+src))
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+	loader := &ruleset.Loader{}
+	sets, err := loader.Load("codesize")
+	if err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	for _, r := range sets[0].Rules {
+		if r.Name() == "CognitiveComplexity" {
+			cfg, ok := r.(rule.Configurable)
+			if !ok {
+				t.Fatalf("CognitiveComplexity is not Configurable")
+			}
+			if err := cfg.Configure(rule.Properties{"reportLevel": "2"}); err != nil {
+				t.Fatalf("configure: %v", err)
+			}
+		}
+	}
+	vs := rule.Analyze(f, sets)
+	var found bool
+	for _, v := range vs {
+		if v.Rule.Name() == "CognitiveComplexity" {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("expected CognitiveComplexity to fire with reportLevel=2; it did not")
+	}
+}
+
+func TestUncheckedTypeAssertionFiresOnBareAssertion(t *testing.T) {
+	src := `
+func assert(x any) int {
+	return x.(int)
+}
+`
+	hits := analyze(t, src, "opinionated")
+	mustHave(t, hits, "UncheckedTypeAssertion")
+}
+
+func TestUncheckedTypeAssertionDoesNotFireOnCommaOK(t *testing.T) {
+	src := `
+func assert(x any) (int, bool) {
+	v, ok := x.(int)
+	return v, ok
+}
+`
+	hits := analyze(t, src, "opinionated")
+	mustNotHave(t, hits, "UncheckedTypeAssertion")
+}
+
+func TestUncheckedTypeAssertionDoesNotFireOnTypeSwitch(t *testing.T) {
+	src := `
+func classify(x any) string {
+	switch v := x.(type) {
+	case int:
+		return "int"
+	default:
+		return "other"
+	}
+}
+`
+	hits := analyze(t, src, "opinionated")
+	mustNotHave(t, hits, "UncheckedTypeAssertion")
+}
+
+func TestIdenticalBranchesFiresOnIfElse(t *testing.T) {
+	src := `
+func branch(cond bool) {
+	if cond {
+		doX()
+		doY()
+	} else {
+		doX()
+		doY()
+	}
+}
+`
+	hits := analyze(t, src, "opinionated")
+	mustHave(t, hits, "IdenticalBranches")
+}
+
+func TestIdenticalBranchesDoesNotFireOnDifferentBodies(t *testing.T) {
+	src := `
+func branch(cond bool) {
+	if cond {
+		doX()
+	} else {
+		doY()
+	}
+}
+`
+	hits := analyze(t, src, "opinionated")
+	mustNotHave(t, hits, "IdenticalBranches")
+}
+
+func TestIdenticalBranchesFiresOnSwitchCases(t *testing.T) {
+	src := `
+func branch(n int) {
+	switch n {
+	case 1:
+		handle()
+	case 2:
+		handle()
+	default:
+		other()
+	}
+}
+`
+	hits := analyze(t, src, "opinionated")
+	mustHave(t, hits, "IdenticalBranches")
+}
+
+func TestStructEmbeddingDepthFiresOnDeepChain(t *testing.T) {
+	src := `
+type A struct{}
+type B struct{ A }
+type C struct{ B }
+type D struct{ C }
+type E struct{ D }
+`
+	hits := analyze(t, src, "opinionated")
+	mustHave(t, hits, "StructEmbeddingDepth")
+}
+
+func TestStructEmbeddingDepthDoesNotFireOnShallowChain(t *testing.T) {
+	src := `
+type A struct{}
+type B struct{ A }
+type C struct{ B }
+`
+	hits := analyze(t, src, "opinionated")
+	mustNotHave(t, hits, "StructEmbeddingDepth")
+}
+
 func TestNaming(t *testing.T) {
 	src := `
 const my_constant = 5

@@ -54,6 +54,300 @@ func NPathComplexity(body *ast.BlockStmt) int {
 	return npathStmts(body.List)
 }
 
+// NestingDepth computes the maximum control-flow nesting depth within a
+// function body — the deepest stack of nested if/for/range/switch/type-switch/
+// select statements. This is the "arrow code" smell: deeply nested control
+// flow is hard to read and a candidate for early returns or guard clauses. It
+// is independent of cyclomatic and NPath complexity, which do not penalise
+// nesting. Mirrors the intent of nestif and revive's max-control-nesting.
+//
+// An else-if chain does not add depth (the chained if sits at the same level as
+// its parent); an else block does. Case clauses sit inside their switch/select
+// and do not add a level of their own.
+func NestingDepth(body *ast.BlockStmt) int {
+	if body == nil {
+		return 0
+	}
+	return maxStmtNesting(body.List, 0)
+}
+
+func maxStmtNesting(stmts []ast.Stmt, depth int) int {
+	m := depth
+	for _, s := range stmts {
+		if d := nestingDepthStmt(s, depth); d > m {
+			m = d
+		}
+	}
+	return m
+}
+
+// nestingDepthStmt returns the max nesting depth reachable from s, where depth
+// is the nesting level of the block containing s.
+func nestingDepthStmt(s ast.Stmt, depth int) int {
+	switch n := s.(type) {
+	case *ast.IfStmt:
+		return nestingDepthIf(n, depth)
+	case *ast.ForStmt:
+		return max(depth+1, maxStmtNesting(n.Body.List, depth+1))
+	case *ast.RangeStmt:
+		return max(depth+1, maxStmtNesting(n.Body.List, depth+1))
+	case *ast.SwitchStmt:
+		return max(depth+1, caseNesting(n.Body.List, depth+1))
+	case *ast.TypeSwitchStmt:
+		return max(depth+1, caseNesting(n.Body.List, depth+1))
+	case *ast.SelectStmt:
+		return max(depth+1, commNesting(n.Body.List, depth+1))
+	}
+	return depth
+}
+
+// nestingDepthIf handles the if/else branching rules: the if body and an else
+// block sit at depth+1; an else-if chain stays at the parent's depth.
+func nestingDepthIf(n *ast.IfStmt, depth int) int {
+	m := max(depth+1, maxStmtNesting(n.Body.List, depth+1))
+	if n.Else == nil {
+		return m
+	}
+	if blk, ok := n.Else.(*ast.BlockStmt); ok {
+		return max(m, maxStmtNesting(blk.List, depth+1))
+	}
+	// else-if chain: the chained if sits at the same level as its parent.
+	return max(m, nestingDepthStmt(n.Else, depth))
+}
+
+// caseNesting measures nesting within a switch body, whose direct children are
+// CaseClauses. The case body sits at the switch's level (depth), not deeper.
+func caseNesting(clauses []ast.Stmt, depth int) int {
+	m := depth
+	for _, c := range clauses {
+		cc, ok := c.(*ast.CaseClause)
+		if !ok {
+			continue
+		}
+		if d := maxStmtNesting(cc.Body, depth); d > m {
+			m = d
+		}
+	}
+	return m
+}
+
+// commNesting measures nesting within a select body, whose direct children are
+// CommClauses.
+func commNesting(clauses []ast.Stmt, depth int) int {
+	m := depth
+	for _, c := range clauses {
+		cc, ok := c.(*ast.CommClause)
+		if !ok {
+			continue
+		}
+		if d := maxStmtNesting(cc.Body, depth); d > m {
+			m = d
+		}
+	}
+	return m
+}
+
+// CognitiveComplexity computes the cognitive complexity of a function using the
+// SonarSource algorithm, as implemented by gocognit (github.com/uudashr/gocognit).
+// Unlike cyclomatic complexity, cognitive complexity penalises nesting: a
+// control-flow structure nested inside another scores nesting+1, not just 1.
+// An else-if chain does not add nesting (the chained if sits at the same level
+// as its parent); an else block adds +1. Boolean && and || sequences add 1 per
+// operator change. Direct recursion adds +1. Labeled break/continue adds +1.
+func CognitiveComplexity(fn *ast.FuncDecl) int {
+	if fn == nil {
+		return 0
+	}
+	v := &cognitiveVisitor{name: fn.Name}
+	ast.Walk(v, fn)
+	return v.complexity
+}
+
+type cognitiveVisitor struct {
+	name            *ast.Ident
+	complexity      int
+	nesting         int
+	elseNodes       map[ast.Node]bool
+	calculatedExprs map[ast.Expr]bool
+}
+
+func (v *cognitiveVisitor) inc()        { v.complexity++ }
+func (v *cognitiveVisitor) nestInc()    { v.complexity += v.nesting + 1 }
+func (v *cognitiveVisitor) incNesting() { v.nesting++ }
+func (v *cognitiveVisitor) decNesting() { v.nesting-- }
+
+func (v *cognitiveVisitor) markElse(n ast.Node) {
+	if v.elseNodes == nil {
+		v.elseNodes = make(map[ast.Node]bool)
+	}
+	v.elseNodes[n] = true
+}
+
+func (v *cognitiveVisitor) isElse(n ast.Node) bool {
+	return v.elseNodes != nil && v.elseNodes[n]
+}
+
+func (v *cognitiveVisitor) markCalc(e ast.Expr) {
+	if v.calculatedExprs == nil {
+		v.calculatedExprs = make(map[ast.Expr]bool)
+	}
+	v.calculatedExprs[e] = true
+}
+
+func (v *cognitiveVisitor) isCalc(e ast.Expr) bool {
+	return v.calculatedExprs != nil && v.calculatedExprs[e]
+}
+
+func (v *cognitiveVisitor) walkIfSet(n ast.Node) {
+	if n != nil {
+		ast.Walk(v, n)
+	}
+}
+
+// Visit implements ast.Visitor. It handles nesting-increasing nodes (if, switch,
+// for, range, select, func-lit) and delegates non-nesting nodes (branch, binary,
+// call) to visitNonNesting.
+func (v *cognitiveVisitor) Visit(n ast.Node) ast.Visitor {
+	switch n := n.(type) {
+	case *ast.IfStmt:
+		return v.visitIf(n)
+	case *ast.SwitchStmt:
+		v.visitSwitch(n.Init, n.Tag, n.Body)
+		return nil
+	case *ast.TypeSwitchStmt:
+		v.visitSwitch(n.Init, n.Assign, n.Body)
+		return nil
+	case *ast.SelectStmt:
+		v.nestInc()
+		v.incNesting()
+		ast.Walk(v, n.Body)
+		v.decNesting()
+		return nil
+	case *ast.ForStmt:
+		v.nestInc()
+		v.walkIfSet(n.Init)
+		v.walkIfSet(n.Cond)
+		v.walkIfSet(n.Post)
+		v.incNesting()
+		ast.Walk(v, n.Body)
+		v.decNesting()
+		return nil
+	case *ast.RangeStmt:
+		v.nestInc()
+		v.walkIfSet(n.Key)
+		v.walkIfSet(n.Value)
+		ast.Walk(v, n.X)
+		v.incNesting()
+		ast.Walk(v, n.Body)
+		v.decNesting()
+		return nil
+	case *ast.FuncLit:
+		ast.Walk(v, n.Type)
+		v.incNesting()
+		ast.Walk(v, n.Body)
+		v.decNesting()
+		return nil
+	}
+	return v.visitNonNesting(n)
+}
+
+func (v *cognitiveVisitor) visitNonNesting(n ast.Node) ast.Visitor {
+	switch n := n.(type) {
+	case *ast.BranchStmt:
+		if n.Label != nil {
+			v.inc()
+		}
+		return v
+	case *ast.BinaryExpr:
+		v.visitBinary(n)
+		return v
+	case *ast.CallExpr:
+		v.visitCall(n)
+		return v
+	}
+	return v
+}
+
+func (v *cognitiveVisitor) visitIf(n *ast.IfStmt) ast.Visitor {
+	if v.isElse(n) {
+		v.inc()
+	} else {
+		v.nestInc()
+	}
+	v.walkIfSet(n.Init)
+	ast.Walk(v, n.Cond)
+	v.incNesting()
+	ast.Walk(v, n.Body)
+	v.decNesting()
+	if blk, ok := n.Else.(*ast.BlockStmt); ok {
+		v.inc() // +1 for the else keyword
+		ast.Walk(v, blk)
+	} else if _, ok := n.Else.(*ast.IfStmt); ok {
+		v.markElse(n.Else)
+		ast.Walk(v, n.Else)
+	}
+	return nil
+}
+
+func (v *cognitiveVisitor) visitSwitch(init ast.Stmt, extra ast.Node, body *ast.BlockStmt) {
+	v.nestInc()
+	v.walkIfSet(init)
+	if extra != nil {
+		ast.Walk(v, extra)
+	}
+	v.incNesting()
+	ast.Walk(v, body)
+	v.decNesting()
+}
+
+func (v *cognitiveVisitor) visitBinary(n *ast.BinaryExpr) {
+	if !(n.Op == token.LAND || n.Op == token.LOR) {
+		return
+	}
+	if v.isCalc(n) {
+		return
+	}
+	ops := v.collectBinaryOps(n)
+	var lastOp token.Token
+	for _, op := range ops {
+		if lastOp != op {
+			v.inc()
+			lastOp = op
+		}
+	}
+}
+
+func (v *cognitiveVisitor) collectBinaryOps(e ast.Expr) []token.Token {
+	v.markCalc(e)
+	if be, ok := e.(*ast.BinaryExpr); ok {
+		return mergeBinaryOps(v.collectBinaryOps(be.X), be.Op, v.collectBinaryOps(be.Y))
+	}
+	return nil
+}
+
+func mergeBinaryOps(x []token.Token, op token.Token, y []token.Token) []token.Token {
+	var out []token.Token
+	out = append(out, x...)
+	if op == token.LAND || op == token.LOR {
+		out = append(out, op)
+	}
+	out = append(out, y...)
+	return out
+}
+
+func (v *cognitiveVisitor) visitCall(n *ast.CallExpr) {
+	if v.name == nil {
+		return
+	}
+	id, ok := n.Fun.(*ast.Ident)
+	if !ok {
+		return
+	}
+	if id.Obj == v.name.Obj && id.Name == v.name.Name {
+		v.inc() // direct recursion
+	}
+}
+
 func npathStmts(stmts []ast.Stmt) int {
 	product := 1
 	for _, s := range stmts {

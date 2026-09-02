@@ -44,6 +44,11 @@ type File struct {
 	// when a file is analyzed in isolation (rules then fall back to single-file
 	// analysis).
 	MutatedGlobals map[string]bool
+	// PackageClasses holds all structs from every file in this file's package.
+	// It is populated by the runner after parsing, enabling cross-file embedding
+	// analysis. When nil (file analyzed in isolation), rules fall back to
+	// this file's own Classes.
+	PackageClasses []*Class
 
 	analysis fileAnalysisCache
 }

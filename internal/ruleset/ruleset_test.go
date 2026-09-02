@@ -106,11 +106,18 @@ func TestOpinionatedRulesNotInDefaultGo(t *testing.T) {
 	// These rules conflict with idiomatic Go and live only in the opt-in
 	// "opinionated" ruleset, not the default "go" ruleset.
 	moved := []string{"ElseExpression", "BooleanArgumentFlag", "UnusedFormalParameter", "GlobalVariable"}
+	// Go-specific opinionated rules (ADR-0001 ranks 6-8) also live here.
+	goOpinionated := []string{"UncheckedTypeAssertion", "IdenticalBranches", "StructEmbeddingDepth"}
 
 	goSet := loadOne(t, "go")
 	for _, name := range moved {
 		if ruleByName(goSet, name) != nil {
 			t.Errorf("go ruleset should not include %s (it is opinionated, not idiomatic Go)", name)
+		}
+	}
+	for _, name := range goOpinionated {
+		if ruleByName(goSet, name) != nil {
+			t.Errorf("go ruleset should not include %s (it is opinionated, not default)", name)
 		}
 	}
 
@@ -120,8 +127,14 @@ func TestOpinionatedRulesNotInDefaultGo(t *testing.T) {
 			t.Errorf("opinionated ruleset should include %s", name)
 		}
 	}
-	if got := len(opinionated.Rules); got != len(moved) {
-		t.Errorf("opinionated ruleset has %d rules, want %d", got, len(moved))
+	for _, name := range goOpinionated {
+		if ruleByName(opinionated, name) == nil {
+			t.Errorf("opinionated ruleset should include %s", name)
+		}
+	}
+	want := len(moved) + len(goOpinionated)
+	if got := len(opinionated.Rules); got != want {
+		t.Errorf("opinionated ruleset has %d rules, want %d", got, want)
 	}
 }
 

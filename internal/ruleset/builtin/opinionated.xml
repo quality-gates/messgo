@@ -37,4 +37,110 @@ Or combine: messgo &lt;paths&gt; &lt;format&gt; go,opinionated
     <rule ref="cleancode/BooleanArgumentFlag"/>
     <rule ref="unusedcode/UnusedFormalParameter"/>
     <rule ref="design/GlobalVariable"/>
+
+    <!-- Go-specific opinionated rules (ADR-0001 ranks 6-8) -->
+
+    <rule name="UncheckedTypeAssertion"
+          since="0.3.0"
+          class="messgo\Rule\UncheckedTypeAssertion"
+          message="The {0} {1}() uses an unchecked type assertion that panics on failure. Use the comma-ok form (v, ok := x.(T)) or a type switch.">
+        <description>
+            <![CDATA[
+A Go-specific rule (no PHPMD analog). Flags type assertions used without the
+comma-ok form (v, ok := x.(T)), which panic on a failed assertion. The comma-ok
+form and type switches (switch v := x.(type)) are safe and not flagged.
+
+This rule is opinionated because unchecked assertions are sometimes intentional
+(the caller knows the type is correct), but they are a common source of panics
+in production.
+            ]]>
+        </description>
+        <priority>3</priority>
+        <example>
+            <![CDATA[
+// panics if x is not an int
+n := x.(int)
+
+// safe — check ok
+n, ok := x.(int)
+if !ok {
+    return errors.New("not an int")
+}
+            ]]>
+        </example>
+    </rule>
+
+    <rule name="IdenticalBranches"
+          since="0.3.0"
+          class="messgo\Rule\IdenticalBranches"
+          message="The {0} {1}() has identical branches. Combine or extract to avoid copy-pasted logic.">
+        <description>
+            <![CDATA[
+A Go-specific rule (no PHPMD analog). Flags if/else and switch cases whose
+bodies are textually identical, which usually indicates copy-pasted logic that
+belongs in a single path. Two branches are "identical" when their statements
+produce the same formatted output.
+
+This rule is opinionated because identical branches can be legitimate (e.g.
+default cases that must return the same value), but they are usually a sign of
+missing abstraction.
+            ]]>
+        </description>
+        <priority>3</priority>
+        <example>
+            <![CDATA[
+// identical if/else — flag
+if cond {
+    doX()
+    doY()
+} else {
+    doX()
+    doY()
+}
+
+// identical switch cases — flag
+switch x {
+case 1:
+    handle()
+case 2:
+    handle()
+}
+            ]]>
+        </example>
+    </rule>
+
+    <rule name="StructEmbeddingDepth"
+          since="0.3.0"
+          class="messgo\Rule\StructEmbeddingDepth"
+          message="The {0} {1} has an embedding depth of {2}. The configured embedding depth threshold is {3}. Deep embedding chains obscure promoted fields and methods.">
+        <description>
+            <![CDATA[
+A Go-specific rule (no PHPMD analog, but the conceptual cousin of PHPMD's
+DepthOfInheritance). Flags structs whose transitive embedding chain exceeds a
+threshold (default 3). Deep embedding chains make it hard to understand which
+promoted fields and methods a type exposes.
+
+Cross-package embeddings are approximate: the AST alone cannot resolve them, so
+they are treated as depth-0 leaves. Within-package embeddings are followed
+transitively across files.
+
+This rule is opinionated because embedding is idiomatic in Go, but chains deeper
+than 3-4 levels are rarely intentional and usually indicate a type hierarchy
+disguised as embedding.
+            ]]>
+        </description>
+        <priority>3</priority>
+        <properties>
+            <property name="maxdepth" description="The maximum embedding chain depth (default 3)"/>
+        </properties>
+        <example>
+            <![CDATA[
+type A struct {}
+type B struct { A }
+type C struct { B }
+type D struct { C }
+type E struct { D } // depth 4 — flag
+            ]]>
+        </example>
+    </rule>
 </ruleset>

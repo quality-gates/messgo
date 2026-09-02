@@ -429,6 +429,10 @@ func TestCognitiveComplexity(t *testing.T) {
 		{"func literal with nested if", `func f() { fn := func(a bool) { if a { } }; fn() }`, 2},
 		{"direct recursion", `func f(n int) int { if n > 0 { return f(n - 1) }; return 0 }`, 2},
 		{"nesting decrement after if", `func f(a, b bool) { if a { if b { } }; if a { } }`, 4},
+		{"select then if", `func f(ch chan int, a bool) { select { case <-ch: }; if a { } }`, 2},
+		{"for with binary in init", `func f(a, b bool) { for x := a && b; x; { } }`, 2},
+		{"for with binary in cond", `func f(n int, a bool) { for i := 0; i < n && a; i++ { } }`, 2},
+		{"for with binary in post", `func f(a, b bool) { for ; a; a = a && b { } }`, 2},
 		{"nil decl", `func f()`, 0},
 	}
 	for _, tc := range tests {

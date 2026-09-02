@@ -88,15 +88,15 @@ func nestingDepthStmt(s ast.Stmt, depth int) int {
 	case *ast.IfStmt:
 		return nestingDepthIf(n, depth)
 	case *ast.ForStmt:
-		return max(depth+1, maxStmtNesting(n.Body.List, depth+1))
+		return maxStmtNesting(n.Body.List, depth+1)
 	case *ast.RangeStmt:
-		return max(depth+1, maxStmtNesting(n.Body.List, depth+1))
+		return maxStmtNesting(n.Body.List, depth+1)
 	case *ast.SwitchStmt:
-		return max(depth+1, caseNesting(n.Body.List, depth+1))
+		return caseNesting(n.Body.List, depth+1)
 	case *ast.TypeSwitchStmt:
-		return max(depth+1, caseNesting(n.Body.List, depth+1))
+		return caseNesting(n.Body.List, depth+1)
 	case *ast.SelectStmt:
-		return max(depth+1, commNesting(n.Body.List, depth+1))
+		return commNesting(n.Body.List, depth+1)
 	}
 	return depth
 }

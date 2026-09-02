@@ -435,6 +435,7 @@ func TestCognitiveComplexity(t *testing.T) {
 		{"for with binary in post", `func f(a, b bool) { for ; a; a = a && b { } }`, 2},
 		{"for then if", `func f(a bool) { for { break }; if a { } }`, 2},
 		{"range then if", `func f(items []int, a bool) { for _, x := range items { _ = x }; if a { } }`, 2},
+		{"range with binary in expr", `func f(a, b bool) { for _, v := range []bool{a && b} { _ = v } }`, 2},
 		{"func literal then if", `func f(a bool) { fn := func() {}; fn(); if a { } }`, 1},
 		{"nil decl", `func f()`, 0},
 	}

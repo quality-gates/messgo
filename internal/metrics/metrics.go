@@ -240,7 +240,6 @@ func (v *cognitiveVisitor) Visit(n ast.Node) ast.Visitor {
 		v.decNesting()
 		return nil
 	case *ast.FuncLit:
-		ast.Walk(v, n.Type)
 		v.incNesting()
 		ast.Walk(v, n.Body)
 		v.decNesting()

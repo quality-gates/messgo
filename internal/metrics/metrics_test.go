@@ -437,6 +437,12 @@ func TestCognitiveComplexity(t *testing.T) {
 		{"range then if", `func f(items []int, a bool) { for _, x := range items { _ = x }; if a { } }`, 2},
 		{"range with binary in expr", `func f(a, b bool) { for _, v := range []bool{a && b} { _ = v } }`, 2},
 		{"func literal then if", `func f(a bool) { fn := func() {}; fn(); if a { } }`, 1},
+		{"if with binary in cond", `func f(a, b bool) { if a && b { } }`, 2},
+		{"if with binary in init", `func f(a, b bool) { if x := a && b; x { } }`, 2},
+		{"else-if chain in loop", `func f(a, b bool) { for { if a { } else if b { } } }`, 4},
+		{"switch with binary in init", `func f(a, b bool) { switch x := a && b; x { case 1: } }`, 2},
+		{"switch with binary in tag", `func f(a, b bool) { switch a && b { case 1: } }`, 2},
+		{"switch then if", `func f(n int, a bool) { switch n { case 1: }; if a { } }`, 2},
 		{"nil decl", `func f()`, 0},
 	}
 	for _, tc := range tests {

@@ -234,8 +234,6 @@ func (v *cognitiveVisitor) Visit(n ast.Node) ast.Visitor {
 		return nil
 	case *ast.RangeStmt:
 		v.nestInc()
-		v.walkIfSet(n.Key)
-		v.walkIfSet(n.Value)
 		ast.Walk(v, n.X)
 		v.incNesting()
 		ast.Walk(v, n.Body)

@@ -245,6 +245,8 @@ func embeddedName(e ast.Expr) string {
 		return t.Sel.Name
 	case *ast.IndexExpr:
 		return embeddedName(t.X)
+	case *ast.IndexListExpr:
+		return embeddedName(t.X)
 	}
 	return exprString(e)
 }

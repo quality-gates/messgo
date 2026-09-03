@@ -60,9 +60,13 @@ func collectSafeTypeAssertions(body *ast.BlockStmt) map[*ast.TypeAssertExpr]bool
 	ast.Inspect(body, func(n ast.Node) bool {
 		switch n := n.(type) {
 		case *ast.AssignStmt:
-			markSafeTypeAssert(safe, n.Rhs)
+			if len(n.Lhs) == 2 {
+				markSafeTypeAssert(safe, n.Rhs)
+			}
 		case *ast.ValueSpec:
-			markSafeTypeAssert(safe, n.Values)
+			if len(n.Names) == 2 {
+				markSafeTypeAssert(safe, n.Values)
+			}
 		}
 		return true
 	})
@@ -126,11 +130,19 @@ func (r *IdenticalBranches) checkIfElse(c *rule.Context, fn *model.Function, n *
 
 func (r *IdenticalBranches) checkSwitchCases(c *rule.Context, fn *model.Function, n *ast.SwitchStmt, fset *token.FileSet) {
 	cases := switchCases(n.Body)
+	reported := map[int]bool{}
 	for i := range cases {
+		if len(cases[i].Body) == 0 {
+			continue
+		}
 		for j := i + 1; j < len(cases); j++ {
+			if len(cases[j].Body) == 0 || reported[j] {
+				continue
+			}
 			if !stmtsEqual(cases[i].Body, cases[j].Body, fset) {
 				continue
 			}
+			reported[j] = true
 			line := fset.Position(cases[j].Pos()).Line
 			c.ReportFuncAt(fn, line, line, string(fn.NodeType()), fn.Name)
 		}

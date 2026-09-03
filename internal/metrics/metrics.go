@@ -97,6 +97,10 @@ func nestingDepthStmt(s ast.Stmt, depth int) int {
 		return caseNesting(n.Body.List, depth+1)
 	case *ast.SelectStmt:
 		return commNesting(n.Body.List, depth+1)
+	case *ast.LabeledStmt:
+		return nestingDepthStmt(n.Stmt, depth)
+	case *ast.BlockStmt:
+		return maxStmtNesting(n.List, depth)
 	}
 	return depth
 }

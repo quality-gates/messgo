@@ -1192,3 +1192,140 @@ func codesizeRuleset(t *testing.T, ruleName string, minimum int, ignoreWhitespac
 	}
 	return path
 }
+
+func TestUncheckedTypeAssertionFiresOnAssignment(t *testing.T) {
+	src := `
+func assert(x any) {
+	v := x.(int)
+	println(v)
+}
+`
+	hits := analyze(t, src, "opinionated")
+	mustHave(t, hits, "UncheckedTypeAssertion")
+}
+
+func TestNakedReturnIgnoresBareReturnInsideClosure(t *testing.T) {
+	src := `
+func complexFunc() (result int, err error) {
+	x := 0
+	if x > 0 { x++ }
+	if x > 0 { x++ }
+	if x > 0 { x++ }
+	if x > 0 { x++ }
+	if x > 0 { x++ }
+	if x > 0 { x++ }
+	if x > 0 { x++ }
+	if x > 0 { x++ }
+	if x > 0 { x++ }
+	if x > 0 { x++ }
+	helper := func() {
+		return
+	}
+	helper()
+	return x, nil
+}
+`
+	hits := analyze(t, src, "codesize")
+	mustNotHave(t, hits, "NakedReturn")
+}
+
+func TestShortMethodNameIgnoresFreeFunctions(t *testing.T) {
+	hits := analyze(t, `func Do() {}`, "naming")
+	mustNotHave(t, hits, "ShortMethodName")
+}
+
+func TestUnusedPrivateFieldGenericMultiParam(t *testing.T) {
+	src := `
+type pair[A, B any] struct {
+	First  A
+	Second B
+}
+
+type Container struct {
+	pair[int, string]
+}
+
+func (c *Container) Test() {
+	println(c.pair.First)
+}
+`
+	hits := analyze(t, src, "unusedcode")
+	mustNotHave(t, hits, "UnusedPrivateField")
+}
+
+func TestStructEmbeddingDepthGenericMultiParam(t *testing.T) {
+	src := `
+type Root struct{}
+type Base[A, B any] struct{ Root }
+type Level1 struct{ Base[int, string] }
+type Level2 struct{ Level1 }
+type Level3 struct{ Level2 }
+`
+	hits := analyze(t, src, "opinionated")
+	mustHave(t, hits, "StructEmbeddingDepth")
+}
+
+func TestGlobalVariableIgnoresShadowedLocalMutation(t *testing.T) {
+	src := `
+var s = "read-only constant"
+
+func helper(s int) int {
+	s = s + 1
+	return s
+}
+`
+	hits := analyze(t, src, "design")
+	mustNotHave(t, hits, "GlobalVariable")
+}
+
+func TestIdenticalBranchesDeduplicatesSwitchCases(t *testing.T) {
+	src := `
+func f(x int) {
+	switch x {
+	case 1:
+		println("same")
+	case 2:
+		println("same")
+	case 3:
+		println("same")
+	}
+}
+`
+	hits := analyze(t, src, "opinionated")
+	count := 0
+	for _, h := range hits {
+		if h.rule == "IdenticalBranches" {
+			count++
+		}
+	}
+	if count != 2 {
+		t.Fatalf("IdenticalBranches hits = %d, want 2", count)
+	}
+}
+
+func TestIdenticalBranchesIgnoresEmptyCases(t *testing.T) {
+	src := `
+func f(x int) {
+	switch x {
+	case 1:
+	case 2:
+	case 3:
+	}
+}
+`
+	hits := analyze(t, src, "opinionated")
+	mustNotHave(t, hits, "IdenticalBranches")
+}
+
+func TestDuplicatedArrayKeyNegativeKeys(t *testing.T) {
+	src := `
+func f() {
+	_ = map[int]string{
+		-1: "a",
+		-1: "b",
+	}
+}
+`
+	hits := analyze(t, src, "cleancode")
+	mustHave(t, hits, "DuplicatedArrayKey")
+}

@@ -233,6 +233,9 @@ func hasNakedReturn(fn *model.Function) bool {
 	}
 	found := false
 	ast.Inspect(fn.Body, func(n ast.Node) bool {
+		if _, ok := n.(*ast.FuncLit); ok {
+			return false
+		}
 		if ret, ok := n.(*ast.ReturnStmt); ok && ret.Results == nil {
 			found = true
 			return false

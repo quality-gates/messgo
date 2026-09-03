@@ -592,20 +592,45 @@ func isNilIdent(e ast.Expr) bool {
 
 func literalKey(e ast.Expr) (string, bool) {
 	switch k := e.(type) {
+	case *ast.ParenExpr:
+		return literalKey(k.X)
+	case *ast.UnaryExpr:
+		return unaryLitKey(k)
 	case *ast.BasicLit:
-		v := constant.MakeFromLiteral(k.Value, k.Kind, 0)
-		if v.Kind() == constant.Unknown {
-			return k.Kind.String() + ":" + k.Value, true
-		}
-		return v.Kind().String() + ":" + v.ExactString(), true
+		return basicLitKey(k.Value, k.Kind)
 	case *ast.Ident:
 		return "ident:" + k.Name, true
 	}
 	return "", false
 }
 
+func basicLitKey(val string, kind token.Token) (string, bool) {
+	v := constant.MakeFromLiteral(val, kind, 0)
+	if v.Kind() == constant.Unknown {
+		return kind.String() + ":" + val, true
+	}
+	return v.Kind().String() + ":" + v.ExactString(), true
+}
+
+func unaryLitKey(u *ast.UnaryExpr) (string, bool) {
+	if u.Op != token.SUB && u.Op != token.ADD {
+		return "", false
+	}
+	lit, ok := u.X.(*ast.BasicLit)
+	if !ok {
+		return "", false
+	}
+	return basicLitKey(u.Op.String()+lit.Value, lit.Kind)
+}
+
 func displayKey(e ast.Expr) string {
 	switch k := e.(type) {
+	case *ast.ParenExpr:
+		return displayKey(k.X)
+	case *ast.UnaryExpr:
+		if k.Op == token.SUB || k.Op == token.ADD {
+			return k.Op.String() + displayKey(k.X)
+		}
 	case *ast.BasicLit:
 		return k.Value
 	case *ast.Ident:

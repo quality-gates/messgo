@@ -368,6 +368,29 @@ func TestNestingDepth(t *testing.T) {
 			want: 2,
 		},
 		{
+			name: "labeled for with nested if",
+			src: `func f() {
+				outer:
+					for {
+						if true {
+							break outer
+						}
+					}
+			}`,
+			want: 2,
+		},
+		{
+			name: "block statement with nested if",
+			src: `func f() {
+				{
+					if true {
+						return
+					}
+				}
+			}`,
+			want: 1,
+		},
+		{
 			name: "nil body",
 			src:  `func f()`,
 			want: 0,

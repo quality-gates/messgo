@@ -147,24 +147,29 @@ func identOf(e ast.Expr) *ast.Ident {
 // shadows a global name (via `var`) may cause the global to be reported, which
 // is preferable to hiding a genuinely mutable global.
 func MutatedGlobalNames(files []*ast.File) map[string]bool {
-	globals := topLevelVarNames(files)
+	globals, topSpecs := topLevelVarNames(files)
 	mutated := map[string]bool{}
 	if len(globals) == 0 {
 		return mutated
 	}
 	for _, f := range files {
-		collectMutations(f, globals, mutated)
+		collectMutations(f, globals, topSpecs, mutated)
 	}
 	return mutated
 }
 
 // collectMutations records, into mutated, every name in globals that is mutated
 // anywhere in f.
-func collectMutations(f *ast.File, globals, mutated map[string]bool) {
+func collectMutations(f *ast.File, globals map[string]bool, topSpecs map[any]bool, mutated map[string]bool) {
 	mark := func(e ast.Expr) {
-		if id := rootIdent(e); id != nil && globals[id.Name] {
-			mutated[id.Name] = true
+		id := rootIdent(e)
+		if id == nil || !globals[id.Name] {
+			return
 		}
+		if id.Obj != nil && !topSpecs[id.Obj.Decl] {
+			return
+		}
+		mutated[id.Name] = true
 	}
 	ast.Inspect(f, func(n ast.Node) bool {
 		markMutation(n, mark)
@@ -218,29 +223,35 @@ func markDeleteOrClear(call *ast.CallExpr, mark func(ast.Expr)) {
 }
 
 // topLevelVarNames collects the names declared in package-level `var`
-// declarations across the files. The blank identifier is skipped.
-func topLevelVarNames(files []*ast.File) map[string]bool {
+// declarations across the files and the set of top-level ValueSpec nodes.
+// The blank identifier is skipped.
+func topLevelVarNames(files []*ast.File) (map[string]bool, map[any]bool) {
 	names := map[string]bool{}
+	specs := map[any]bool{}
 	for _, f := range files {
 		for _, decl := range f.Decls {
-			gd, ok := decl.(*ast.GenDecl)
-			if !ok || gd.Tok != token.VAR {
-				continue
-			}
-			for _, spec := range gd.Specs {
-				collectVarSpecNames(spec, names)
-			}
+			collectGenDeclVars(decl, names, specs)
 		}
 	}
-	return names
+	return names, specs
 }
 
-// collectVarSpecNames adds the non-blank names from a var spec to the set.
-func collectVarSpecNames(spec ast.Spec, names map[string]bool) {
+func collectGenDeclVars(decl ast.Decl, names map[string]bool, specs map[any]bool) {
+	gd, ok := decl.(*ast.GenDecl)
+	if !ok || gd.Tok != token.VAR {
+		return
+	}
+	for _, spec := range gd.Specs {
+		collectValueSpecVars(spec, names, specs)
+	}
+}
+
+func collectValueSpecVars(spec ast.Spec, names map[string]bool, specs map[any]bool) {
 	vs, ok := spec.(*ast.ValueSpec)
 	if !ok {
 		return
 	}
+	specs[vs] = true
 	for _, name := range vs.Names {
 		if name.Name != "_" {
 			names[name.Name] = true

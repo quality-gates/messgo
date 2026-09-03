@@ -58,7 +58,7 @@ func (r *UnusedFormalParameter) check(c *rule.Context, fn *model.Function) {
 		if p.Name == "" || p.Name == "_" {
 			continue
 		}
-		if !fn.IdentifierRead(p.Ident) {
+		if !model.IdentifierRead(fn, p.Ident) {
 			c.Report(p.Line, p.Line, p.Name)
 		}
 	}
@@ -82,10 +82,10 @@ func (r *UnusedLocalVariable) Configure(props rule.Properties) error {
 }
 
 func (r *UnusedLocalVariable) check(c *rule.Context, fn *model.Function) {
-	locals := fn.LocalVariables()
+	locals := model.LocalVariables(fn)
 	reported := map[string]bool{}
 	for _, v := range locals {
-		if fn.IdentifierRead(v.Ident) || reported[v.Name] || util.Contains(r.exceptions, v.Name) {
+		if model.IdentifierRead(fn, v.Ident) || reported[v.Name] || util.Contains(r.exceptions, v.Name) {
 			continue
 		}
 		reported[v.Name] = true

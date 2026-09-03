@@ -101,9 +101,19 @@ func (c *Context) Report(beginLine, endLine int, args ...any) {
 }
 
 func (c *Context) report(beginLine, endLine int, class, method, function string, args []any) {
+	c.reportInFile(c.File, beginLine, endLine, class, method, function, args)
+}
+
+func (c *Context) reportInFile(file *model.File, beginLine, endLine int, class, method, function string, args []any) {
+	filePath := c.File.Path
+	pkg := c.File.Package
+	if file != nil && file.Path != "" {
+		filePath = file.Path
+		pkg = file.Package
+	}
 	v := &Violation{
 		Rule:        c.rule,
-		File:        c.File.Path,
+		File:        filePath,
 		BeginLine:   beginLine,
 		EndLine:     endLine,
 		Args:        args,
@@ -112,7 +122,7 @@ func (c *Context) report(beginLine, endLine int, class, method, function string,
 		Function:    function,
 		Priority:    c.rule.Priority(),
 		RuleSetName: c.rule.SetName(),
-		Package:     c.File.Package,
+		Package:     pkg,
 		Description: RenderMessage(c.rule.Message(), args),
 	}
 	*c.violations = append(*c.violations, v)
@@ -122,19 +132,19 @@ func (c *Context) report(beginLine, endLine int, class, method, function string,
 // class/method/function names the way PHPMD does for XML/JSON output.
 func (c *Context) ReportFunc(fn *model.Function, args ...any) {
 	if fn.IsMethod() {
-		c.report(fn.Line, fn.EndLine, fn.Receiver, fn.Name, "", args)
+		c.reportInFile(fn.File, fn.Line, fn.EndLine, fn.Receiver, fn.Name, "", args)
 		return
 	}
-	c.report(fn.Line, fn.EndLine, "", "", fn.Name, args)
+	c.reportInFile(fn.File, fn.Line, fn.EndLine, "", "", fn.Name, args)
 }
 
 // ReportFuncAt is like ReportFunc but at a specific line span.
 func (c *Context) ReportFuncAt(fn *model.Function, beginLine, endLine int, args ...any) {
 	if fn.IsMethod() {
-		c.report(beginLine, endLine, fn.Receiver, fn.Name, "", args)
+		c.reportInFile(fn.File, beginLine, endLine, fn.Receiver, fn.Name, "", args)
 		return
 	}
-	c.report(beginLine, endLine, "", "", fn.Name, args)
+	c.reportInFile(fn.File, beginLine, endLine, "", "", fn.Name, args)
 }
 
 // ReportClass records a violation against a class.

@@ -7,6 +7,10 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 ## [Unreleased]
 
 ### Fixed
+- Fixed multi-file package analysis: aggregate package member selections across all files so `UnusedPrivateField` and `UnusedPrivateMethod` do not falsely flag members accessed in sibling files within the same package (#48).
+- Fixed cross-file method attachment: attach methods declared in sibling files to their target struct so class-level rules (`TooManyMethods`, `CouplingBetweenObjects`, `ExcessiveClassComplexity`, `LackOfCohesionOfMethods`) see the complete class definition (#49).
+- Fixed SARIF renderer error location schema violation: omit `region` on whole-file processing errors and point `$schema` to the canonical SchemaStore URI (`https://json.schemastore.org/sarif-2.1.0.json`) (#50).
+- Fixed recursive file discovery: skip hidden directories and files starting with `.` or `_` (e.g. `.worktrees`, `.git`, `.claude`, `_tools`) unless explicitly requested as CLI arguments (#51).
 - Fixed `UncheckedTypeAssertion` false negatives: require 2 LHS assignments for comma-ok forms so single assignments (`v := x.(T)`) are flagged.
 - Fixed `NakedReturn` false positives: ignore bare returns within nested closures (`func() { return }`).
 - Fixed `ShortMethodName` false positives on free functions and eliminated malformed `.Do()` diagnostic message.

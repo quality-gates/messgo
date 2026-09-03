@@ -1,6 +1,10 @@
 package rule
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/quality-gates/messgo/internal/model"
+)
 
 func TestRenderMessage(t *testing.T) {
 	tests := []struct {
@@ -142,5 +146,51 @@ func TestSortViolations(t *testing.T) {
 		if got[i] != want[i] {
 			t.Errorf("position %d = %v, want %v", i, got[i], want[i])
 		}
+	}
+}
+
+func TestReportFuncUsesTargetFile(t *testing.T) {
+	var violations []*Violation
+	r := &Base{RuleName: "TestRule"}
+	c := &Context{
+		File:       &model.File{Path: "main.go", Package: "main"},
+		rule:       r,
+		violations: &violations,
+	}
+
+	// 1. Function has explicit file with path
+	fnWithFile := &model.Function{
+		Name:    "M",
+		Line:    10,
+		EndLine: 12,
+		File:    &model.File{Path: "other.go", Package: "otherpkg"},
+	}
+	c.ReportFunc(fnWithFile)
+	if len(violations) != 1 || violations[0].File != "other.go" || violations[0].Package != "otherpkg" {
+		t.Fatalf("expected other.go/otherpkg, got %v", violations[0])
+	}
+
+	// 2. Function has file with empty path (should fallback to context file)
+	fnEmptyPath := &model.Function{
+		Name:    "M2",
+		Line:    20,
+		EndLine: 22,
+		File:    &model.File{Path: "", Package: "fallback"},
+	}
+	c.ReportFunc(fnEmptyPath)
+	if len(violations) != 2 || violations[1].File != "main.go" || violations[1].Package != "main" {
+		t.Fatalf("expected fallback to main.go/main, got %v", violations[1])
+	}
+
+	// 3. Function has nil File (should fallback to context file)
+	fnNilFile := &model.Function{
+		Name:    "M3",
+		Line:    30,
+		EndLine: 32,
+		File:    nil,
+	}
+	c.ReportFunc(fnNilFile)
+	if len(violations) != 3 || violations[2].File != "main.go" || violations[2].Package != "main" {
+		t.Fatalf("expected fallback to main.go/main, got %v", violations[2])
 	}
 }

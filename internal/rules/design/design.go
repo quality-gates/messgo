@@ -69,7 +69,7 @@ func (r *GlobalVariable) ApplyFile(c *rule.Context) {
 type ExitExpression struct{ *rule.Base }
 
 func (r *ExitExpression) check(c *rule.Context, fn *model.Function) {
-	for _, call := range fn.Calls() {
+	for _, call := range model.Calls(fn) {
 		if call.Name == "os.Exit" || call.Name == "syscall.Exit" {
 			c.ReportFuncAt(fn, call.Line, call.Line, string(fn.NodeType()), fn.Name)
 			return
@@ -83,7 +83,7 @@ func (r *ExitExpression) ApplyFunc(c *rule.Context, fn *model.Function) { r.chec
 type GotoStatement struct{ *rule.Base }
 
 func (r *GotoStatement) check(c *rule.Context, fn *model.Function) {
-	if fn.HasGoto() {
+	if model.HasGoto(fn) {
 		c.ReportFunc(fn, string(fn.NodeType()), fn.Name)
 	}
 }
@@ -99,7 +99,7 @@ type CountInLoopExpression struct{ *rule.Base }
 var loopCountFuncs = map[string]bool{"len": true, "cap": true}
 
 func (r *CountInLoopExpression) check(c *rule.Context, fn *model.Function) {
-	for _, call := range fn.LoopConditionCalls(loopCountFuncs) {
+	for _, call := range model.LoopConditionCalls(fn, loopCountFuncs) {
 		c.ReportFuncAt(fn, call.Line, call.Line, call.Name, "for")
 	}
 }
@@ -129,7 +129,7 @@ func (r *DevelopmentCodeFragment) check(c *rule.Context, fn *model.Function) {
 	if fn.IsMethod() {
 		image = fn.Receiver + "::" + fn.Name
 	}
-	for _, call := range fn.Calls() {
+	for _, call := range model.Calls(fn) {
 		if r.unwantedFunctions[strings.ToLower(call.Name)] {
 			c.ReportFuncAt(fn, call.Line, call.Line, string(fn.NodeType()), image, call.Name)
 		}
@@ -145,7 +145,7 @@ func (r *DevelopmentCodeFragment) ApplyFunc(c *rule.Context, fn *model.Function)
 type EmptyCatchBlock struct{ *rule.Base }
 
 func (r *EmptyCatchBlock) check(c *rule.Context, fn *model.Function) {
-	for _, line := range fn.EmptyNilCheckBlockLines() {
+	for _, line := range model.EmptyNilCheckBlockLines(fn) {
 		c.ReportFuncAt(fn, line, line, fn.Name)
 	}
 }
@@ -338,7 +338,7 @@ func lcom4(class *model.Class) int {
 		if accessorOf[m.Name] != "" {
 			continue
 		}
-		usedFields, calledMethods := m.ReceiverUses(fields, methodIdx)
+		usedFields, calledMethods := model.ReceiverUses(m, fields, methodIdx)
 		for _, f := range usedFields {
 			g.addFieldUse(i, f)
 		}
@@ -368,7 +368,7 @@ func indexMethods(class *model.Class, fields map[string]bool) (methodIdx map[str
 	accessorOf = map[string]string{}
 	for i, m := range class.Methods {
 		methodIdx[m.Name] = i
-		if f := m.AccessorField(fields); f != "" {
+		if f := model.AccessorField(m, fields); f != "" {
 			accessorOf[m.Name] = f
 		}
 	}

@@ -358,34 +358,31 @@ func checkstyleSeverity(priority int) string {
 
 // ----- SARIF --------------------------------------------------------------
 
-// SARIFRenderer emits SARIF 2.1.0.
-type SARIFRenderer struct{}
-
-func (SARIFRenderer) Render(w io.Writer, r *Report) error {
-	out := &checkedWriter{Writer: w}
-	type artifactLoc struct {
+// SARIF 2.1.0 document types.
+type (
+	sarifArtifactLoc struct {
 		URI string `json:"uri"`
 	}
-	type region struct {
+	sarifRegion struct {
 		StartLine int `json:"startLine"`
 		EndLine   int `json:"endLine"`
 	}
-	type physLoc struct {
-		ArtifactLocation artifactLoc `json:"artifactLocation"`
-		Region           region      `json:"region"`
+	sarifPhysLoc struct {
+		ArtifactLocation sarifArtifactLoc `json:"artifactLocation"`
+		Region           *sarifRegion     `json:"region,omitempty"`
 	}
-	type location struct {
-		PhysicalLocation physLoc `json:"physicalLocation"`
+	sarifLocation struct {
+		PhysicalLocation sarifPhysLoc `json:"physicalLocation"`
 	}
-	type result struct {
+	sarifResult struct {
 		RuleID  string `json:"ruleId"`
 		Level   string `json:"level"`
 		Message struct {
 			Text string `json:"text"`
 		} `json:"message"`
-		Locations []location `json:"locations"`
+		Locations []sarifLocation `json:"locations"`
 	}
-	type driverRule struct {
+	sarifDriverRule struct {
 		ID               string `json:"id"`
 		Name             string `json:"name"`
 		HelpURI          string `json:"helpUri,omitempty"`
@@ -393,63 +390,73 @@ func (SARIFRenderer) Render(w io.Writer, r *Report) error {
 			Text string `json:"text"`
 		} `json:"shortDescription"`
 	}
-	type driver struct {
-		Name    string       `json:"name"`
-		Version string       `json:"version"`
-		Rules   []driverRule `json:"rules"`
+	sarifDriver struct {
+		Name    string            `json:"name"`
+		Version string            `json:"version"`
+		Rules   []sarifDriverRule `json:"rules"`
 	}
-	type tool struct {
-		Driver driver `json:"driver"`
+	sarifTool struct {
+		Driver sarifDriver `json:"driver"`
 	}
-	type run struct {
-		Tool    tool     `json:"tool"`
-		Results []result `json:"results"`
+	sarifRun struct {
+		Tool    sarifTool     `json:"tool"`
+		Results []sarifResult `json:"results"`
 	}
-	type sarif struct {
-		Schema  string `json:"$schema"`
-		Version string `json:"version"`
-		Runs    []run  `json:"runs"`
+	sarifDoc struct {
+		Schema  string     `json:"$schema"`
+		Version string     `json:"version"`
+		Runs    []sarifRun `json:"runs"`
 	}
+)
 
+// SARIFRenderer emits SARIF 2.1.0.
+type SARIFRenderer struct{}
+
+func (SARIFRenderer) Render(w io.Writer, r *Report) error {
+	out := &checkedWriter{Writer: w}
 	seen := map[string]bool{}
-	rules := make([]driverRule, 0)
-	results := make([]result, 0)
+	rules := make([]sarifDriverRule, 0)
+	results := make([]sarifResult, 0)
 	for _, v := range r.Violations {
 		id := v.Rule.Name()
 		if !seen[id] {
 			seen[id] = true
-			var dr driverRule
+			var dr sarifDriverRule
 			dr.ID = id
 			dr.Name = id
 			dr.HelpURI = v.Rule.ExternalURL()
 			dr.ShortDescription.Text = strings.TrimSpace(v.Rule.Description())
 			rules = append(rules, dr)
 		}
-		var res result
+		var res sarifResult
 		res.RuleID = id
 		res.Level = sarifLevel(v.Priority)
 		res.Message.Text = v.Description
-		var l location
+		var l sarifLocation
 		l.PhysicalLocation.ArtifactLocation.URI = v.File
-		l.PhysicalLocation.Region.StartLine = v.BeginLine
-		l.PhysicalLocation.Region.EndLine = v.EndLine
-		res.Locations = []location{l}
+		if v.BeginLine > 0 {
+			l.PhysicalLocation.Region = &sarifRegion{
+				StartLine: v.BeginLine,
+				EndLine:   v.EndLine,
+			}
+		}
+		res.Locations = []sarifLocation{l}
 		results = append(results, res)
 	}
 	for _, e := range r.Errors {
-		var res result
+		var res sarifResult
 		res.Level = "error"
 		res.Message.Text = e.Message
-		var loc location
+		var loc sarifLocation
 		loc.PhysicalLocation.ArtifactLocation.URI = e.File
-		res.Locations = []location{loc}
+		res.Locations = []sarifLocation{loc}
 		results = append(results, res)
 	}
-	doc := sarif{
-		Schema:  "https://raw.githubusercontent.com/oasis-tcs/sarif-spec/master/Schemata/sarif-schema-2.1.0.json",
+	doc := sarifDoc{
+		Schema:  "https://json.schemastore.org/sarif-2.1.0.json",
 		Version: "2.1.0",
-		Runs: []run{{
-			Tool:    tool{Driver: driver{Name: "messgo", Version: Version, Rules: rules}},
+		Runs: []sarifRun{{
+			Tool:    sarifTool{Driver: sarifDriver{Name: "messgo", Version: Version, Rules: rules}},
 			Results: results,
 		}},
 	}

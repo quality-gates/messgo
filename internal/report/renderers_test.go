@@ -166,6 +166,57 @@ func TestSARIFEmptyReportUsesArrays(t *testing.T) {
 	}
 }
 
+func TestSARIFErrorOutputOmitsRegion(t *testing.T) {
+	var buf bytes.Buffer
+	r := &rule.Base{RuleName: "Stub"}
+	rep := &Report{
+		Errors: []ProcessingError{
+			{File: "broken.go", Message: "syntax error"},
+		},
+		Violations: []*rule.Violation{
+			{File: "zero_line.go", BeginLine: 0, Rule: r},
+			{File: "valid_line.go", BeginLine: 5, EndLine: 6, Rule: r},
+		},
+	}
+	if err := (SARIFRenderer{}).Render(&buf, rep); err != nil {
+		t.Fatal(err)
+	}
+	var doc map[string]any
+	if err := json.Unmarshal(buf.Bytes(), &doc); err != nil {
+		t.Fatal(err)
+	}
+	if doc["$schema"] != "https://json.schemastore.org/sarif-2.1.0.json" {
+		t.Fatalf("SARIF $schema = %v, want https://json.schemastore.org/sarif-2.1.0.json", doc["$schema"])
+	}
+	run := doc["runs"].([]any)[0].(map[string]any)
+	driver := run["tool"].(map[string]any)["driver"].(map[string]any)
+	if driver["version"] != Version {
+		t.Fatalf("driver version = %v, want %v", driver["version"], Version)
+	}
+	results := run["results"].([]any)
+	if len(results) != 3 {
+		t.Fatalf("SARIF results count = %d, want 3", len(results))
+	}
+	// Result 0: zero_line violation -> region omitted
+	res0 := results[0].(map[string]any)
+	loc0 := res0["locations"].([]any)[0].(map[string]any)["physicalLocation"].(map[string]any)
+	if _, hasRegion := loc0["region"]; hasRegion {
+		t.Fatalf("zero_line violation emitted region: %v", loc0["region"])
+	}
+	// Result 1: valid_line violation -> region present
+	res1 := results[1].(map[string]any)
+	loc1 := res1["locations"].([]any)[0].(map[string]any)["physicalLocation"].(map[string]any)
+	if _, hasRegion := loc1["region"]; !hasRegion {
+		t.Fatalf("valid_line violation missing region")
+	}
+	// Result 2: error -> region omitted
+	res2 := results[2].(map[string]any)
+	loc2 := res2["locations"].([]any)[0].(map[string]any)["physicalLocation"].(map[string]any)
+	if _, hasRegion := loc2["region"]; hasRegion {
+		t.Fatalf("SARIF error emitted region for whole-file error: %v", loc2["region"])
+	}
+}
+
 func TestGitHubEscapesWorkflowCommands(t *testing.T) {
 	r := &rule.Base{RuleName: "Stub"}
 	var buf bytes.Buffer

@@ -26,10 +26,10 @@ func stay() {
 		t.Fatalf("ParseSource: %v", err)
 	}
 
-	if !f.Functions[0].HasGoto() {
+	if !HasGoto(f.Functions[0]) {
 		t.Fatalf("%s HasGoto() = false, want true", f.Functions[0].Name)
 	}
-	if f.Functions[1].HasGoto() {
+	if HasGoto(f.Functions[1]) {
 		t.Fatalf("%s HasGoto() = true, want false", f.Functions[1].Name)
 	}
 }
@@ -54,7 +54,7 @@ func scan(items []int) {
 		t.Fatalf("ParseSource: %v", err)
 	}
 
-	calls := f.Functions[0].LoopConditionCalls(map[string]bool{"len": true, "cap": true})
+	calls := LoopConditionCalls(f.Functions[0], map[string]bool{"len": true, "cap": true})
 	if len(calls) != 2 {
 		t.Fatalf("LoopConditionCalls count = %d, want 2", len(calls))
 	}
@@ -80,7 +80,7 @@ func exit() {
 		t.Fatalf("ParseSource: %v", err)
 	}
 
-	calls := f.Functions[0].Calls()
+	calls := Calls(f.Functions[0])
 	want := []Call{
 		{Name: "os.Exit", Line: 4},
 		{Name: "syscall.Exit", Line: 5},
@@ -116,17 +116,17 @@ func inspect(err error, xs []int) {
 	}
 	fn := f.Functions[0]
 
-	if got := fn.EmptyNilCheckBlockLines(); len(got) != 1 || got[0] != 4 {
+	if got := EmptyNilCheckBlockLines(fn); len(got) != 1 || got[0] != 4 {
 		t.Fatalf("EmptyNilCheckBlockLines() = %v, want [4]", got)
 	}
-	if got := fn.ElseBlockLines(); len(got) != 1 || got[0] != 5 {
+	if got := ElseBlockLines(fn); len(got) != 1 || got[0] != 5 {
 		t.Fatalf("ElseBlockLines() = %v, want [5]", got)
 	}
-	assigns := fn.IfAssignmentInitPositions()
+	assigns := IfAssignmentInitPositions(fn)
 	if len(assigns) != 1 || assigns[0].Line != 8 || assigns[0].Column != 5 {
 		t.Fatalf("IfAssignmentInitPositions() = %+v, want line 8 column 5", assigns)
 	}
-	dups := fn.DuplicateLiteralKeys()
+	dups := DuplicateLiteralKeys(fn)
 	if len(dups) != 1 || dups[0].Display != `"a"` || dups[0].FirstLine != 11 || dups[0].Line != 11 {
 		t.Fatalf("DuplicateLiteralKeys() = %+v, want duplicate string key on line 11", dups)
 	}
@@ -168,11 +168,11 @@ func use(x int) {
 		t.Fatalf("SelectedMemberNames() = %v, want used", selected)
 	}
 	fn := f.Functions[0]
-	locals := fn.LocalVariables()
+	locals := LocalVariables(fn)
 	if len(locals) != 2 || locals[0].Name != "local" || locals[0].Line != 10 || locals[1].Name != "unread" || locals[1].Line != 14 {
 		t.Fatalf("LocalVariables() = %+v, want local line 10 and unread line 14", locals)
 	}
-	reads := fn.IdentifierReads()
+	reads := IdentifierReads(fn)
 	if !reads["x"] || !reads["local"] || reads["unread"] {
 		t.Fatalf("IdentifierReads() = %v, want x/local read and unread not read", reads)
 	}
@@ -197,7 +197,7 @@ func TestDuplicateLiteralKeysUseConstantValue(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := f.Functions[0].DuplicateLiteralKeys(); len(got) < 2 {
+	if got := DuplicateLiteralKeys(f.Functions[0]); len(got) < 2 {
 		t.Fatalf("DuplicateLiteralKeys() = %#v, want 1/01 and a/`a`", got)
 	}
 }
@@ -211,7 +211,7 @@ func f(pointer *int) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := f.Functions[0].EmptyNilCheckBlockLines(); len(got) != 0 {
+	if got := EmptyNilCheckBlockLines(f.Functions[0]); len(got) != 0 {
 		t.Fatalf("EmptyNilCheckBlockLines() = %v, want none for == nil", got)
 	}
 }
@@ -232,14 +232,14 @@ func outer(x int) {
 		t.Fatalf("ParseSource: %v", err)
 	}
 	fn := f.Functions[0]
-	locals := fn.LocalVariables()
+	locals := LocalVariables(fn)
 	if len(locals) != 1 || locals[0].Name != "closure" {
 		t.Fatalf("LocalVariables() = %+v, want only closure from the outer function", locals)
 	}
-	if reads := fn.IdentifierReads(); reads["x"] {
+	if reads := IdentifierReads(fn); reads["x"] {
 		t.Fatalf("IdentifierReads() = %v, inner shadow should not count as an outer read", reads)
 	}
-	if fn.IdentifierRead(fn.Params[0].Ident) {
+	if IdentifierRead(fn, fn.Params[0].Ident) {
 		t.Fatal("IdentifierRead() counted the closure's shadowed x as a read of the outer parameter")
 	}
 }
@@ -258,10 +258,10 @@ func outer(x int) {
 	if err != nil {
 		t.Fatalf("ParseSource: %v", err)
 	}
-	if reads := f.Functions[0].IdentifierReads(); !reads["x"] {
+	if reads := IdentifierReads(f.Functions[0]); !reads["x"] {
 		t.Fatalf("IdentifierReads() = %v, captured outer variable x should count as read", reads)
 	}
-	if !f.Functions[0].IdentifierRead(f.Functions[0].Params[0].Ident) {
+	if !IdentifierRead(f.Functions[0], f.Functions[0].Params[0].Ident) {
 		t.Fatal("IdentifierRead() missed the captured outer parameter")
 	}
 }
@@ -274,10 +274,10 @@ func TestIdentifierReadFallsBackForUnresolvedIdentifiers(t *testing.T) {
 		&ast.AssignStmt{Lhs: []ast.Expr{write}, Tok: token.ASSIGN, Rhs: []ast.Expr{&ast.BasicLit{Kind: token.INT, Value: "1"}}},
 	}}}
 
-	if !fn.IdentifierRead(&ast.Ident{Name: "external"}) {
+	if !IdentifierRead(fn, &ast.Ident{Name: "external"}) {
 		t.Fatal("IdentifierRead() missed an unresolved read with the same name")
 	}
-	if fn.IdentifierRead(&ast.Ident{Name: "writeOnly"}) {
+	if IdentifierRead(fn, &ast.Ident{Name: "writeOnly"}) {
 		t.Fatal("IdentifierRead() counted an unresolved write target as a read")
 	}
 }
@@ -329,12 +329,12 @@ func outer(captured int) (named int) {
 		t.Fatalf("ParseSource: %v", err)
 	}
 	fn := f.Functions[0]
-	locals := fn.LocalVariables()
+	locals := LocalVariables(fn)
 	if len(locals) != 3 || locals[0].Name != "outerLocal" || locals[1].Name != "index" || locals[2].Name != "closure" {
 		t.Fatalf("LocalVariables() = %+v, want only outerLocal, index, and closure", locals)
 	}
 
-	reads := fn.IdentifierReads()
+	reads := IdentifierReads(fn)
 	for _, name := range []string{"captured", "outerLocal", "closure", "named"} {
 		if !reads[name] {
 			t.Errorf("IdentifierReads() = %v, want outer %q to be read", reads, name)
@@ -345,13 +345,13 @@ func outer(captured int) (named int) {
 			t.Errorf("IdentifierReads() = %v, inner/write-only %q should not be reported as an outer read", reads, name)
 		}
 	}
-	if !fn.IdentifierRead(fn.Params[0].Ident) {
+	if !IdentifierRead(fn, fn.Params[0].Ident) {
 		t.Fatal("IdentifierRead() missed the captured outer parameter")
 	}
-	if !fn.IdentifierRead(locals[0].Ident) {
+	if !IdentifierRead(fn, locals[0].Ident) {
 		t.Fatal("IdentifierRead() missed the outer local read")
 	}
-	if fn.IdentifierRead(nil) {
+	if IdentifierRead(fn, nil) {
 		t.Fatal("IdentifierRead(nil) = true, want false")
 	}
 }
@@ -388,17 +388,25 @@ func (c *counter) Touch() {
 		methods[method.Name] = i
 	}
 
-	if got := class.Methods[0].AccessorField(fields); got != "value" {
+	if got := AccessorField(class.Methods[0], fields); got != "value" {
 		t.Fatalf("Value AccessorField() = %q, want value", got)
 	}
-	if got := class.Methods[1].AccessorField(fields); got != "value" {
+	if got := AccessorField(class.Methods[1], fields); got != "value" {
 		t.Fatalf("SetValue AccessorField() = %q, want value", got)
 	}
-	usedFields, calledMethods := class.Methods[2].ReceiverUses(fields, methods)
-	if len(usedFields) != 2 || usedFields[0] != "value" || usedFields[1] != "other" {
-		t.Fatalf("ReceiverUses fields = %v, want [value other]", usedFields)
+	if got := AccessorField(class.Methods[2], fields); got != "" {
+		t.Fatalf("multi-statement AccessorField() = %q, want empty", got)
 	}
-	if len(calledMethods) != 1 || calledMethods[0] != "SetValue" {
-		t.Fatalf("ReceiverUses methods = %v, want [SetValue]", calledMethods)
+	if got := AccessorField(&Function{}, fields); got != "" {
+		t.Fatalf("nil body AccessorField() = %q, want empty", got)
+	}
+	if u, c := ReceiverUses(&Function{}, fields, methods); u != nil || c != nil {
+		t.Fatalf("nil body ReceiverUses = %v, %v, want nil, nil", u, c)
+	}
+	if u, c := ReceiverUses(&Function{RecvName: "_", Body: class.Methods[2].Body}, fields, methods); u != nil || c != nil {
+		t.Fatalf("blank receiver ReceiverUses = %v, %v, want nil, nil", u, c)
+	}
+	if u, c := ReceiverUses(&Function{RecvName: "", Body: class.Methods[2].Body}, fields, methods); u != nil || c != nil {
+		t.Fatalf("empty receiver ReceiverUses = %v, %v, want nil, nil", u, c)
 	}
 }

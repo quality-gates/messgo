@@ -18,7 +18,7 @@ func inspect(unused, used int, _ int) {
 	ignored := 1
 	if true {
 		duplicate := 1
-		_ = duplicate + ignored
+		_ = duplicate
 	}
 	duplicate := 2
 	closure := func() {

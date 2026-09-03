@@ -57,7 +57,7 @@ func (r *BooleanArgumentFlag) ApplyFunc(c *rule.Context, fn *model.Function) { r
 type ElseExpression struct{ *rule.Base }
 
 func (r *ElseExpression) check(c *rule.Context, fn *model.Function) {
-	for _, line := range fn.ElseBlockLines() {
+	for _, line := range model.ElseBlockLines(fn) {
 		c.ReportFuncAt(fn, line, line, fn.Name)
 	}
 }
@@ -71,7 +71,7 @@ func (r *ElseExpression) ApplyFunc(c *rule.Context, fn *model.Function) { r.chec
 type IfStatementAssignment struct{ *rule.Base }
 
 func (r *IfStatementAssignment) check(c *rule.Context, fn *model.Function) {
-	for _, pos := range fn.IfAssignmentInitPositions() {
+	for _, pos := range model.IfAssignmentInitPositions(fn) {
 		c.ReportFuncAt(fn, pos.Line, pos.Line, pos.Line, pos.Column)
 	}
 }
@@ -91,7 +91,7 @@ func (r *DuplicatedArrayKey) ApplyFile(c *rule.Context) {
 }
 
 func (r *DuplicatedArrayKey) check(c *rule.Context, fn *model.Function) {
-	for _, dup := range fn.DuplicateLiteralKeys() {
+	for _, dup := range model.DuplicateLiteralKeys(fn) {
 		c.ReportFuncAt(fn, dup.Line, dup.Line, dup.Display, dup.FirstLine)
 	}
 }

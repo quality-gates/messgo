@@ -648,3 +648,18 @@ func thresholdLoaderFile(paramCount int) *model.File {
 	fn.File = file
 	return file
 }
+
+func TestLoadCustomRulesetReferencingOpinionatedRule(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "ruleset.xml")
+	xml := `<?xml version="1.0"?>
+<ruleset name="test">
+  <rule ref="UncheckedTypeAssertion"/>
+</ruleset>`
+	if err := os.WriteFile(path, []byte(xml), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	set := loadOne(t, path)
+	if len(set.Rules) != 1 || set.Rules[0].Name() != "UncheckedTypeAssertion" {
+		t.Fatalf("expected 1 rule UncheckedTypeAssertion, got %v", set.Rules)
+	}
+}

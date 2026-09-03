@@ -6,6 +6,17 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 
 ## [Unreleased]
 
+### Fixed
+- Fixed `UncheckedTypeAssertion` false negatives: require 2 LHS assignments for comma-ok forms so single assignments (`v := x.(T)`) are flagged.
+- Fixed `NakedReturn` false positives: ignore bare returns within nested closures (`func() { return }`).
+- Fixed `ShortMethodName` false positives on free functions and eliminated malformed `.Do()` diagnostic message.
+- Fixed generic embedded structs with multiple type arguments (`*ast.IndexListExpr`) to prevent false positives in `UnusedPrivateField` and undercounting in `StructEmbeddingDepth`.
+- Fixed custom ruleset XML resolution: added `opinionated` to `leafBuiltinRulesets` so rules like `<rule ref="UncheckedTypeAssertion" />` can be referenced by name.
+- Fixed `NestingDepth` metric on labeled loops (`outer: for { ... }`) and block statements.
+- Fixed `GlobalVariable` false positives: distinguish package-level variables from shadowed local variables and parameters.
+- Fixed `IdenticalBranches` on switch cases: deduplicate multiple identical cases and ignore idiomatic empty cases.
+- Fixed `DuplicatedArrayKey` to recognize negative literal keys (`*ast.UnaryExpr`).
+
 ## [0.3.0] - 2026-09-02
 
 ### Added

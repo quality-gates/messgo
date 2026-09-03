@@ -204,6 +204,9 @@ func (r *ShortMethodName) Configure(props rule.Properties) error {
 }
 
 func (r *ShortMethodName) check(c *rule.Context, fn *model.Function) {
+	if !fn.IsMethod() {
+		return
+	}
 	if len(fn.Name) >= r.minimum {
 		return
 	}

@@ -73,20 +73,68 @@ func annotatePackages(parsed []*model.File) {
 		byPkg[packageKeyOf(f)] = append(byPkg[packageKeyOf(f)], f)
 	}
 	for _, group := range byPkg {
-		asts := make([]*ast.File, len(group))
-		for i, f := range group {
-			asts[i] = f.Syntax
-		}
-		mutated := util.MutatedGlobalNames(asts)
-		var pkgClasses []*model.Class
-		for _, f := range group {
-			pkgClasses = append(pkgClasses, f.Classes...)
-		}
-		for _, f := range group {
-			f.MutatedGlobals = mutated
-			f.PackageClasses = pkgClasses
+		annotatePackageGroup(group)
+	}
+}
+
+func annotatePackageGroup(group []*model.File) {
+	asts := make([]*ast.File, len(group))
+	for i, f := range group {
+		asts[i] = f.Syntax
+	}
+	mutated := util.MutatedGlobalNames(asts)
+	var pkgClasses []*model.Class
+	classByName := map[string]*model.Class{}
+	for _, f := range group {
+		pkgClasses = append(pkgClasses, f.Classes...)
+		for _, c := range f.Classes {
+			classByName[c.Name] = c
 		}
 	}
+	attachPackageMethods(group, classByName)
+	pkgMembers := collectPackageMemberNames(group)
+	for _, f := range group {
+		f.MutatedGlobals = mutated
+		f.PackageClasses = pkgClasses
+		f.PackageMembers = pkgMembers
+	}
+}
+
+func attachPackageMethods(group []*model.File, classByName map[string]*model.Class) {
+	for _, f := range group {
+		for _, fn := range f.AllFuncs {
+			if !fn.IsMethod() {
+				continue
+			}
+			c := classByName[fn.Receiver]
+			if c == nil {
+				continue
+			}
+			fn.Class = c
+			if !hasMethod(c.Methods, fn) {
+				c.Methods = append(c.Methods, fn)
+			}
+		}
+	}
+}
+
+func hasMethod(methods []*model.Function, fn *model.Function) bool {
+	for _, m := range methods {
+		if m == fn {
+			return true
+		}
+	}
+	return false
+}
+
+func collectPackageMemberNames(group []*model.File) map[string]bool {
+	members := map[string]bool{}
+	for _, f := range group {
+		for name := range f.SelectedMemberNames() {
+			members[name] = true
+		}
+	}
+	return members
 }
 
 func packageKeyOf(f *model.File) packageKey {
@@ -100,13 +148,13 @@ func packageKeyOf(f *model.File) packageKey {
 	return packageKey{dir: dir, name: f.Package}
 }
 
-func walkDirFunc(opts Options, add func(string)) fs.WalkDirFunc {
+func walkDirFunc(root string, opts Options, add func(string)) fs.WalkDirFunc {
 	return func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}
 		if d.IsDir() {
-			if shouldSkipDir(d.Name()) {
+			if path != root && shouldSkipDir(d.Name()) {
 				return filepath.SkipDir
 			}
 			return nil
@@ -143,7 +191,7 @@ func discover(opts Options) ([]string, error) {
 			add(root)
 			continue
 		}
-		err = filepath.WalkDir(root, walkDirFunc(opts, add))
+		err = filepath.WalkDir(root, walkDirFunc(root, opts, add))
 		if err != nil {
 			return nil, err
 		}
@@ -170,8 +218,14 @@ func shouldIncludeFile(path string, opts Options) bool {
 }
 
 func shouldSkipDir(name string) bool {
+	if name == "." || name == ".." {
+		return false
+	}
+	if strings.HasPrefix(name, ".") || strings.HasPrefix(name, "_") {
+		return true
+	}
 	switch name {
-	case "vendor", "node_modules", ".git":
+	case "vendor", "node_modules":
 		return true
 	}
 	return false

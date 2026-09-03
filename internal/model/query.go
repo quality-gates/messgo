@@ -43,7 +43,7 @@ type LocalVariable struct {
 }
 
 // HasGoto reports whether the function body contains a goto statement.
-func (f *Function) HasGoto() bool {
+func HasGoto(f *Function) bool {
 	if f.Body == nil {
 		return false
 	}
@@ -59,8 +59,8 @@ func (f *Function) HasGoto() bool {
 }
 
 // Calls returns every call expression in this function body.
-func (f *Function) Calls() []Call {
-	if f.Body == nil {
+func Calls(f *Function) []Call {
+	if f == nil || f.Body == nil {
 		return nil
 	}
 	var out []Call
@@ -75,8 +75,8 @@ func (f *Function) Calls() []Call {
 
 // LoopConditionCalls returns calls to selected names found in for-loop
 // conditions, reported at the loop's line.
-func (f *Function) LoopConditionCalls(names map[string]bool) []Call {
-	if f.Body == nil {
+func LoopConditionCalls(f *Function, names map[string]bool) []Call {
+	if f == nil || f.Body == nil {
 		return nil
 	}
 	var out []Call
@@ -103,8 +103,8 @@ func (f *Function) LoopConditionCalls(names map[string]bool) []Call {
 
 // EmptyNilCheckBlockLines returns lines for empty if-blocks whose condition
 // compares any operand with nil using !=.
-func (f *Function) EmptyNilCheckBlockLines() []int {
-	if f.Body == nil {
+func EmptyNilCheckBlockLines(f *Function) []int {
+	if f == nil || f.Body == nil {
 		return nil
 	}
 	var lines []int
@@ -123,8 +123,8 @@ func (f *Function) EmptyNilCheckBlockLines() []int {
 
 // ElseBlockLines returns the source lines of else blocks, excluding else-if
 // chains.
-func (f *Function) ElseBlockLines() []int {
-	if f.Body == nil {
+func ElseBlockLines(f *Function) []int {
+	if f == nil || f.Body == nil {
 		return nil
 	}
 	var lines []int
@@ -143,8 +143,8 @@ func (f *Function) ElseBlockLines() []int {
 
 // IfAssignmentInitPositions returns positions for plain assignment initializers
 // in if statements. Short declarations are intentionally excluded.
-func (f *Function) IfAssignmentInitPositions() []SourcePosition {
-	if f.Body == nil {
+func IfAssignmentInitPositions(f *Function) []SourcePosition {
+	if f == nil || f.Body == nil {
 		return nil
 	}
 	var positions []SourcePosition
@@ -164,8 +164,8 @@ func (f *Function) IfAssignmentInitPositions() []SourcePosition {
 }
 
 // DuplicateLiteralKeys returns duplicate constant keys in composite literals.
-func (f *Function) DuplicateLiteralKeys() []DuplicateLiteralKey {
-	if f.Body == nil {
+func DuplicateLiteralKeys(f *Function) []DuplicateLiteralKey {
+	if f == nil || f.Body == nil {
 		return nil
 	}
 	return duplicateLiteralKeys(f.Body, f.File.Fset)
@@ -259,8 +259,8 @@ func (f *File) MutatedPackageGlobals() map[string]bool {
 }
 
 // LocalVariables returns local variable declarations in this function.
-func (f *Function) LocalVariables() []LocalVariable {
-	if f.Body == nil {
+func LocalVariables(f *Function) []LocalVariable {
+	if f == nil || f.Body == nil {
 		return nil
 	}
 	locals := util.LocalVariables(f.Body, f.File.Fset)
@@ -273,14 +273,17 @@ func (f *Function) LocalVariables() []LocalVariable {
 
 // IdentifierReads returns names read from this function body. Identifiers used
 // only as assignment or declaration write targets are excluded.
-func (f *Function) IdentifierReads() map[string]bool {
+func IdentifierReads(f *Function) map[string]bool {
+	if f == nil {
+		return nil
+	}
 	return maps.Clone(functionIdentifierReadFacts(f).names)
 }
 
 // IdentifierRead reports whether target's binding is read in this function.
 // Object identity distinguishes a shadowing local from a captured parameter or
 // local with the same name.
-func (f *Function) IdentifierRead(target *ast.Ident) bool {
+func IdentifierRead(f *Function, target *ast.Ident) bool {
 	if f.Body == nil || target == nil {
 		return false
 	}
@@ -482,7 +485,7 @@ func collectRangeWrites(s *ast.RangeStmt, writeIdents map[*ast.Ident]bool) {
 }
 
 // AccessorField returns the field wrapped by a trivial getter or setter.
-func (f *Function) AccessorField(fields map[string]bool) string {
+func AccessorField(f *Function, fields map[string]bool) string {
 	if f.Body == nil || len(f.Body.List) != 1 {
 		return ""
 	}
@@ -514,7 +517,7 @@ func assignAccessorField(stmt *ast.AssignStmt, recvName string, fields map[strin
 
 // ReceiverUses returns fields and sibling methods selected through the
 // receiver variable in this function body.
-func (f *Function) ReceiverUses(fields map[string]bool, methods map[string]int) (usedFields, calledMethods []string) {
+func ReceiverUses(f *Function, fields map[string]bool, methods map[string]int) (usedFields, calledMethods []string) {
 	if f.Body == nil || f.RecvName == "" || f.RecvName == "_" {
 		return nil, nil
 	}

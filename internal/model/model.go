@@ -49,6 +49,11 @@ type File struct {
 	// analysis. When nil (file analyzed in isolation), rules fall back to
 	// this file's own Classes.
 	PackageClasses []*Class
+	// PackageMembers holds all selected member names across every file in
+	// this file's package. It is populated by the runner after parsing,
+	// enabling cross-file unused member analysis. When nil, rules fall back
+	// to this file's own selected members.
+	PackageMembers map[string]bool
 
 	analysis fileAnalysisCache
 }
@@ -67,9 +72,22 @@ func (f *File) SelectedMemberNames() map[string]bool {
 	return maps.Clone(f.analysis.selectedMembers)
 }
 
+// PackageMemberNames returns a snapshot of field or method names selected
+// anywhere across this file's package (or this file if analyzed in isolation).
+func (f *File) PackageMemberNames() map[string]bool {
+	if f.PackageMembers != nil {
+		return maps.Clone(f.PackageMembers)
+	}
+	return f.SelectedMemberNames()
+}
+
 // MemberSelected reports whether name is selected or used as a keyed struct
-// literal field anywhere in this file. The file-wide AST scan runs once.
+// literal field anywhere in this file (or in this file's package if PackageMembers
+// is populated). The file-wide AST scan runs once.
 func (f *File) MemberSelected(name string) bool {
+	if f.PackageMembers != nil {
+		return f.PackageMembers[name]
+	}
 	f.collectSelectedMemberNames()
 	return f.analysis.selectedMembers[name]
 }

@@ -31,22 +31,30 @@ func ParseSource(path string, src []byte) (*File, error) {
 		Src:     src,
 		Package: syntax.Name.Name,
 	}
-	f.build()
+	b := &fileBuilder{
+		f:       f,
+		classes: map[string]*Class{},
+		ifaces:  map[string]*Interface{},
+	}
+	b.build()
 	return f, nil
 }
 
-func (f *File) line(p token.Pos) int { return f.Fset.Position(p).Line }
-
-func (f *File) build() {
-	classes := map[string]*Class{}
-	ifaces := map[string]*Interface{}
-
-	f.collectTypes(classes, ifaces)
-	f.collectFuncs(classes)
+type fileBuilder struct {
+	f       *File
+	classes map[string]*Class
+	ifaces  map[string]*Interface
 }
 
-func (f *File) collectTypes(classes map[string]*Class, ifaces map[string]*Interface) {
-	for _, decl := range f.Syntax.Decls {
+func (b *fileBuilder) line(p token.Pos) int { return b.f.Fset.Position(p).Line }
+
+func (b *fileBuilder) build() {
+	b.collectTypes()
+	b.collectFuncs()
+}
+
+func (b *fileBuilder) collectTypes() {
+	for _, decl := range b.f.Syntax.Decls {
 		gen, ok := decl.(*ast.GenDecl)
 		if !ok || gen.Tok != token.TYPE {
 			continue
@@ -56,65 +64,65 @@ func (f *File) collectTypes(classes map[string]*Class, ifaces map[string]*Interf
 			if !ok {
 				continue
 			}
-			f.collectTypeSpec(ts, gen.Doc, classes, ifaces)
+			b.collectTypeSpec(ts, gen.Doc)
 		}
 	}
 }
 
-func (f *File) collectTypeSpec(ts *ast.TypeSpec, docGroup *ast.CommentGroup, classes map[string]*Class, ifaces map[string]*Interface) {
+func (b *fileBuilder) collectTypeSpec(ts *ast.TypeSpec, docGroup *ast.CommentGroup) {
 	doc := docText(ts.Doc, docGroup)
 	switch t := ts.Type.(type) {
 	case *ast.StructType:
 		c := &Class{
 			Name:       ts.Name.Name,
-			Line:       f.line(ts.Pos()),
-			EndLine:    f.line(ts.End()),
+			Line:       b.line(ts.Pos()),
+			EndLine:    b.line(ts.End()),
 			Exported:   ts.Name.IsExported(),
-			File:       f,
+			File:       b.f,
 			Spec:       ts,
 			Struct:     t,
 			DocComment: doc,
 		}
-		f.collectFields(c, t)
-		classes[c.Name] = c
-		f.Classes = append(f.Classes, c)
+		b.collectFields(c, t)
+		b.classes[c.Name] = c
+		b.f.Classes = append(b.f.Classes, c)
 	case *ast.InterfaceType:
 		i := &Interface{
 			Name:       ts.Name.Name,
-			Line:       f.line(ts.Pos()),
-			EndLine:    f.line(ts.End()),
+			Line:       b.line(ts.Pos()),
+			EndLine:    b.line(ts.End()),
 			Exported:   ts.Name.IsExported(),
-			File:       f,
+			File:       b.f,
 			Spec:       ts,
 			Iface:      t,
 			DocComment: doc,
 		}
-		f.collectInterfaceMethods(i, t)
-		ifaces[i.Name] = i
-		f.Interfaces = append(f.Interfaces, i)
+		b.collectInterfaceMethods(i, t)
+		b.ifaces[i.Name] = i
+		b.f.Interfaces = append(b.f.Interfaces, i)
 	}
 }
 
-func (f *File) collectFuncs(classes map[string]*Class) {
-	for _, decl := range f.Syntax.Decls {
+func (b *fileBuilder) collectFuncs() {
+	for _, decl := range b.f.Syntax.Decls {
 		fd, ok := decl.(*ast.FuncDecl)
 		if !ok {
 			continue
 		}
-		fn := f.buildFunc(fd)
-		f.AllFuncs = append(f.AllFuncs, fn)
+		fn := b.buildFunc(fd)
+		b.f.AllFuncs = append(b.f.AllFuncs, fn)
 		if !fn.IsMethod() {
-			f.Functions = append(f.Functions, fn)
+			b.f.Functions = append(b.f.Functions, fn)
 			continue
 		}
-		if c := classes[fn.Receiver]; c != nil {
+		if c := b.classes[fn.Receiver]; c != nil {
 			c.Methods = append(c.Methods, fn)
 			fn.Class = c
 		}
 	}
 }
 
-func (f *File) collectFields(c *Class, st *ast.StructType) {
+func (b *fileBuilder) collectFields(c *Class, st *ast.StructType) {
 	if st.Fields == nil {
 		return
 	}
@@ -127,7 +135,7 @@ func (f *File) collectFields(c *Class, st *ast.StructType) {
 			c.Fields = append(c.Fields, &Field{
 				Name:     name,
 				Type:     typeStr,
-				Line:     f.line(fld.Pos()),
+				Line:     b.line(fld.Pos()),
 				Exported: ast.IsExported(name),
 			})
 			continue
@@ -136,7 +144,7 @@ func (f *File) collectFields(c *Class, st *ast.StructType) {
 			c.Fields = append(c.Fields, &Field{
 				Name:     n.Name,
 				Type:     typeStr,
-				Line:     f.line(n.Pos()),
+				Line:     b.line(n.Pos()),
 				Exported: n.IsExported(),
 				Ident:    n,
 			})
@@ -144,7 +152,7 @@ func (f *File) collectFields(c *Class, st *ast.StructType) {
 	}
 }
 
-func (f *File) collectInterfaceMethods(i *Interface, it *ast.InterfaceType) {
+func (b *fileBuilder) collectInterfaceMethods(i *Interface, it *ast.InterfaceType) {
 	if it.Methods == nil {
 		return
 	}
@@ -158,34 +166,34 @@ func (f *File) collectInterfaceMethods(i *Interface, it *ast.InterfaceType) {
 			fn := &Function{
 				Name:     n.Name,
 				Receiver: i.Name,
-				Line:     f.line(n.Pos()),
-				EndLine:  f.line(m.End()),
+				Line:     b.line(n.Pos()),
+				EndLine:  b.line(m.End()),
 				Exported: n.IsExported(),
-				File:     f,
+				File:     b.f,
 			}
 			if ft != nil {
-				fn.Params = f.params(ft.Params)
-				fn.Results = f.params(ft.Results)
+				fn.Params = b.params(ft.Params)
+				fn.Results = b.params(ft.Results)
 			}
 			i.Methods = append(i.Methods, fn)
 		}
 	}
 }
 
-func (f *File) buildFunc(fd *ast.FuncDecl) *Function {
+func (b *fileBuilder) buildFunc(fd *ast.FuncDecl) *Function {
 	fn := &Function{
 		Name:       fd.Name.Name,
-		Line:       f.line(fd.Pos()),
-		EndLine:    f.line(fd.End()),
+		Line:       b.line(fd.Pos()),
+		EndLine:    b.line(fd.End()),
 		Exported:   fd.Name.IsExported(),
 		Decl:       fd,
 		Body:       fd.Body,
-		File:       f,
+		File:       b.f,
 		DocComment: docText(fd.Doc),
 	}
 	if fd.Type != nil {
-		fn.Params = f.params(fd.Type.Params)
-		fn.Results = f.params(fd.Type.Results)
+		fn.Params = b.params(fd.Type.Params)
+		fn.Results = b.params(fd.Type.Results)
 	}
 	if fd.Recv != nil && len(fd.Recv.List) > 0 {
 		r := fd.Recv.List[0]
@@ -197,7 +205,7 @@ func (f *File) buildFunc(fd *ast.FuncDecl) *Function {
 	return fn
 }
 
-func (f *File) params(fl *ast.FieldList) []*Parameter {
+func (b *fileBuilder) params(fl *ast.FieldList) []*Parameter {
 	if fl == nil {
 		return nil
 	}
@@ -205,14 +213,14 @@ func (f *File) params(fl *ast.FieldList) []*Parameter {
 	for _, fld := range fl.List {
 		typeStr := exprString(fld.Type)
 		if len(fld.Names) == 0 {
-			out = append(out, &Parameter{Type: typeStr, Line: f.line(fld.Pos()), Field: fld})
+			out = append(out, &Parameter{Type: typeStr, Line: b.line(fld.Pos()), Field: fld})
 			continue
 		}
 		for _, n := range fld.Names {
 			out = append(out, &Parameter{
 				Name:  n.Name,
 				Type:  typeStr,
-				Line:  f.line(n.Pos()),
+				Line:  b.line(n.Pos()),
 				Field: fld,
 				Ident: n,
 			})

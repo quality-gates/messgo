@@ -74,7 +74,7 @@ func findRangeDeclarations(node *ast.RangeStmt, forms *declarationForms) {
 }
 
 func TestIdentifierQueryHelpersRejectUnboundAndWrongScopeObjects(t *testing.T) {
-	if (&Function{}).IdentifierRead(&ast.Ident{Name: "missing"}) {
+	if IdentifierRead(&Function{}, &ast.Ident{Name: "missing"}) {
 		t.Fatal("IdentifierRead on a function without a body = true, want false")
 	}
 	if isDeclaredBy(nil, nil) {

@@ -6,6 +6,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 
 ## [Unreleased]
 
+## [0.3.1] - 2026-09-03
+
 ### Fixed
 - Fixed multi-file package analysis: aggregate package member selections across all files so `UnusedPrivateField` and `UnusedPrivateMethod` do not falsely flag members accessed in sibling files within the same package (#48).
 - Fixed cross-file method attachment: attach methods declared in sibling files to their target struct so class-level rules (`TooManyMethods`, `CouplingBetweenObjects`, `ExcessiveClassComplexity`, `LackOfCohesionOfMethods`) see the complete class definition (#49).

@@ -6,6 +6,11 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-09-07
+
+### Added
+- Added production and development Dockerfiles (`Dockerfile`, `dev.Dockerfile`) for running messgo and running tests in containerized environments (#54).
+
 ## [0.3.1] - 2026-09-03
 
 ### Fixed

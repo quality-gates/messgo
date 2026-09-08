@@ -56,6 +56,8 @@ func TestShouldIncludeFileAppliesAllFileFilters(t *testing.T) {
 		{name: "dot-prefix exclude against cleaned path", path: "proj/gen/g.go", opts: Options{Suffixes: []string{".go"}, Exclude: []string{"./proj/gen"}}, want: false},
 		{name: "cleaned exclude against dotted path", path: "./proj/gen/g.go", opts: Options{Suffixes: []string{".go"}, Exclude: []string{"proj/gen"}}, want: false},
 		{name: "dot-prefix exclude misses sibling", path: "proj/ok/o.go", opts: Options{Suffixes: []string{".go"}, Exclude: []string{"./proj/gen"}}, want: true},
+		{name: "empty exclude does not match", path: "source.go", opts: Options{Suffixes: []string{".go"}, Exclude: []string{""}}, want: true},
+		{name: "unclean path still matches cleaned exclude", path: "proj/./gen/g.go", opts: Options{Suffixes: []string{".go"}, Exclude: []string{"proj/gen"}}, want: false},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

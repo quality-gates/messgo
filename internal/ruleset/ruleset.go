@@ -98,8 +98,9 @@ type Loader struct {
 // into RuleSets.
 func (l *Loader) Load(spec string) ([]*rule.RuleSet, error) {
 	session := &loadSession{
-		loader:  l,
-		sources: make(map[string]xmlRuleSet),
+		loader:     l,
+		sources:    make(map[string]xmlRuleSet),
+		candidates: make(map[*rule.RuleSet][]ruleCandidate),
 	}
 	var sets []*rule.RuleSet
 	for _, part := range strings.Split(spec, ",") {
@@ -117,14 +118,42 @@ func (l *Loader) Load(spec string) ([]*rule.RuleSet, error) {
 		}
 		sets = append(sets, set)
 	}
-	dedupeRules(sets)
+	if err := dedupeRules(sets, session.candidates); err != nil {
+		return nil, err
+	}
 	return sets, nil
 }
 
 type loadSession struct {
-	loader        *Loader
-	sources       map[string]xmlRuleSet
+	loader     *Loader
+	sources    map[string]xmlRuleSet
+	candidates map[*rule.RuleSet][]ruleCandidate
+
 	builtinOwners map[string]string
+}
+
+type candidateKind uint8
+
+const (
+	candidateInherited candidateKind = iota
+	candidateDefinition
+	candidateOverride
+)
+
+type ruleCandidate struct {
+	rule  rule.Rule
+	class string
+	kind  candidateKind
+}
+
+type ruleSlot struct {
+	setIndex  int
+	ruleIndex int
+}
+
+type selectedCandidate struct {
+	candidate ruleCandidate
+	slot      ruleSlot
 }
 
 func builtinRuleOwner(session *loadSession, name string) string {
@@ -186,25 +215,141 @@ func toSet(names []string) map[string]bool {
 	return set
 }
 
-// dedupeRules drops rules whose name has already appeared in an earlier set,
-// so overlapping ruleset specs (e.g. "go,codesize", where "go" already
-// imports "codesize") do not run the same rule twice and emit duplicate
-// violations. The first occurrence wins, preserving any tuning the earlier
-// ruleset applied.
-func dedupeRules(sets []*rule.RuleSet) {
-	seen := map[string]bool{}
-	for _, set := range sets {
-		kept := set.Rules[:0]
-		for _, r := range set.Rules {
-			name := rule.BaseOf(r).RuleName
-			if seen[name] {
-				continue
-			}
-			seen[name] = true
-			kept = append(kept, r)
-		}
-		set.Rules = kept
+// dedupeRules merges same-named candidates across the loaded sets. Identical
+// inherited rules are collapsed, while an explicit single-rule override wins
+// over an inherited rule regardless of declaration order. Distinct direct
+// definitions are rejected instead of silently selecting one.
+func dedupeRules(sets []*rule.RuleSet, candidatesBySet map[*rule.RuleSet][]ruleCandidate) error {
+	selected, err := selectCandidates(sets, candidatesBySet)
+	if err != nil {
+		return err
 	}
+	winners := selectedWinners(selected)
+	for setIndex, set := range sets {
+		set.Rules = keepWinners(set, setIndex, winners)
+	}
+	return nil
+}
+
+func selectCandidates(sets []*rule.RuleSet, candidatesBySet map[*rule.RuleSet][]ruleCandidate) (map[string]selectedCandidate, error) {
+	selected := map[string]selectedCandidate{}
+	for setIndex, set := range sets {
+		candidates := candidatesFor(set, candidatesBySet)
+		for ruleIndex, incoming := range candidates {
+			if err := selectCandidate(selected, incoming, ruleSlot{setIndex: setIndex, ruleIndex: ruleIndex}); err != nil {
+				return nil, err
+			}
+		}
+	}
+	return selected, nil
+}
+
+func candidatesFor(set *rule.RuleSet, candidatesBySet map[*rule.RuleSet][]ruleCandidate) []ruleCandidate {
+	candidates := candidatesBySet[set]
+	if len(candidates) == len(set.Rules) {
+		return candidates
+	}
+	return fallbackCandidates(set.Rules)
+}
+
+func selectCandidate(selected map[string]selectedCandidate, incoming ruleCandidate, slot ruleSlot) error {
+	name := incoming.rule.Name()
+	current, exists := selected[name]
+	if !exists {
+		selected[name] = selectedCandidate{candidate: incoming, slot: slot}
+		return nil
+	}
+
+	winner, replace, err := mergeCandidates(current.candidate, incoming)
+	if err != nil {
+		return err
+	}
+	if replace {
+		current.candidate = winner
+		selected[name] = current
+	}
+	return nil
+}
+
+func selectedWinners(selected map[string]selectedCandidate) map[ruleSlot]rule.Rule {
+	winners := map[ruleSlot]rule.Rule{}
+	for _, current := range selected {
+		winners[current.slot] = current.candidate.rule
+	}
+	return winners
+}
+
+func keepWinners(set *rule.RuleSet, setIndex int, winners map[ruleSlot]rule.Rule) []rule.Rule {
+	kept := set.Rules[:0]
+	for ruleIndex := range set.Rules {
+		if winner, ok := winners[ruleSlot{setIndex: setIndex, ruleIndex: ruleIndex}]; ok {
+			kept = append(kept, winner)
+		}
+	}
+	return kept
+}
+
+func fallbackCandidates(rules []rule.Rule) []ruleCandidate {
+	candidates := make([]ruleCandidate, len(rules))
+	for index, r := range rules {
+		candidates[index] = ruleCandidate{rule: r}
+	}
+	return candidates
+}
+
+func mergeCandidates(existing, incoming ruleCandidate) (ruleCandidate, bool, error) {
+	if sameRuleDefinition(existing, incoming) {
+		return existing, false, nil
+	}
+	if existing.kind == candidateOverride {
+		if incoming.kind == candidateOverride {
+			return ruleCandidate{}, false, fmt.Errorf("conflicting overrides for rule %q", existing.rule.Name())
+		}
+		return existing, false, nil
+	}
+	if incoming.kind == candidateOverride {
+		return incoming, true, nil
+	}
+	if existing.kind == candidateDefinition && incoming.kind == candidateDefinition {
+		return ruleCandidate{}, false, fmt.Errorf("conflicting definitions for rule %q", existing.rule.Name())
+	}
+	return existing, false, nil
+}
+
+func sameRuleDefinition(left, right ruleCandidate) bool {
+	if left.class != right.class {
+		return false
+	}
+	leftBase := rule.BaseOf(left.rule)
+	rightBase := rule.BaseOf(right.rule)
+	if leftBase == nil {
+		return rightBase == nil
+	}
+	if rightBase == nil {
+		return false
+	}
+	return sameRuleMetadata(leftBase, rightBase) && sameProperties(leftBase.RuleProps, rightBase.RuleProps)
+}
+
+func sameRuleMetadata(left, right *rule.Base) bool {
+	return left.RuleName == right.RuleName &&
+		left.RuleMessage == right.RuleMessage &&
+		left.RulePrio == right.RulePrio &&
+		left.RuleURL == right.RuleURL &&
+		left.RuleDesc == right.RuleDesc &&
+		left.RuleSince == right.RuleSince
+}
+
+func sameProperties(left, right rule.Properties) bool {
+	if len(left) != len(right) {
+		return false
+	}
+	for name, value := range left {
+		if right[name] != value {
+			return false
+		}
+	}
+	return true
 }
 
 func readRuleset(part, fromDir string) ([]byte, string, error) {
@@ -238,6 +383,9 @@ func (s *loadSession) parse(data []byte, loc string) (*rule.RuleSet, error) {
 		if err := addRule(expander, xrs.Name, xr, rulesetDir(key)); err != nil {
 			return nil, err
 		}
+	}
+	if s.candidates != nil {
+		s.candidates[set] = expander.candidates
 	}
 	return set, nil
 }

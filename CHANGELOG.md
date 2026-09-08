@@ -6,6 +6,9 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 
 ## [Unreleased]
 
+### Fixed
+- Fixed custom ruleset single-rule overrides being dropped when the same rule was already imported by a whole-ruleset reference (#68).
+
 ## [0.4.1] - 2026-09-08
 
 ### Fixed

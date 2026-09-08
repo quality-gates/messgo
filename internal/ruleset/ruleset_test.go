@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -307,6 +308,184 @@ func TestNestedGoRefImportsRules(t *testing.T) {
 	}
 }
 
+func TestCustomRulesetSingleRuleOverrideAfterWholeRulesetRef(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "team.xml")
+	xml := `<ruleset name="team policy">
+  <rule ref="go">
+    <exclude name="DevelopmentCodeFragment" />
+  </rule>
+  <rule ref="LongVariable">
+    <priority>2</priority>
+    <properties>
+      <property name="maximum" value="50" />
+    </properties>
+  </rule>
+</ruleset>
+`
+	if err := os.WriteFile(path, []byte(xml), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	set := loadOne(t, path)
+	lv := ruleByName(set, "LongVariable")
+	if lv == nil {
+		t.Fatal("custom ruleset should include LongVariable")
+	}
+	if got := rule.BaseOf(lv).RulePrio; got != 2 {
+		t.Errorf("LongVariable priority = %d, want 2", got)
+	}
+	if got := rule.BaseOf(lv).RuleProps.Int("maximum", 0); got != 50 {
+		t.Errorf("LongVariable maximum = %d, want 50", got)
+	}
+}
+
+func TestCustomRulesetSingleRuleOverrideOrderIndependent(t *testing.T) {
+	var want *rule.RuleSet
+	for _, overrideFirst := range []bool{false, true} {
+		t.Run(fmt.Sprintf("overrideFirst=%t", overrideFirst), func(t *testing.T) {
+			set := loadOne(t, writeCustomRuleset(t, overrideFirst))
+			if ruleByName(set, "DevelopmentCodeFragment") != nil {
+				t.Fatal("whole-ruleset exclusion was ignored")
+			}
+			if want == nil {
+				want = set
+				return
+			}
+			assertEquivalentRules(t, want, set)
+		})
+	}
+}
+
+func writeCustomRuleset(t *testing.T, overrideFirst bool) string {
+	t.Helper()
+	const whole = `  <rule ref="go">
+    <exclude name="DevelopmentCodeFragment" />
+  </rule>
+`
+	const override = `  <rule ref="LongVariable">
+    <priority>2</priority>
+    <properties>
+      <property name="maximum" value="50" />
+    </properties>
+  </rule>
+`
+	ordered := whole + override
+	if overrideFirst {
+		ordered = override + whole
+	}
+	path := filepath.Join(t.TempDir(), "team.xml")
+	xml := fmt.Sprintf(`<ruleset name="team policy">
+%s</ruleset>
+`, ordered)
+	if err := os.WriteFile(path, []byte(xml), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	return path
+}
+
+func assertEquivalentRules(t *testing.T, want, got *rule.RuleSet) {
+	t.Helper()
+	if len(want.Rules) != len(got.Rules) {
+		t.Fatalf("rule count = %d, want %d", len(got.Rules), len(want.Rules))
+	}
+	for _, wantRule := range want.Rules {
+		gotRule := ruleByName(got, wantRule.Name())
+		if gotRule == nil {
+			t.Fatalf("missing rule %q", wantRule.Name())
+		}
+		wantBase := rule.BaseOf(wantRule)
+		gotBase := rule.BaseOf(gotRule)
+		if wantBase.RulePrio != gotBase.RulePrio || !reflect.DeepEqual(wantBase.RuleProps, gotBase.RuleProps) {
+			t.Fatalf("rule %q differs: got priority %d properties %v, want priority %d properties %v",
+				wantRule.Name(), gotBase.RulePrio, gotBase.RuleProps, wantBase.RulePrio, wantBase.RuleProps)
+		}
+	}
+}
+
+func TestConflictingDirectRuleDefinitionsError(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "team.xml")
+	xml := `<ruleset name="team">
+  <rule name="CyclomaticComplexity" class="PHPMD\Rule\CyclomaticComplexity">
+    <priority>2</priority>
+  </rule>
+  <rule name="CyclomaticComplexity" class="PHPMD\Rule\CyclomaticComplexity">
+    <priority>3</priority>
+  </rule>
+</ruleset>
+`
+	if err := os.WriteFile(path, []byte(xml), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := (&Loader{}).Load(path); err == nil {
+		t.Fatal("expected conflicting direct rule definitions to fail")
+	} else if !strings.Contains(err.Error(), `conflicting definitions for rule "CyclomaticComplexity"`) {
+		t.Fatalf("error = %q, want a clear conflicting-definition error", err)
+	}
+}
+
+func TestConflictingDirectRuleDefinitionsWithDifferentClassesError(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "team.xml")
+	xml := `<ruleset name="team">
+  <rule name="Collision" class="PHPMD\Rule\CyclomaticComplexity"/>
+  <rule name="Collision" class="PHPMD\Rule\Design\NpathComplexity"/>
+</ruleset>
+`
+	if err := os.WriteFile(path, []byte(xml), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := (&Loader{}).Load(path); err == nil {
+		t.Fatal("expected direct definitions with different classes to fail")
+	} else if !strings.Contains(err.Error(), `conflicting definitions for rule "Collision"`) {
+		t.Fatalf("error = %q, want a clear conflicting-definition error", err)
+	}
+}
+
+func TestConflictingSingleRuleOverridesError(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "team.xml")
+	xml := `<ruleset name="team">
+  <rule ref="LongVariable">
+    <priority>2</priority>
+  </rule>
+  <rule ref="LongVariable">
+    <priority>1</priority>
+  </rule>
+</ruleset>
+`
+	if err := os.WriteFile(path, []byte(xml), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := (&Loader{}).Load(path); err == nil {
+		t.Fatal("expected conflicting single-rule overrides to fail")
+	} else if !strings.Contains(err.Error(), `conflicting overrides for rule "LongVariable"`) {
+		t.Fatalf("error = %q, want a clear conflicting-override error", err)
+	}
+}
+
+func TestHasRuleOverrides(t *testing.T) {
+	priority := 2
+	value := "50"
+	cases := []struct {
+		name string
+		rule xmlRule
+		want bool
+	}{
+		{name: "none", rule: xmlRule{}, want: false},
+		{name: "priority", rule: xmlRule{Priority: &priority}, want: true},
+		{name: "property", rule: xmlRule{Properties: xmlProperties{Property: []xmlProperty{{Name: "maximum", Value: &value}}}}, want: true},
+		{name: "exclude", rule: xmlRule{Exclude: []xmlExclude{{Name: "OtherRule"}}}, want: true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := hasRuleOverrides(tc.rule); got != tc.want {
+				t.Fatalf("hasRuleOverrides(%+v) = %t, want %t", tc.rule, got, tc.want)
+			}
+		})
+	}
+}
+
 func TestBareRuleNameResolvesBuiltin(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "team.xml")
 	xml := `<ruleset name="team">
@@ -388,7 +567,12 @@ func TestNestedRelativeFileRefs(t *testing.T) {
 func TestUnknownSingleRuleRefErrors(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "team.xml")
 	xml := `<ruleset name="team">
-  <rule ref="naming/ShortVariabl"/>
+  <rule ref="naming/ShortVariabl">
+    <priority>2</priority>
+    <properties>
+      <property name="maximum" value="50" />
+    </properties>
+  </rule>
 </ruleset>
 `
 	if err := os.WriteFile(path, []byte(xml), 0o644); err != nil {
@@ -621,7 +805,7 @@ func TestRefExpanderAppliesPriorityBoundaries(t *testing.T) {
 			expander := newRefExpander(&loadSession{loader: &tc.loader}, set)
 			base := rule.NewBase()
 			base.RulePrio = tc.priority
-			expander.appendRule(base)
+			expander.appendRuleWithKind(base, candidateInherited, "")
 			if len(set.Rules) != tc.wantRuleCount {
 				t.Fatalf("rule count = %d, want %d", len(set.Rules), tc.wantRuleCount)
 			}

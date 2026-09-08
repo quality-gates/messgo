@@ -3,11 +3,14 @@ package report
 import (
 	"bytes"
 	"encoding/json"
+	"encoding/xml"
 	"errors"
 	"io"
 	"strings"
 	"testing"
+	"unicode/utf8"
 
+	"github.com/quality-gates/messgo/internal/model"
 	"github.com/quality-gates/messgo/internal/rule"
 )
 
@@ -248,4 +251,140 @@ func TestFormatsSurfaceParseErrors(t *testing.T) {
 			t.Errorf("%s dropped Report.Errors:\n%s", format, buf.String())
 		}
 	}
+}
+
+func TestXMLRenderersAcceptSanitizedParserErrors(t *testing.T) {
+	_, parseErr := model.ParseSource("bad.go", []byte("package p\nvar _ = 1 `a\x01b`\n"))
+	if parseErr == nil {
+		t.Fatal("ParseSource() unexpectedly accepted malformed source")
+	}
+	if !strings.ContainsRune(parseErr.Error(), '\x01') {
+		t.Fatalf("ParseSource() error = %q, want echoed control character", parseErr)
+	}
+	rep := &Report{Errors: []ProcessingError{{File: "bad.go", Message: parseErr.Error()}}}
+
+	for _, format := range []string{"xml", "checkstyle"} {
+		t.Run(format, func(t *testing.T) {
+			output := renderReport(t, format, rep)
+			requireXMLDocument(t, output)
+			requireXML10Characters(t, output)
+		})
+	}
+
+	t.Run("html", func(t *testing.T) {
+		requireXML10Characters(t, renderReport(t, "html", rep))
+	})
+}
+
+func TestXMLRenderersSanitizeViolationFields(t *testing.T) {
+	bad := "bad\x01\x7f" + string([]byte{0xff}) + "text"
+	r := &rule.Base{
+		RuleName: bad,
+		RulePrio: 2,
+		RuleSet:  bad,
+		RuleURL:  bad,
+		RuleDesc: bad,
+	}
+	rep := &Report{Violations: []*rule.Violation{{
+		Rule:        r,
+		File:        bad,
+		BeginLine:   1,
+		EndLine:     1,
+		Description: bad,
+		Priority:    2,
+		RuleSetName: bad,
+		Package:     bad,
+		Function:    bad,
+		Class:       bad,
+		Method:      bad,
+	}}}
+
+	for _, format := range []string{"xml", "checkstyle"} {
+		t.Run(format, func(t *testing.T) {
+			output := renderReport(t, format, rep)
+			requireXMLDocument(t, output)
+			requireXML10Characters(t, output)
+			requireReplacementRune(t, output)
+		})
+	}
+	htmlOutput := renderReport(t, "html", rep)
+	requireXML10Characters(t, htmlOutput)
+	requireReplacementRune(t, htmlOutput)
+}
+
+func TestXMLEscapePreservesValidTextAndMarkupEscaping(t *testing.T) {
+	input := "text\twith\nallowed\rcharacters & < > \" '"
+	want := "text\twith\nallowed\rcharacters &amp; &lt; &gt; &quot; &#039;"
+	if got := xmlEscape(input); got != want {
+		t.Fatalf("xmlEscape(%q) = %q, want %q", input, got, want)
+	}
+}
+
+func TestXMLEscapeFollowsXML10CharacterBoundaries(t *testing.T) {
+	input := string([]rune{
+		0x8, 0x9, 0xa, 0xb, 0xd, 0xe, 0x1f, 0x20, 0x7d, 0x7e, 0x7f,
+		0x80, 0x81, 0xd7fe, 0xd7ff, 0xe000, 0xe001, 0xfffd, 0xfffe, 0xffff,
+		0x10000, 0x10001, 0x10fffe, 0x10ffff,
+	})
+	want := string([]rune{
+		0x9, 0xa, 0xd, 0x20, 0x7d, 0x7e, 0x80, 0x81, 0xd7fe, 0xd7ff,
+		0xe000, 0xe001, 0xfffd, 0x10000, 0x10001, 0x10fffe, 0x10ffff,
+	})
+	if got := xmlEscape(input); got != want {
+		t.Fatalf("xmlEscape(%q) = %q, want %q", input, got, want)
+	}
+}
+
+func renderReport(t *testing.T, format string, rep *Report) string {
+	t.Helper()
+	renderer, ok := For(format)
+	if !ok {
+		t.Fatalf("For(%q) did not return a renderer", format)
+	}
+	var output strings.Builder
+	if err := renderer.Render(&output, rep); err != nil {
+		t.Fatalf("%s.Render() error = %v", format, err)
+	}
+	return output.String()
+}
+
+func requireXMLDocument(t *testing.T, output string) {
+	t.Helper()
+	decoder := xml.NewDecoder(strings.NewReader(output))
+	for {
+		if _, err := decoder.Token(); errors.Is(err, io.EOF) {
+			return
+		} else if err != nil {
+			t.Fatalf("XML decoder rejected output: %v\n%s", err, output)
+		}
+	}
+}
+
+func requireXML10Characters(t *testing.T, output string) {
+	t.Helper()
+	if !utf8.ValidString(output) {
+		t.Fatalf("output is not valid UTF-8: %q", output)
+	}
+	for _, r := range output {
+		if !validXML10Char(r) {
+			t.Fatalf("output contains XML 1.0-disallowed U+%04X: %q", r, output)
+		}
+	}
+}
+
+func requireReplacementRune(t *testing.T, output string) {
+	t.Helper()
+	if !strings.ContainsRune(output, utf8.RuneError) {
+		t.Fatalf("output does not contain a replacement rune for malformed UTF-8: %q", output)
+	}
+}
+
+func validXML10Char(r rune) bool {
+	if r == 0x7f {
+		return false
+	}
+	return r == '\t' || r == '\n' || r == '\r' ||
+		(r >= 0x20 && r <= 0xd7ff) ||
+		(r >= 0xe000 && r <= 0xfffd) ||
+		(r >= 0x10000 && r <= 0x10ffff)
 }

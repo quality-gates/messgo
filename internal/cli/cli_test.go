@@ -232,3 +232,49 @@ func TestUsageListsProcessingExitCode(t *testing.T) {
 		t.Errorf("usage missing processing-error exit code: %q", out)
 	}
 }
+
+func TestEmptyPathsIsUsageError(t *testing.T) {
+	for _, paths := range []string{"", ",", " , "} {
+		code, out, errOut := runMain(t, paths, "text", "go")
+		if code != ExitError {
+			t.Errorf("paths %q: exit = %d, want %d", paths, code, ExitError)
+		}
+		if out != "" {
+			t.Errorf("paths %q: expected empty stdout, got %q", paths, out)
+		}
+		if !strings.Contains(errOut, "path") {
+			t.Errorf("paths %q: stderr should mention paths, got %q", paths, errOut)
+		}
+	}
+}
+
+func TestEmptyRulesetIsUsageError(t *testing.T) {
+	for _, rulesets := range []string{"", ",", " , "} {
+		code, out, errOut := runMain(t, "a.go", "text", rulesets)
+		if code != ExitError {
+			t.Errorf("rulesets %q: exit = %d, want %d", rulesets, code, ExitError)
+		}
+		if out != "" {
+			t.Errorf("rulesets %q: expected empty stdout, got %q", rulesets, out)
+		}
+		if !strings.Contains(errOut, "ruleset") {
+			t.Errorf("rulesets %q: stderr should mention rulesets, got %q", rulesets, errOut)
+		}
+	}
+}
+
+func TestBlankEntriesInListsAreDropped(t *testing.T) {
+	a := writeFixture(t, excessiveParamsSrc)
+	b := writeFixture(t, "package p\nfunc g() {}\n")
+	codeBlank, outBlank, errBlank := runMain(t, a+",,"+b, "text", "go,")
+	codeClean, outClean, errClean := runMain(t, a+","+b, "text", "go")
+	if codeBlank != codeClean {
+		t.Errorf("exit = %d, want %d", codeBlank, codeClean)
+	}
+	if outBlank != outClean {
+		t.Errorf("stdout mismatch:\nblank %q\nclean %q", outBlank, outClean)
+	}
+	if errBlank != errClean {
+		t.Errorf("stderr mismatch:\nblank %q\nclean %q", errBlank, errClean)
+	}
+}

@@ -69,6 +69,10 @@ func Main(args []string, stdout, stderr io.Writer) int {
 		return ExitError
 	}
 	opt.paths, opt.format, opt.rulesets = positionals[0], positionals[1], positionals[2]
+	if err := requireNonEmptyLists(opt); err != nil {
+		fmt.Fprintln(stderr, "error:", err)
+		return ExitError
+	}
 	return run(opt, stdout, stderr)
 }
 
@@ -223,6 +227,16 @@ func arg(args []string, i int) string {
 func atoi(s string) int {
 	n, _ := strconv.Atoi(s)
 	return n
+}
+
+func requireNonEmptyLists(opt options) error {
+	if len(splitList(opt.paths)) == 0 {
+		return fmt.Errorf("no paths given")
+	}
+	if len(splitList(opt.rulesets)) == 0 {
+		return fmt.Errorf("no rulesets given")
+	}
+	return nil
 }
 
 func splitList(s string) []string {

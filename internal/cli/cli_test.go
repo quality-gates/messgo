@@ -162,3 +162,66 @@ func TestSingleRuleRefPriorityFilterExitClean(t *testing.T) {
 		t.Fatalf("exit = %d, want %d (ExitSuccess); out=%q errOut=%q", code, ExitSuccess, out, errOut)
 	}
 }
+
+const parseErrorSrc = "package p\nfunc (\n"
+const excessiveParamsSrc = "package p\nfunc f(a, b, c, d, e, f2, g, h, i, j, k int) {}\n"
+
+func TestExitCodeParseError(t *testing.T) {
+	path := writeFixture(t, parseErrorSrc)
+	code, _, _ := runMain(t, path, "text", "go")
+	if code != ExitProcessingError {
+		t.Errorf("exit = %d, want %d", code, ExitProcessingError)
+	}
+}
+
+func TestIgnoreErrorsOnExitFallsThroughToClean(t *testing.T) {
+	path := writeFixture(t, parseErrorSrc)
+	code, _, _ := runMain(t, path, "text", "go", "--ignore-errors-on-exit")
+	if code != ExitSuccess {
+		t.Errorf("exit = %d, want %d", code, ExitSuccess)
+	}
+}
+
+func TestParseErrorTakesPrecedenceOverViolation(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "bad.go"), []byte(parseErrorSrc), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "viol.go"), []byte(excessiveParamsSrc), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	code, _, _ := runMain(t, dir, "text", "codesize")
+	if code != ExitProcessingError {
+		t.Errorf("exit = %d, want %d (processing error precedes violations)", code, ExitProcessingError)
+	}
+	code, _, _ = runMain(t, dir, "text", "codesize", "--ignore-errors-on-exit")
+	if code != ExitViolation {
+		t.Errorf("ignore-errors-on-exit: exit = %d, want %d", code, ExitViolation)
+	}
+}
+
+func TestToolErrorsStillExitOne(t *testing.T) {
+	path := writeFixture(t, "package p\n")
+	code, _, errOut := runMain(t, filepath.Join(t.TempDir(), "missing.go"), "text", "go")
+	if code != ExitError {
+		t.Errorf("missing path: exit = %d, want %d (%q)", code, ExitError, errOut)
+	}
+	code, _, errOut = runMain(t, path, "nope", "go")
+	if code != ExitError {
+		t.Errorf("unknown format: exit = %d, want %d (%q)", code, ExitError, errOut)
+	}
+	code, _, errOut = runMain(t, path, "text", "nope")
+	if code != ExitError {
+		t.Errorf("unknown ruleset: exit = %d, want %d (%q)", code, ExitError, errOut)
+	}
+}
+
+func TestUsageListsProcessingExitCode(t *testing.T) {
+	code, out, _ := runMain(t, "--help")
+	if code != ExitSuccess {
+		t.Fatalf("help exit = %d, want %d", code, ExitSuccess)
+	}
+	if !strings.Contains(out, "3 = processing error") {
+		t.Errorf("usage missing processing-error exit code: %q", out)
+	}
+}

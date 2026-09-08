@@ -40,7 +40,7 @@ To run messgo on itself locally to check for design or quality violations:
 ./messgo ./internal text go --ignore-tests
 ```
 
-Exit code matches phpmd: **0** clean · **1** error · **2** violations found.
+Exit code matches phpmd: **0** clean · **1** error · **2** violations found · **3** processing error.
 
 ## Shipping workflow
 
@@ -58,7 +58,7 @@ Follow these steps in order when landing a change:
 
 ## Conventions
 
-- Exit codes match phpmd exactly (0 success, 1 error, 2 violations).
+- Exit codes match phpmd exactly (0 success, 1 error, 2 violations, 3 processing error).
 - **Edit files one at a time using Read then Edit.** Avoid bulk string-replacement tools across multiple directories.
 - Keep complexity metrics (Cyclomatic Complexity, NPath) of messgo's own functions below their configured limits.
 - **Git worktrees go in `.worktrees/`** (gitignored). Create new worktrees there, e.g. `git worktree add .worktrees/my-feature`.

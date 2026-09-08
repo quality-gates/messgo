@@ -16,8 +16,8 @@ messgo ./... text go --ignore-tests
 ```
 
 That scans the module with the recommended low-noise policy and prints findings
-on stdout. Exit `0` is clean, `2` means findings, `1` means the tool or a
-source file failed.
+on stdout. Exit `0` is clean, `2` means findings, `1` means the tool failed,
+`3` means a source file failed to parse.
 
 Common next steps:
 

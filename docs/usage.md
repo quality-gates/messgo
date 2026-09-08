@@ -40,7 +40,7 @@ the loaded ruleset does not already include.
 | `--maximumpriority <n>` | Only run rules with priority ≥ n. |
 | `--reportfile <file>` | Write the report to a file instead of stdout. |
 | `--suffixes <list>` | File extensions to scan (default: `go`). |
-| `--exclude <list>` | Path substrings to exclude. |
+| `--exclude <list>` | Path substrings to exclude. Matching cleans both the discovered path and the pattern, so `./` prefixes do not change which files are skipped. |
 | `--enable`, `--only <list>` | Run only these rules (comma-separated names) from the loaded ruleset(s). |
 | `--disable <list>` | Skip these rules (comma-separated names). |
 | `--ignore-tests` | Skip `*_test.go` files. |

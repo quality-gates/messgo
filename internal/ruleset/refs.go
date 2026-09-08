@@ -19,7 +19,7 @@ type refExpander struct {
 	set       *rule.RuleSet
 	active    []string
 	activePos map[string]int
-	expanded  map[string]struct{}
+	expanded  map[string]bool
 }
 
 func newRefExpander(session *loadSession, set *rule.RuleSet) *refExpander {
@@ -27,7 +27,7 @@ func newRefExpander(session *loadSession, set *rule.RuleSet) *refExpander {
 		session:   session,
 		set:       set,
 		activePos: make(map[string]int),
-		expanded:  make(map[string]struct{}),
+		expanded:  make(map[string]bool),
 	}
 }
 
@@ -67,40 +67,42 @@ func addRule(e *refExpander, setName string, xr xmlRule, fromDir string) error {
 }
 
 func (e *refExpander) addRef(xr xmlRule, fromDir string) error {
-	if err := e.expandRef(xr, "", excludeSet(xr.Exclude), &xr, fromDir); err != nil {
+	found, err := e.expandRef(xr, "", excludeSet(xr.Exclude), &xr, fromDir)
+	if err != nil {
 		return err
 	}
 	_, ruleName := e.session.resolveRef(xr.Ref, fromDir)
-	if ruleName != "" && !setHasRule(e.set, ruleName) {
+	if ruleName != "" && !found {
 		return fmt.Errorf("unknown rule %q", xr.Ref)
 	}
 	return nil
 }
 
-func (e *refExpander) expandRef(xr xmlRule, wantName string, parentExclude map[string]bool, ov *xmlRule, fromDir string) error {
+func (e *refExpander) expandRef(xr xmlRule, wantName string, parentExclude map[string]bool, ov *xmlRule, fromDir string) (bool, error) {
 	base, ruleName := e.session.resolveRef(xr.Ref, fromDir)
 	if skipFilteredRef(ruleName, wantName) {
-		return nil
+		return false, nil
 	}
 	ruleName = coalesceRuleName(ruleName, wantName)
 	src, key, err := readSource(e.session, base, fromDir)
 	if err != nil {
-		return err
+		return false, err
 	}
 	if err := e.enter(key); err != nil {
-		return err
+		return false, err
 	}
 	defer e.leave()
 	excluded := mergeExclude(parentExclude, xr.Exclude)
 	expansion := expansionKey(key, ruleName, excluded, ov)
-	if _, alreadyExpanded := e.expanded[expansion]; alreadyExpanded {
-		return nil
+	if found, alreadyExpanded := e.expanded[expansion]; alreadyExpanded {
+		return found, nil
 	}
-	if err := e.importSourceRules(src, ruleName, excluded, ov, rulesetDir(key)); err != nil {
-		return err
+	found, err := e.importSourceRules(src, ruleName, excluded, ov, rulesetDir(key))
+	if err != nil {
+		return false, err
 	}
-	e.expanded[expansion] = struct{}{}
-	return nil
+	e.expanded[expansion] = found
+	return found, nil
 }
 
 func readSource(session *loadSession, part, fromDir string) (xmlRuleSet, string, error) {
@@ -142,15 +144,6 @@ func expansionKey(location, ruleName string, excluded map[string]bool, ov *xmlRu
 	return key.String()
 }
 
-func setHasRule(set *rule.RuleSet, name string) bool {
-	for _, r := range set.Rules {
-		if r.Name() == name {
-			return true
-		}
-	}
-	return false
-}
-
 func skipFilteredRef(resolved, want string) bool {
 	return want != "" && resolved != "" && resolved != want
 }
@@ -162,30 +155,35 @@ func coalesceRuleName(resolved, want string) string {
 	return want
 }
 
-func (e *refExpander) importSourceRules(src xmlRuleSet, ruleName string, excluded map[string]bool, ov *xmlRule, fromDir string) error {
+func (e *refExpander) importSourceRules(src xmlRuleSet, ruleName string, excluded map[string]bool, ov *xmlRule, fromDir string) (bool, error) {
+	var anyFound bool
 	for _, sr := range src.Rules {
-		if err := e.expandSourceRule(src.Name, sr, ruleName, excluded, ov, fromDir); err != nil {
-			return err
+		found, err := e.expandSourceRule(src.Name, sr, ruleName, excluded, ov, fromDir)
+		if err != nil {
+			return false, err
+		}
+		if found {
+			anyFound = true
 		}
 	}
-	return nil
+	return anyFound, nil
 }
 
-func (e *refExpander) expandSourceRule(srcName string, sr xmlRule, ruleName string, excluded map[string]bool, ov *xmlRule, fromDir string) error {
+func (e *refExpander) expandSourceRule(srcName string, sr xmlRule, ruleName string, excluded map[string]bool, ov *xmlRule, fromDir string) (bool, error) {
 	if sr.Ref != "" {
 		return e.expandRef(sr, ruleName, excluded, refOverride(sr, ov, ruleName), fromDir)
 	}
 	if sr.Class == "" || excluded[sr.Name] || (ruleName != "" && sr.Name != ruleName) {
-		return nil
+		return false, nil
 	}
 	r, err := e.buildRule(srcName, sr, refOverride(sr, ov, ruleName))
 	if err != nil {
-		return err
+		return false, err
 	}
 	if r != nil {
 		e.appendRule(r)
 	}
-	return nil
+	return true, nil
 }
 
 func refOverride(sr xmlRule, ov *xmlRule, ruleName string) *xmlRule {

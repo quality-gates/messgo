@@ -399,6 +399,86 @@ func TestUnknownSingleRuleRefErrors(t *testing.T) {
 	}
 }
 
+func writeSingleRuleTestRuleset(t *testing.T, ref string) string {
+	t.Helper()
+	path := filepath.Join(t.TempDir(), "custom.xml")
+	xml := fmt.Sprintf(`<ruleset name="custom">
+  <rule ref=%q/>
+</ruleset>
+`, ref)
+	if err := os.WriteFile(path, []byte(xml), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	return path
+}
+
+func TestSingleRuleRefPriorityFilterExclusion(t *testing.T) {
+	cases := []struct {
+		name   string
+		ref    string
+		loader Loader
+	}{
+		{
+			name:   "prefixed single-rule ref excluded by min priority",
+			ref:    "codesize/CyclomaticComplexity",
+			loader: Loader{MinPriority: 1},
+		},
+		{
+			name:   "prefixed single-rule ref excluded by max priority",
+			ref:    "codesize/CyclomaticComplexity",
+			loader: Loader{MaxPriority: 4},
+		},
+		{
+			name:   "bare single-rule ref excluded by priority",
+			ref:    "CyclomaticComplexity",
+			loader: Loader{MinPriority: 1},
+		},
+		{
+			name:   "nested single-rule ref excluded by priority",
+			ref:    "go/CyclomaticComplexity",
+			loader: Loader{MinPriority: 1},
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			path := writeSingleRuleTestRuleset(t, tc.ref)
+			sets, err := tc.loader.Load(path)
+			if err != nil {
+				t.Fatalf("unexpected error loading rule ref filtered by priority: %v", err)
+			}
+			if len(sets) != 1 || len(sets[0].Rules) != 0 {
+				t.Fatalf("expected 1 ruleset with 0 rules, got %d rulesets, %d rules", len(sets), len(sets[0].Rules))
+			}
+		})
+	}
+}
+
+func TestSingleRuleRefUnknownErrors(t *testing.T) {
+	cases := []struct {
+		name   string
+		ref    string
+		loader Loader
+	}{
+		{
+			name:   "unknown rule in existing ruleset",
+			ref:    "codesize/NonExistentRule",
+			loader: Loader{MinPriority: 1},
+		},
+		{
+			name: "unknown rule across rulesets",
+			ref:  "naming/CyclomaticComplexity",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			path := writeSingleRuleTestRuleset(t, tc.ref)
+			if _, err := tc.loader.Load(path); err == nil {
+				t.Fatal("expected error for unknown rule ref, got nil")
+			}
+		})
+	}
+}
+
 func TestRelativeFileRefResolvesAgainstRulesetDir(t *testing.T) {
 	dir := t.TempDir()
 	base := filepath.Join(dir, "base.xml")

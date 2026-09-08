@@ -7,6 +7,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 ## [Unreleased]
 
 ### Fixed
+- Fixed single-rule references in ruleset XML aborting with an unknown rule error when filtered out by priority bounds (#55).
 - Fixed CouplingBetweenObjects generic type handling: decompose bracketed type arguments, ignore built-in type arguments, count base generic types once across instantiations, and prevent package-prefix slicing from corrupting qualified type arguments (#56).
 - Fixed NPath complexity undercounting for return statements with boolean expressions by setting base return path complexity to 1 (#57).
 - Fixed `StructEmbeddingDepth` false positives when an embedded field references an external package type that matches the name of a local struct (#58).

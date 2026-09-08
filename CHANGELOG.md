@@ -8,6 +8,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 
 ### Fixed
 - Fixed `IdenticalBranches` false positives on empty `if/else` statements (`if cond {} else {}`) (#60).
+- Fixed `UncheckedTypeAssertion` false positives on safe comma-ok type assertions wrapped in parentheses (#59).
 
 ## [0.4.0] - 2026-09-07
 

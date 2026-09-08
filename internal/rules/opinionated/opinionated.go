@@ -79,11 +79,21 @@ func markSafeTypeAssert(safe map[*ast.TypeAssertExpr]bool, vals []ast.Expr) {
 	if len(vals) != 1 {
 		return
 	}
-	ta, ok := vals[0].(*ast.TypeAssertExpr)
+	ta, ok := unwrapParen(vals[0]).(*ast.TypeAssertExpr)
 	if !ok || ta.Type == nil {
 		return
 	}
 	safe[ta] = true
+}
+
+func unwrapParen(e ast.Expr) ast.Expr {
+	for {
+		paren, ok := e.(*ast.ParenExpr)
+		if !ok {
+			return e
+		}
+		e = paren.X
+	}
 }
 
 // ----- IdenticalBranches --------------------------------------------------

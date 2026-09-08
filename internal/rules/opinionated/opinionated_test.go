@@ -99,3 +99,57 @@ func f(x int) {
 		t.Fatalf("expected 0 violations for empty switch cases, got %d", len(violations))
 	}
 }
+
+func TestUncheckedTypeAssertionParenthesizedCommaOK(t *testing.T) {
+	r := newUncheckedTypeAssertion()
+	src := `package sample
+
+func f(x any) {
+	v, ok := (x.(int))
+	_ = v
+	_ = ok
+}
+
+func fNested(x any) {
+	v, ok := ((x.(int)))
+	_ = v
+	_ = ok
+}
+
+func fVar(x any) {
+	var v, ok = (x.(int))
+	_ = v
+	_ = ok
+}
+
+func fIf(x any) {
+	if v, ok := (x.(int)); ok {
+		_ = v
+	}
+}
+`
+	violations := analyzeSource(t, r, src)
+	if len(violations) != 0 {
+		t.Fatalf("expected 0 violations, got %d", len(violations))
+	}
+}
+
+func TestUncheckedTypeAssertionParenthesizedUnchecked(t *testing.T) {
+	r := newUncheckedTypeAssertion()
+	src := `package sample
+
+func f(x any) {
+	v := (x.(int))
+	_ = v
+}
+
+func fNested(x any) {
+	v := ((x.(int)))
+	_ = v
+}
+`
+	violations := analyzeSource(t, r, src)
+	if len(violations) != 2 {
+		t.Fatalf("expected 2 violations, got %d", len(violations))
+	}
+}

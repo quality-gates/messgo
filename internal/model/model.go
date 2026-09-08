@@ -73,7 +73,7 @@ type fileAnalysisCache struct {
 }
 
 // SelectedMemberNames returns a snapshot of field or method names selected or
-// used as keyed struct-literal fields anywhere in this file.
+// used in struct literals anywhere in this file.
 func (f *File) SelectedMemberNames() map[string]bool {
 	f.collectSelectedMemberNames()
 	return maps.Clone(f.analysis.selectedMembers)
@@ -88,9 +88,9 @@ func (f *File) PackageMemberNames() map[string]bool {
 	return f.SelectedMemberNames()
 }
 
-// MemberSelected reports whether name is selected or used as a keyed struct
-// literal field anywhere in this file (or in this file's package if PackageMembers
-// is populated). The file-wide AST scan runs once.
+// MemberSelected reports whether name is selected or used in a struct literal
+// anywhere in this file (or in this file's package if PackageMembers is
+// populated). The file-wide AST scan runs once.
 func (f *File) MemberSelected(name string) bool {
 	if f.PackageMembers != nil {
 		return f.PackageMembers[name]
@@ -102,12 +102,16 @@ func (f *File) MemberSelected(name string) bool {
 func (f *File) collectSelectedMemberNames() {
 	f.analysis.selectedMembersOnce.Do(func() {
 		f.analysis.selectedMembers = map[string]bool{}
+		classes := f.Classes
+		if f.PackageClasses != nil {
+			classes = f.PackageClasses
+		}
 		ast.Inspect(f.Syntax, func(n ast.Node) bool {
 			switch e := n.(type) {
 			case *ast.SelectorExpr:
 				f.analysis.selectedMembers[e.Sel.Name] = true
 			case *ast.CompositeLit:
-				collectCompositeMemberNames(e, f.analysis.selectedMembers)
+				collectCompositeMemberNames(e, f.analysis.selectedMembers, classes)
 			}
 			return true
 		})
@@ -162,9 +166,13 @@ func (f *File) EffectiveLinesOfCode(start, end token.Pos) int {
 	return f.analysis.effectiveLOC.LinesOfCode(f.Fset, start, end)
 }
 
-func collectCompositeMemberNames(lit *ast.CompositeLit, set map[string]bool) {
+func collectCompositeMemberNames(lit *ast.CompositeLit, set map[string]bool, classes []*Class) {
 	switch lit.Type.(type) {
 	case *ast.MapType, *ast.ArrayType:
+		return
+	}
+	if name, ok := unkeyedStructName(lit); ok {
+		markStructFields(name, set, classes)
 		return
 	}
 	for _, elt := range lit.Elts {
@@ -176,6 +184,47 @@ func collectCompositeMemberNames(lit *ast.CompositeLit, set map[string]bool) {
 		if ok {
 			set[id.Name] = true
 		}
+	}
+}
+
+func unkeyedStructName(lit *ast.CompositeLit) (string, bool) {
+	if len(lit.Elts) == 0 {
+		return "", false
+	}
+	for _, elt := range lit.Elts {
+		if _, ok := elt.(*ast.KeyValueExpr); ok {
+			return "", false
+		}
+	}
+	return namedTypeName(lit.Type)
+}
+
+func namedTypeName(expr ast.Expr) (string, bool) {
+	switch t := expr.(type) {
+	case *ast.Ident:
+		return t.Name, true
+	case *ast.ParenExpr:
+		return namedTypeName(t.X)
+	case *ast.StarExpr:
+		return namedTypeName(t.X)
+	case *ast.IndexExpr:
+		return namedTypeName(t.X)
+	case *ast.IndexListExpr:
+		return namedTypeName(t.X)
+	default:
+		return "", false
+	}
+}
+
+func markStructFields(name string, set map[string]bool, classes []*Class) {
+	for _, class := range classes {
+		if class.Name != name {
+			continue
+		}
+		for _, field := range class.Fields {
+			set[field.Name] = true
+		}
+		return
 	}
 }
 

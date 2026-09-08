@@ -818,6 +818,128 @@ func inspect(w widget) {
 	}
 }
 
+func TestUnusedPrivateFieldTracksUnkeyedStructLiterals(t *testing.T) {
+	tests := []struct {
+		name      string
+		source    string
+		wantCount int
+	}{
+		{
+			name: "map key",
+			source: `
+type key struct {
+	typ string
+	ptr any
+}
+
+func seen(seen map[key]bool, typ string, ptr any) bool {
+	k := key{typ, ptr}
+	if seen[k] {
+		return true
+	}
+	seen[k] = true
+	return false
+}
+`,
+			wantCount: 0,
+		},
+		{
+			name: "struct equality",
+			source: `
+type pair struct {
+	left  int
+	right int
+}
+
+func equal(a, b pair) bool {
+	return a == b
+}
+
+var _ = equal(pair{1, 2}, pair{3, 4})
+`,
+			wantCount: 0,
+		},
+		{
+			name: "fewer elements",
+			source: `
+type short struct {
+	first  int
+	second int
+	third  int
+}
+
+var _ = short{1}
+`,
+			wantCount: 0,
+		},
+		{
+			name: "generic struct",
+			source: `
+type pair[T any] struct {
+	first  T
+	second T
+}
+
+var _ = pair[int]{1, 2}
+`,
+			wantCount: 0,
+		},
+		{
+			name: "non struct literals",
+			source: `
+type holder struct {
+	private int
+}
+
+var _ = []int{1}
+var _ = [1]int{1}
+var _ = map[int]int{1: 2}
+`,
+			wantCount: 1,
+		},
+		{
+			name: "external struct literal",
+			source: `
+import "image"
+
+type Point struct {
+	private int
+}
+
+var _ = image.Point{1, 2}
+`,
+			wantCount: 1,
+		},
+		{
+			name: "genuinely unused field",
+			source: `
+type state struct {
+	used   int
+	unused int
+}
+
+var _ = state{used: 1}
+`,
+			wantCount: 1,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			hits := analyze(t, tt.source, "unusedcode")
+			var gotCount int
+			for _, hit := range hits {
+				if hit.rule == "UnusedPrivateField" {
+					gotCount++
+				}
+			}
+			if gotCount != tt.wantCount {
+				t.Fatalf("UnusedPrivateField count = %d, want %d; hits = %v", gotCount, tt.wantCount, hits)
+			}
+		})
+	}
+}
+
 func TestUnusedRangeLoopVariable(t *testing.T) {
 	src := `
 func loop() {

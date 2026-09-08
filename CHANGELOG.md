@@ -6,6 +6,9 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 
 ## [Unreleased]
 
+### Fixed
+- Fixed `IdenticalBranches` false positives on empty `if/else` statements (`if cond {} else {}`) (#60).
+
 ## [0.4.0] - 2026-09-07
 
 ### Added

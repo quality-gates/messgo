@@ -49,6 +49,11 @@ type File struct {
 	// analysis. When nil (file analyzed in isolation), rules fall back to
 	// this file's own Classes.
 	PackageClasses []*Class
+	// PackageInterfaces holds all interface types from every file in this
+	// file's package. It is populated by the runner after parsing, enabling
+	// cross-file interface-satisfaction analysis. When nil (file analyzed in
+	// isolation), rules fall back to this file's own Interfaces.
+	PackageInterfaces []*Interface
 	// PackageMembers holds all selected member names across every file in
 	// this file's package. It is populated by the runner after parsing,
 	// enabling cross-file unused member analysis. When nil, rules fall back
@@ -61,6 +66,8 @@ type File struct {
 type fileAnalysisCache struct {
 	selectedMembersOnce sync.Once
 	selectedMembers     map[string]bool
+	ifaceMethodsOnce    sync.Once
+	ifaceMethods        map[string]bool
 	effectiveLOCOnce    sync.Once
 	effectiveLOC        *metrics.EffectiveLOCIndex
 }
@@ -105,6 +112,45 @@ func (f *File) collectSelectedMemberNames() {
 			return true
 		})
 	})
+}
+
+// InterfaceMethodNames returns the set of method names declared by any
+// interface in this file's package (or this file if analyzed in isolation),
+// including methods inherited through embedded interfaces resolved within the
+// same package. The set is computed at most once per file.
+func (f *File) InterfaceMethodNames() map[string]bool {
+	f.analysis.ifaceMethodsOnce.Do(func() {
+		ifaces := f.Interfaces
+		if f.PackageInterfaces != nil {
+			ifaces = f.PackageInterfaces
+		}
+		byName := make(map[string]*Interface, len(ifaces))
+		for _, i := range ifaces {
+			byName[i.Name] = i
+		}
+		visited := map[string]bool{}
+		names := map[string]bool{}
+		var visit func(i *Interface)
+		visit = func(i *Interface) {
+			if visited[i.Name] {
+				return
+			}
+			visited[i.Name] = true
+			for _, m := range i.Methods {
+				names[m.Name] = true
+			}
+			for _, e := range i.Embeds {
+				if emb := byName[e]; emb != nil {
+					visit(emb)
+				}
+			}
+		}
+		for _, i := range ifaces {
+			visit(i)
+		}
+		f.analysis.ifaceMethods = names
+	})
+	return f.analysis.ifaceMethods
 }
 
 // EffectiveLinesOfCode returns the number of code-bearing physical source

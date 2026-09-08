@@ -9,6 +9,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 ### Fixed
 - Fixed `UnusedLocalVariable` false positives when a named result is re-bound with `:=` and returned by a naked `return` (#69).
 - Fixed custom ruleset single-rule overrides being dropped when the same rule was already imported by a whole-ruleset reference (#68).
+- Fixed `UnusedPrivateMethod` false positives on unexported methods that satisfy a same-package interface (including through embedded interfaces) and are never selected by name (#70).
 
 ## [0.4.1] - 2026-09-08
 

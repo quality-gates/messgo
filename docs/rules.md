@@ -72,6 +72,12 @@ in the same package (including through embedded interfaces) declares a method of
 the same name — the sealed-interface / marker-method idiom means the method is
 part of a type's contract even when never selected by name.
 
+`ConstructorWithNameAsEnclosingClass` flags a method whose name equals its
+receiver type name. The error-interface method `Error() string` on a type named
+`Error` is exempt, for both pointer and value receivers. Other same-named
+methods, including `String() string` on a type named `String`, are still
+reported.
+
 `UncheckedTypeAssertion` (opinionated) flags type assertions used without the
 comma-ok form (`v, ok := x.(T)`), which panic on failure. Type switches are
 safe and not flagged.

@@ -11,6 +11,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 - Fixed custom ruleset single-rule overrides being dropped when the same rule was already imported by a whole-ruleset reference (#68).
 - Fixed `UnusedPrivateMethod` false positives on unexported methods that satisfy a same-package interface (including through embedded interfaces) and are never selected by name (#70).
 - Fixed `UnusedPrivateField` false positives for fields populated by positional local-struct literals, including struct values used as map keys or in equality comparisons (#71).
+- Fixed `ConstructorWithNameAsEnclosingClass` false positives on the error-interface idiom `func (e *Error) Error() string` (#72).
 
 ## [0.4.1] - 2026-09-08
 

@@ -15,11 +15,12 @@ var leafBuiltinRulesets = []string{
 }
 
 type refExpander struct {
-	session   *loadSession
-	set       *rule.RuleSet
-	active    []string
-	activePos map[string]int
-	expanded  map[string]bool
+	session    *loadSession
+	set        *rule.RuleSet
+	candidates []ruleCandidate
+	active     []string
+	activePos  map[string]int
+	expanded   map[string]bool
 }
 
 func newRefExpander(session *loadSession, set *rule.RuleSet) *refExpander {
@@ -60,25 +61,29 @@ func addRule(e *refExpander, setName string, xr xmlRule, fromDir string) error {
 			return err
 		}
 		if r != nil {
-			e.appendRule(r)
+			e.appendRuleWithKind(r, candidateDefinition, xr.Class)
 		}
 	}
 	return nil
 }
 
 func (e *refExpander) addRef(xr xmlRule, fromDir string) error {
-	found, err := e.expandRef(xr, "", excludeSet(xr.Exclude), &xr, fromDir)
+	_, ruleName := e.session.resolveRef(xr.Ref, fromDir)
+	kind := candidateInherited
+	if ruleName != "" && hasRuleOverrides(xr) {
+		kind = candidateOverride
+	}
+	found, err := e.expandRef(xr, "", excludeSet(xr.Exclude), &xr, fromDir, kind)
 	if err != nil {
 		return err
 	}
-	_, ruleName := e.session.resolveRef(xr.Ref, fromDir)
 	if ruleName != "" && !found {
 		return fmt.Errorf("unknown rule %q", xr.Ref)
 	}
 	return nil
 }
 
-func (e *refExpander) expandRef(xr xmlRule, wantName string, parentExclude map[string]bool, ov *xmlRule, fromDir string) (bool, error) {
+func (e *refExpander) expandRef(xr xmlRule, wantName string, parentExclude map[string]bool, ov *xmlRule, fromDir string, kind candidateKind) (bool, error) {
 	base, ruleName := e.session.resolveRef(xr.Ref, fromDir)
 	if skipFilteredRef(ruleName, wantName) {
 		return false, nil
@@ -97,7 +102,7 @@ func (e *refExpander) expandRef(xr xmlRule, wantName string, parentExclude map[s
 	if found, alreadyExpanded := e.expanded[expansion]; alreadyExpanded {
 		return found, nil
 	}
-	found, err := e.importSourceRules(src, ruleName, excluded, ov, rulesetDir(key))
+	found, err := e.importSourceRules(src, ruleName, excluded, ov, rulesetDir(key), kind)
 	if err != nil {
 		return false, err
 	}
@@ -148,6 +153,10 @@ func skipFilteredRef(resolved, want string) bool {
 	return want != "" && resolved != "" && resolved != want
 }
 
+func hasRuleOverrides(xr xmlRule) bool {
+	return xr.Priority != nil || len(xr.Properties.Property) > 0 || len(xr.Exclude) > 0
+}
+
 func coalesceRuleName(resolved, want string) string {
 	if resolved != "" {
 		return resolved
@@ -155,10 +164,10 @@ func coalesceRuleName(resolved, want string) string {
 	return want
 }
 
-func (e *refExpander) importSourceRules(src xmlRuleSet, ruleName string, excluded map[string]bool, ov *xmlRule, fromDir string) (bool, error) {
+func (e *refExpander) importSourceRules(src xmlRuleSet, ruleName string, excluded map[string]bool, ov *xmlRule, fromDir string, kind candidateKind) (bool, error) {
 	var anyFound bool
 	for _, sr := range src.Rules {
-		found, err := e.expandSourceRule(src.Name, sr, ruleName, excluded, ov, fromDir)
+		found, err := e.expandSourceRule(src.Name, sr, ruleName, excluded, ov, fromDir, kind)
 		if err != nil {
 			return false, err
 		}
@@ -169,9 +178,9 @@ func (e *refExpander) importSourceRules(src xmlRuleSet, ruleName string, exclude
 	return anyFound, nil
 }
 
-func (e *refExpander) expandSourceRule(srcName string, sr xmlRule, ruleName string, excluded map[string]bool, ov *xmlRule, fromDir string) (bool, error) {
+func (e *refExpander) expandSourceRule(srcName string, sr xmlRule, ruleName string, excluded map[string]bool, ov *xmlRule, fromDir string, kind candidateKind) (bool, error) {
 	if sr.Ref != "" {
-		return e.expandRef(sr, ruleName, excluded, refOverride(sr, ov, ruleName), fromDir)
+		return e.expandRef(sr, ruleName, excluded, refOverride(sr, ov, ruleName), fromDir, kind)
 	}
 	if sr.Class == "" || excluded[sr.Name] || (ruleName != "" && sr.Name != ruleName) {
 		return false, nil
@@ -181,7 +190,7 @@ func (e *refExpander) expandSourceRule(srcName string, sr xmlRule, ruleName stri
 		return false, err
 	}
 	if r != nil {
-		e.appendRule(r)
+		e.appendRuleWithKind(r, kind, sr.Class)
 	}
 	return true, nil
 }
@@ -274,9 +283,9 @@ func (e *refExpander) buildRule(setName string, def xmlRule, ov *xmlRule) (rule.
 	return r, nil
 }
 
-// appendRule adds a rule unless it is filtered out by the configured priority
-// bounds.
-func (e *refExpander) appendRule(r rule.Rule) {
+// appendRuleWithKind adds a rule unless it is filtered out by the configured
+// priority bounds, retaining the candidate's merge provenance.
+func (e *refExpander) appendRuleWithKind(r rule.Rule, kind candidateKind, class string) {
 	priority := rule.BaseOf(r).RulePrio
 	loader := e.session.loader
 	if loader.MinPriority > 0 && priority > loader.MinPriority {
@@ -286,6 +295,7 @@ func (e *refExpander) appendRule(r rule.Rule) {
 		return
 	}
 	e.set.Rules = append(e.set.Rules, r)
+	e.candidates = append(e.candidates, ruleCandidate{rule: r, class: class, kind: kind})
 }
 
 func (e *refExpander) warn(format string, args ...any) {

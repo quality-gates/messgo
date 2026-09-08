@@ -335,6 +335,45 @@ func Audit(a *Account) {
 	}
 }
 
+func TestCrossFileUnkeyedLiteralPreventsUnusedFieldWarning(t *testing.T) {
+	dir := t.TempDir()
+	modelCode := `package account
+type key struct {
+	typ string
+	ptr any
+}
+`
+	serviceCode := `package account
+func Seen(seen map[key]bool, typ string, ptr any) bool {
+	k := key{typ, ptr}
+	if seen[k] {
+		return true
+	}
+	seen[k] = true
+	return false
+}
+`
+	if err := os.WriteFile(filepath.Join(dir, "model.go"), []byte(modelCode), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "service.go"), []byte(serviceCode), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	sets, err := (&ruleset.Loader{}).Load("unusedcode")
+	if err != nil {
+		t.Fatal(err)
+	}
+	ruleset.FilterRules(sets, []string{"UnusedPrivateField"}, nil)
+	rep, err := Run(Options{Paths: []string{dir}, RuleSets: sets})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(rep.Violations) != 0 {
+		t.Fatalf("violations = %+v, want none: key fields are populated by a sibling-file positional literal", rep.Violations)
+	}
+}
+
 func TestCrossFileInterfaceSatisfiesMethodFromSiblingFile(t *testing.T) {
 	dir := t.TempDir()
 	// The interface is declared in the file analyzed after the implementation,

@@ -128,8 +128,32 @@ func maybeAttr(w io.Writer, name, val string) {
 }
 
 func xmlEscape(s string) string {
+	s = strings.Map(func(r rune) rune {
+		if !isValidXML10Char(r) {
+			return -1
+		}
+		return r
+	}, s)
 	r := strings.NewReplacer("&", "&amp;", "<", "&lt;", ">", "&gt;", "\"", "&quot;", "'", "&#039;")
 	return r.Replace(s)
+}
+
+var validXML10CharRanges = [...]struct{ min, max rune }{
+	{0x9, 0xa},
+	{0xd, 0xd},
+	{0x20, 0x7e},
+	{0x80, 0xd7ff},
+	{0xe000, 0xfffd},
+	{0x10000, 0x10ffff},
+}
+
+func isValidXML10Char(r rune) bool {
+	for _, bounds := range validXML10CharRanges {
+		if r >= bounds.min && r <= bounds.max {
+			return true
+		}
+	}
+	return false
 }
 
 // ----- JSON ---------------------------------------------------------------

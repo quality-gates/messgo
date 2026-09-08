@@ -7,6 +7,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 ## [Unreleased]
 
 ### Fixed
+- Fixed XML, Checkstyle, and HTML reports emitting XML 1.0-disallowed control characters or invalid UTF-8 from parse errors and violation fields (#74).
 - Fixed `--exclude` with a `./` prefix failing to match files discovered by a directory walk, and report paths now use a cleaned form for both walked and explicitly listed files (#73).
 - Fixed `UnusedLocalVariable` false positives when a named result is re-bound with `:=` and returned by a naked `return` (#69).
 - Fixed custom ruleset single-rule overrides being dropped when the same rule was already imported by a whole-ruleset reference (#68).

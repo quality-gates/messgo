@@ -144,3 +144,21 @@ func TestMinimumPriorityFilter(t *testing.T) {
 		t.Errorf("exit = %d, want clean (filtered out)", code)
 	}
 }
+
+func TestSingleRuleRefPriorityFilterExitClean(t *testing.T) {
+	// A custom ruleset referencing a single rule excluded by priority bounds
+	// must exit clean (ExitSuccess 0), not abort with an unknown rule error (ExitError 1).
+	rulesetPath := filepath.Join(t.TempDir(), "ruleset.xml")
+	xml := `<ruleset name="custom">
+  <rule ref="codesize/CyclomaticComplexity"/>
+</ruleset>
+`
+	if err := os.WriteFile(rulesetPath, []byte(xml), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	srcPath := writeFixture(t, "package main\nfunc main() {}\n")
+	code, out, errOut := runMain(t, srcPath, "text", rulesetPath, "--minimumpriority", "1")
+	if code != ExitSuccess {
+		t.Fatalf("exit = %d, want %d (ExitSuccess); out=%q errOut=%q", code, ExitSuccess, out, errOut)
+	}
+}

@@ -130,3 +130,85 @@ type S struct {
 		t.Fatalf("map[Key]Value coupling = %d, want 2", measurement.Value)
 	}
 }
+
+func TestCouplingMeasureGenericTypes(t *testing.T) {
+	tests := []struct {
+		input string
+		want  []string
+	}{
+		{"List[pkg.Entry]", []string{"List", "Entry"}},
+		{"pkg1.List[pkg2.Entry]", []string{"List", "Entry"}},
+		{"List[int]", []string{"List", "int"}},
+		{"Pair[Key, Value]", []string{"Pair", "Key", "Value"}},
+		{"Map[string, List[CustomType]]", []string{"Map", "string", "List", "CustomType"}},
+		{"Container[T, comparable]", []string{"Container", "T", "comparable"}},
+		{"[]List[Entry]", []string{"List", "Entry"}},
+		{"*pkg.Box[pkg2.Item]", []string{"Box", "Item"}},
+		{"map[string]List[Entry]", []string{"string", "List", "Entry"}},
+		{"chan List[Entry]", []string{"List", "Entry"}},
+		{"List[*Entry]", []string{"List", "Entry"}},
+		{"List[[]Entry]", []string{"List", "Entry"}},
+		{"Pair[map[string]Entry, chan Value]", []string{"Pair", "string", "Entry", "Value"}},
+	}
+
+	for _, tc := range tests {
+		got := namedTypesIn(tc.input)
+		if len(got) != len(tc.want) {
+			t.Fatalf("namedTypesIn(%q) len = %d (%v), want len = %d (%v)", tc.input, len(got), got, len(tc.want), tc.want)
+		}
+		for i := range got {
+			if got[i] != tc.want[i] {
+				t.Errorf("namedTypesIn(%q)[%d] = %q, want %q", tc.input, i, got[i], tc.want[i])
+			}
+		}
+	}
+}
+
+func TestCouplingMeasureGenericFieldsMethodsAndResults(t *testing.T) {
+	src := `package sample
+
+type Entry struct{}
+type Result[T any] struct{}
+type Box[T any] struct{}
+type Service struct {
+	cache Box[Entry]
+	ints  Box[int]
+	strs  Box[string]
+}
+
+func (Service) Process(items Box[pkg.Entry], flag bool) Result[Entry] {
+	return Result[Entry]{}
+}
+
+func (Service) Status() (Result[int], error) {
+	return Result[int]{}, nil
+}
+`
+	f, err := model.ParseSource("coupling.go", []byte(src))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var serviceClass *model.Class
+	for _, c := range f.Classes {
+		if c.Name == "Service" {
+			serviceClass = c
+			break
+		}
+	}
+	if serviceClass == nil {
+		t.Fatal("Service class not found")
+	}
+
+	rule := newCouplingBetweenObjects().(*CouplingBetweenObjects)
+	measurement, ok := rule.measure(nil, serviceClass)
+	if !ok {
+		t.Fatal("measure returned ok = false")
+	}
+	// Service couples to Box, Entry, Result (3 types).
+	// Builtins (int, string, bool, error) must not be counted.
+	// Multiple instantiations of Box and Result should be counted once each.
+	if measurement.Value != 3 {
+		t.Errorf("Service coupling = %d, want 3 (Box, Entry, Result)", measurement.Value)
+	}
+}

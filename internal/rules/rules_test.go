@@ -975,6 +975,53 @@ type Box struct {
 	mustNotHave(t, hits, "CouplingBetweenObjects")
 }
 
+func TestCouplingBetweenObjectsGenericTypes(t *testing.T) {
+	rulesetPath := filepath.Join(t.TempDir(), "coupling.xml")
+	rulesetXML := []byte(`<ruleset name="coupling">
+  <rule ref="design/CouplingBetweenObjects">
+    <properties><property name="maximum" value="3"/></properties>
+  </rule>
+</ruleset>
+`)
+	if err := os.WriteFile(rulesetPath, rulesetXML, 0o600); err != nil {
+		t.Fatalf("write ruleset: %v", err)
+	}
+
+	// Coupling is 2 (List and Entry). Builtin type arguments (int, string) are ignored.
+	// Threshold is 3, so CouplingBetweenObjects must not fire.
+	hits := analyze(t, `
+type Entry struct{}
+type List[T any] struct{}
+type Cache struct {
+	items List[pkg.Entry]
+	ints  List[int]
+	strs  List[string]
+}
+`, rulesetPath)
+	mustNotHave(t, hits, "CouplingBetweenObjects")
+
+	// When threshold is 2, CouplingBetweenObjects must fire.
+	rulesetXML2 := []byte(`<ruleset name="coupling">
+  <rule ref="design/CouplingBetweenObjects">
+    <properties><property name="maximum" value="2"/></properties>
+  </rule>
+</ruleset>
+`)
+	if err := os.WriteFile(rulesetPath, rulesetXML2, 0o600); err != nil {
+		t.Fatalf("write ruleset: %v", err)
+	}
+	hits = analyze(t, `
+type Entry struct{}
+type List[T any] struct{}
+type Cache struct {
+	items List[pkg.Entry]
+	ints  List[int]
+	strs  List[string]
+}
+`, rulesetPath)
+	mustHave(t, hits, "CouplingBetweenObjects")
+}
+
 // globalVarFixture exercises every classification the GlobalVariable rule must
 // make. The mutated vars are written in different ways (reassign, ++, element
 // write, address-of); the const-like vars are only ever read; constants, the

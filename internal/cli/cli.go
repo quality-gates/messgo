@@ -55,7 +55,7 @@ func Main(args []string, stdout, stderr io.Writer) int {
 		printUsage(stderr)
 		return ExitError
 	}
-	if code, handled := handleInfoFlags(args[0], stdout); handled {
+	if code, handled := handleInfoFlags(args, stdout); handled {
 		return code
 	}
 
@@ -88,7 +88,7 @@ func run(opt options, stdout, stderr io.Writer) int {
 		fmt.Fprintln(stderr, "error:", err)
 		return ExitError
 	}
-	ruleset.FilterRules(sets, splitList(opt.ruleFilter.enable), splitList(opt.ruleFilter.disable))
+	applyRuleFilters(opt, sets, stderr)
 	rep, err := runner.Run(runner.Options{
 		Paths:       splitList(opt.paths),
 		RuleSets:    sets,
@@ -107,13 +107,40 @@ func run(opt options, stdout, stderr io.Writer) int {
 	return exitCodeFor(rep, opt)
 }
 
-// handleInfoFlags handles --version/--help, which short-circuit normal runs.
-func handleInfoFlags(first string, stdout io.Writer) (code int, handled bool) {
-	switch first {
-	case "--version":
-		fmt.Fprintf(stdout, "messgo %s\n", version.Version)
-		return ExitSuccess, true
-	case "--help", "-h", "help":
+// applyRuleFilters narrows the loaded rule sets by name and warns when the
+// filter leaves nothing selected or names rules that are not loaded.
+func applyRuleFilters(opt options, sets []*rule.RuleSet, stderr io.Writer) {
+	enable, disable := splitList(opt.ruleFilter.enable), splitList(opt.ruleFilter.disable)
+	if len(enable) == 0 && len(disable) == 0 {
+		return
+	}
+	res := ruleset.ApplyRuleFilter(sets, enable, disable)
+	if res.Remaining == 0 {
+		fmt.Fprintln(stderr, "warning: no rules selected (check --enable/--only/--disable)")
+	}
+	if opt.verbose {
+		for _, name := range res.Unmatched {
+			fmt.Fprintf(stderr, "warning: no rule named %q (check --enable/--only/--disable)\n", name)
+		}
+	}
+}
+
+// handleInfoFlags handles --version/--help, which short-circuit normal runs
+// wherever they appear in the argument list, before any other validation.
+func handleInfoFlags(args []string, stdout io.Writer) (code int, handled bool) {
+	for _, a := range args {
+		switch a {
+		case "--version":
+			fmt.Fprintf(stdout, "messgo %s\n", version.Version)
+			return ExitSuccess, true
+		case "--help", "-h":
+			printUsage(stdout)
+			return ExitSuccess, true
+		}
+	}
+	// The bare `help` command is only honoured as the first argument, where it
+	// cannot be mistaken for a path.
+	if args[0] == "help" {
 		printUsage(stdout)
 		return ExitSuccess, true
 	}
@@ -125,6 +152,8 @@ func parseArgs(args []string) (options, []string, error) {
 	opt := options{format: "text", maxPriority: 1}
 	var positionals []string
 	boolFlags := map[string]*bool{
+		"--verbose":                   &opt.verbose,
+		"-v":                          &opt.verbose,
 		"--strict":                    &opt.strict,
 		"--color":                     &opt.color,
 		"--ignore-errors-on-exit":     &opt.ignoreErrors,
@@ -146,21 +175,20 @@ func parseArgs(args []string) (options, []string, error) {
 	for i := 0; i < len(args); i++ {
 		a := args[i]
 		switch {
-		case a == "--verbose" || a == "-v":
-			opt.verbose = true
 		case boolFlags[a] != nil:
 			*boolFlags[a] = true
-		case strFlags[a] != nil:
-			i++
-			*strFlags[a] = arg(args, i)
-		case intFlags[a] != nil:
-			i++
-			*intFlags[a] = atoi(arg(args, i))
+		case strFlags[a] != nil || intFlags[a] != nil:
+			if err := valueFlag(args, &i, a, valueTarget{str: strFlags[a], pri: intFlags[a]}); err != nil {
+				return opt, nil, err
+			}
 		case strings.HasPrefix(a, "--"):
 			return opt, nil, fmt.Errorf("unknown option: %s", a)
 		default:
 			positionals = append(positionals, a)
 		}
+	}
+	if len(positionals) > 3 {
+		return opt, nil, fmt.Errorf("unexpected argument %q", positionals[3])
 	}
 	return opt, positionals, nil
 }
@@ -217,16 +245,49 @@ func exitCodeFor(rep *report.Report, opt options) int {
 	return ExitSuccess
 }
 
-func arg(args []string, i int) string {
-	if i < len(args) {
-		return args[i]
-	}
-	return ""
+// valueTarget is where a value-taking flag stores its value: either a string
+// field or an integer priority field.
+type valueTarget struct {
+	str *string
+	pri *int
 }
 
-func atoi(s string) int {
-	n, _ := strconv.Atoi(s)
-	return n
+// valueFlag consumes the value token following flag and stores it in t.
+func valueFlag(args []string, i *int, flag string, t valueTarget) error {
+	v, err := flagValue(args, i, flag)
+	if err != nil {
+		return err
+	}
+	if t.str != nil {
+		*t.str = v
+		return nil
+	}
+	n, err := nonNegativeInt(v)
+	if err != nil {
+		return fmt.Errorf("invalid value for %s: %q", flag, v)
+	}
+	*t.pri = n
+	return nil
+}
+
+// flagValue consumes the value token following a value-taking flag. A missing
+// token, or one that looks like another option, is a usage error.
+func flagValue(args []string, i *int, flag string) (string, error) {
+	next := *i + 1
+	if next >= len(args) || strings.HasPrefix(args[next], "--") {
+		return "", fmt.Errorf("%s requires a value", flag)
+	}
+	*i = next
+	return args[next], nil
+}
+
+// nonNegativeInt parses a priority value: a whole number >= 0.
+func nonNegativeInt(s string) (int, error) {
+	n, err := strconv.Atoi(s)
+	if err != nil || n < 0 {
+		return 0, fmt.Errorf("%q is not a non-negative integer", s)
+	}
+	return n, nil
 }
 
 func requireNonEmptyLists(opt options) error {

@@ -208,6 +208,39 @@ func TestFilterRules(t *testing.T) {
 	})
 }
 
+func TestApplyRuleFilterReports(t *testing.T) {
+	t.Run("survivor count and unmatched names", func(t *testing.T) {
+		sets := []*rule.RuleSet{loadOne(t, "codesize")}
+		res := ApplyRuleFilter(sets, []string{"CyclomaticComplexity", "Nope"}, []string{"NoSuchRule"})
+		if res.Remaining != 1 {
+			t.Errorf("Remaining = %d, want 1", res.Remaining)
+		}
+		if len(res.Unmatched) != 2 || res.Unmatched[0] != "Nope" || res.Unmatched[1] != "NoSuchRule" {
+			t.Errorf("Unmatched = %v, want [Nope NoSuchRule]", res.Unmatched)
+		}
+	})
+
+	t.Run("duplicate unmatched names are reported once", func(t *testing.T) {
+		sets := []*rule.RuleSet{loadOne(t, "codesize")}
+		res := ApplyRuleFilter(sets, []string{"Nope", "Nope"}, nil)
+		if len(res.Unmatched) != 1 {
+			t.Errorf("Unmatched = %v, want a single entry", res.Unmatched)
+		}
+	})
+
+	t.Run("no filters counts all rules", func(t *testing.T) {
+		sets := []*rule.RuleSet{loadOne(t, "codesize")}
+		before := len(ruleNames(sets))
+		res := ApplyRuleFilter(sets, nil, nil)
+		if res.Remaining != before {
+			t.Errorf("Remaining = %d, want %d", res.Remaining, before)
+		}
+		if res.Unmatched != nil {
+			t.Errorf("Unmatched = %v, want nil", res.Unmatched)
+		}
+	})
+}
+
 func TestMessageTemplatePreserved(t *testing.T) {
 	set := loadOne(t, "codesize")
 	r := ruleByName(set, "CyclomaticComplexity")

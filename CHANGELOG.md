@@ -6,6 +6,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 
 ## [Unreleased]
 
+## [0.4.1] - 2026-09-08
+
 ### Fixed
 - Fixed single-rule references in ruleset XML aborting with an unknown rule error when filtered out by priority bounds (#55).
 - Fixed CouplingBetweenObjects generic type handling: decompose bracketed type arguments, ignore built-in type arguments, count base generic types once across instantiations, and prevent package-prefix slicing from corrupting qualified type arguments (#56).

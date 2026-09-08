@@ -53,6 +53,11 @@ func TestShouldIncludeFileAppliesAllFileFilters(t *testing.T) {
 		{name: "test file included", path: "source_test.go", opts: Options{Suffixes: []string{".go"}}, want: true},
 		{name: "test file ignored", path: "source_test.go", opts: Options{Suffixes: []string{".go"}, IgnoreTests: true}, want: false},
 		{name: "excluded path", path: "skip/source.go", opts: Options{Suffixes: []string{".go"}, Exclude: []string{"", "skip"}}, want: false},
+		{name: "dot-prefix exclude against cleaned path", path: "proj/gen/g.go", opts: Options{Suffixes: []string{".go"}, Exclude: []string{"./proj/gen"}}, want: false},
+		{name: "cleaned exclude against dotted path", path: "./proj/gen/g.go", opts: Options{Suffixes: []string{".go"}, Exclude: []string{"proj/gen"}}, want: false},
+		{name: "dot-prefix exclude misses sibling", path: "proj/ok/o.go", opts: Options{Suffixes: []string{".go"}, Exclude: []string{"./proj/gen"}}, want: true},
+		{name: "empty exclude does not match", path: "source.go", opts: Options{Suffixes: []string{".go"}, Exclude: []string{""}}, want: true},
+		{name: "unclean path still matches cleaned exclude", path: "proj/./gen/g.go", opts: Options{Suffixes: []string{".go"}, Exclude: []string{"proj/gen"}}, want: false},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -409,4 +414,95 @@ type Book interface {
 	if len(rep.Violations) != 0 {
 		t.Fatalf("violations = %+v, want none: reconcile() satisfies Book declared in a sibling file", rep.Violations)
 	}
+}
+
+func TestDiscoverExcludeNormalizesDotPrefix(t *testing.T) {
+	chdirExcludeFixture(t)
+	want := []string{filepath.FromSlash("proj/ok/o.go")}
+	cases := []struct {
+		name    string
+		paths   []string
+		exclude []string
+	}{
+		{name: "walk + dotted exclude", paths: []string{"proj"}, exclude: []string{"./proj/gen"}},
+		{name: "walk + plain exclude", paths: []string{"proj"}, exclude: []string{"proj/gen"}},
+		{name: "explicit dotted list + dotted exclude", paths: []string{"./proj/gen/g.go", "./proj/ok/o.go"}, exclude: []string{"./proj/gen"}},
+		{name: "explicit dotted list + plain exclude", paths: []string{"./proj/gen/g.go", "./proj/ok/o.go"}, exclude: []string{"proj/gen"}},
+		{name: "pattern expansion + dotted exclude", paths: []string{"./proj/..."}, exclude: []string{"./proj/gen"}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			files, err := discover(Options{Paths: tc.paths, Suffixes: []string{".go"}, Exclude: tc.exclude})
+			if err != nil {
+				t.Fatalf("discover: %v", err)
+			}
+			if !sameStrings(files, want) {
+				t.Fatalf("discover = %v, want %v", files, want)
+			}
+		})
+	}
+}
+
+func TestDiscoverReportsCleanedPaths(t *testing.T) {
+	chdirExcludeFixture(t)
+	want := []string{filepath.FromSlash("proj/gen/g.go"), filepath.FromSlash("proj/ok/o.go")}
+	walked, err := discover(Options{Paths: []string{"proj"}, Suffixes: []string{".go"}})
+	if err != nil {
+		t.Fatalf("walk discover: %v", err)
+	}
+	explicit, err := discover(Options{Paths: []string{"./proj/gen/g.go", "./proj/ok/o.go"}, Suffixes: []string{".go"}})
+	if err != nil {
+		t.Fatalf("explicit discover: %v", err)
+	}
+	if !sameStrings(walked, want) {
+		t.Fatalf("walked = %v, want %v", walked, want)
+	}
+	if !sameStrings(explicit, want) {
+		t.Fatalf("explicit = %v, want %v", explicit, want)
+	}
+}
+
+func TestDiscoverExcludeMatchingNothing(t *testing.T) {
+	chdirExcludeFixture(t)
+	files, err := discover(Options{Paths: []string{"proj"}, Suffixes: []string{".go"}, Exclude: []string{"./no/such"}})
+	if err != nil {
+		t.Fatalf("discover: %v", err)
+	}
+	if len(files) != 2 {
+		t.Fatalf("discover = %v, want 2 files", files)
+	}
+}
+
+func chdirExcludeFixture(t *testing.T) {
+	t.Helper()
+	dir := t.TempDir()
+	for _, rel := range []string{"proj/gen/g.go", "proj/ok/o.go"} {
+		path := filepath.Join(dir, rel)
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(path, []byte("package X\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	cwd, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chdir(dir); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chdir(cwd) })
+}
+
+func sameStrings(got, want []string) bool {
+	if len(got) != len(want) {
+		return false
+	}
+	for i := range got {
+		if got[i] != want[i] {
+			return false
+		}
+	}
+	return true
 }

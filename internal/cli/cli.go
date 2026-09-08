@@ -265,7 +265,7 @@ Options:
   --maximumpriority <n>          Only rules with priority >= n.
   --reportfile <file>            Write the report to a file.
   --suffixes <list>              File extensions to scan (default: go).
-  --exclude <list>               Path substrings to exclude.
+  --exclude <list>               Path substrings to exclude (./ prefixes cleaned).
   --enable, --only <list>        Run only these rules (comma-separated names).
   --disable <list>               Skip these rules (comma-separated names).
   --ignore-tests                 Skip *_test.go files.

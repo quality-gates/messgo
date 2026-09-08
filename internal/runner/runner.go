@@ -178,6 +178,7 @@ func discover(opts Options) ([]string, error) {
 	var out []string
 	seen := map[string]bool{}
 	add := func(p string) {
+		p = normalizePath(p)
 		abs, _ := filepath.Abs(p)
 		if seen[abs] {
 			return
@@ -248,10 +249,15 @@ func hasSuffix(path string, suffixes []string) bool {
 }
 
 func isExcluded(path string, exclude []string) bool {
+	path = normalizePath(path)
 	for _, e := range exclude {
-		if e != "" && strings.Contains(path, e) {
+		if e != "" && strings.Contains(path, normalizePath(e)) {
 			return true
 		}
 	}
 	return false
+}
+
+func normalizePath(p string) string {
+	return filepath.Clean(p)
 }

@@ -166,19 +166,26 @@ func TestSingleRuleRefPriorityFilterExitClean(t *testing.T) {
 const parseErrorSrc = "package p\nfunc (\n"
 const excessiveParamsSrc = "package p\nfunc f(a, b, c, d, e, f2, g, h, i, j, k int) {}\n"
 
+func TestExitCodesMatchPHPMD(t *testing.T) {
+	if ExitSuccess != 0 || ExitError != 1 || ExitViolation != 2 || ExitProcessingError != 3 {
+		t.Errorf("exit codes = %d/%d/%d/%d, want 0/1/2/3",
+			ExitSuccess, ExitError, ExitViolation, ExitProcessingError)
+	}
+}
+
 func TestExitCodeParseError(t *testing.T) {
 	path := writeFixture(t, parseErrorSrc)
 	code, _, _ := runMain(t, path, "text", "go")
-	if code != ExitProcessingError {
-		t.Errorf("exit = %d, want %d", code, ExitProcessingError)
+	if code != 3 {
+		t.Errorf("exit = %d, want 3", code)
 	}
 }
 
 func TestIgnoreErrorsOnExitFallsThroughToClean(t *testing.T) {
 	path := writeFixture(t, parseErrorSrc)
 	code, _, _ := runMain(t, path, "text", "go", "--ignore-errors-on-exit")
-	if code != ExitSuccess {
-		t.Errorf("exit = %d, want %d", code, ExitSuccess)
+	if code != 0 {
+		t.Errorf("exit = %d, want 0", code)
 	}
 }
 
@@ -191,28 +198,28 @@ func TestParseErrorTakesPrecedenceOverViolation(t *testing.T) {
 		t.Fatal(err)
 	}
 	code, _, _ := runMain(t, dir, "text", "codesize")
-	if code != ExitProcessingError {
-		t.Errorf("exit = %d, want %d (processing error precedes violations)", code, ExitProcessingError)
+	if code != 3 {
+		t.Errorf("exit = %d, want 3 (processing error precedes violations)", code)
 	}
 	code, _, _ = runMain(t, dir, "text", "codesize", "--ignore-errors-on-exit")
-	if code != ExitViolation {
-		t.Errorf("ignore-errors-on-exit: exit = %d, want %d", code, ExitViolation)
+	if code != 2 {
+		t.Errorf("ignore-errors-on-exit: exit = %d, want 2", code)
 	}
 }
 
 func TestToolErrorsStillExitOne(t *testing.T) {
 	path := writeFixture(t, "package p\n")
 	code, _, errOut := runMain(t, filepath.Join(t.TempDir(), "missing.go"), "text", "go")
-	if code != ExitError {
-		t.Errorf("missing path: exit = %d, want %d (%q)", code, ExitError, errOut)
+	if code != 1 {
+		t.Errorf("missing path: exit = %d, want 1 (%q)", code, errOut)
 	}
 	code, _, errOut = runMain(t, path, "nope", "go")
-	if code != ExitError {
-		t.Errorf("unknown format: exit = %d, want %d (%q)", code, ExitError, errOut)
+	if code != 1 {
+		t.Errorf("unknown format: exit = %d, want 1 (%q)", code, errOut)
 	}
 	code, _, errOut = runMain(t, path, "text", "nope")
-	if code != ExitError {
-		t.Errorf("unknown ruleset: exit = %d, want %d (%q)", code, ExitError, errOut)
+	if code != 1 {
+		t.Errorf("unknown ruleset: exit = %d, want 1 (%q)", code, errOut)
 	}
 }
 

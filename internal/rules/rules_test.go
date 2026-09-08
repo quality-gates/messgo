@@ -1317,6 +1317,32 @@ func f(x int) {
 	mustNotHave(t, hits, "IdenticalBranches")
 }
 
+func TestIdenticalBranchesIgnoresEmptyIfElse(t *testing.T) {
+	src := `
+func f(x int) {
+	if x > 0 {
+	} else {
+	}
+}
+
+func fEmptyIf(x int) {
+	if x > 0 {
+	} else {
+		println("else")
+	}
+}
+
+func fEmptyElse(x int) {
+	if x > 0 {
+		println("if")
+	} else {
+	}
+}
+`
+	hits := analyze(t, src, "opinionated")
+	mustNotHave(t, hits, "IdenticalBranches")
+}
+
 func TestDuplicatedArrayKeyNegativeKeys(t *testing.T) {
 	src := `
 func f() {

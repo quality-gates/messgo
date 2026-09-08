@@ -121,6 +121,9 @@ func (r *IdenticalBranches) checkIfElse(c *rule.Context, fn *model.Function, n *
 	if !ok {
 		return
 	}
+	if len(n.Body.List) == 0 {
+		return
+	}
 	if !stmtsEqual(n.Body.List, elseBlock.List, fset) {
 		return
 	}

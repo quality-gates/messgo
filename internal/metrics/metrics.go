@@ -358,12 +358,9 @@ func npathStmts(stmts []ast.Stmt) int {
 }
 
 func returnStmtComplexity(n *ast.ReturnStmt) int {
-	c := 0
+	c := 1
 	for _, r := range n.Results {
 		c = npathAdd(c, expressionComplexity(r))
-	}
-	if c == 0 {
-		return 1
 	}
 	return c
 }

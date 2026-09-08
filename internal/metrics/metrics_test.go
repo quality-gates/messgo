@@ -483,3 +483,25 @@ func TestCognitiveComplexity(t *testing.T) {
 		})
 	}
 }
+
+func TestNPathReturnBooleanExpressions(t *testing.T) {
+	tests := []struct {
+		name string
+		src  string
+		want int
+	}{
+		{"empty return", "func f() { return }", 1},
+		{"return literal", "func f() bool { return true }", 1},
+		{"return single bool op", "func f(a, b bool) bool { return a && b }", 2},
+		{"return two bool ops", "func f(a, b, c bool) bool { return a && b && c }", 3},
+		{"return multiple values with bool ops", "func f(a, b, c, d bool) (bool, bool) { return a && b, c || d }", 3},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			body := parseFuncBody(t, tc.src)
+			if got := NPathComplexity(body); got != tc.want {
+				t.Errorf("NPath(%s) = %d, want %d", tc.name, got, tc.want)
+			}
+		})
+	}
+}

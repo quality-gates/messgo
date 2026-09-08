@@ -217,12 +217,12 @@ func namedTypesIn(t string) []string {
 		return namedTypesAfterArrayLen(t)
 	case strings.HasPrefix(t, "map["):
 		return namedTypesInMap(t)
-	case strings.HasPrefix(t, "<-chan "):
-		return namedTypesIn(strings.TrimPrefix(t, "<-chan "))
-	case strings.HasPrefix(t, "chan<- "):
-		return namedTypesIn(strings.TrimPrefix(t, "chan<- "))
-	case strings.HasPrefix(t, "chan "):
-		return namedTypesIn(strings.TrimPrefix(t, "chan "))
+	}
+	if elem, ok := trimChannelPrefix(t); ok {
+		return namedTypesIn(elem)
+	}
+	if types, ok := namedTypesInGeneric(t); ok {
+		return types
 	}
 	if i := strings.IndexByte(t, '.'); i >= 0 {
 		t = t[i+1:]
@@ -231,6 +231,77 @@ func namedTypesIn(t string) []string {
 		return nil
 	}
 	return []string{t}
+}
+
+func trimChannelPrefix(t string) (string, bool) {
+	for _, prefix := range []string{"<-chan ", "chan<- ", "chan "} {
+		if strings.HasPrefix(t, prefix) {
+			return strings.TrimPrefix(t, prefix), true
+		}
+	}
+	return t, false
+}
+
+func namedTypesInGeneric(t string) ([]string, bool) {
+	base, args, ok := splitGenericType(t)
+	if !ok {
+		return nil, false
+	}
+	out := namedTypesIn(base)
+	for _, arg := range args {
+		out = append(out, namedTypesIn(arg)...)
+	}
+	return out, true
+}
+
+func splitGenericType(t string) (base string, args []string, ok bool) {
+	open := strings.IndexByte(t, '[')
+	if open <= 0 || !strings.HasSuffix(t, "]") {
+		return "", nil, false
+	}
+	depth := 0
+	for i := open; i < len(t); i++ {
+		switch t[i] {
+		case '[':
+			depth++
+		case ']':
+			depth--
+			if depth == 0 && i != len(t)-1 {
+				return "", nil, false
+			}
+		}
+	}
+	if depth != 0 {
+		return "", nil, false
+	}
+	return t[:open], splitTypeArguments(t[open+1 : len(t)-1]), true
+}
+
+func splitTypeArguments(args string) []string {
+	var result []string
+	depth := 0
+	start := 0
+	for i := 0; i < len(args); i++ {
+		switch args[i] {
+		case '[':
+			depth++
+		case ']':
+			if depth > 0 {
+				depth--
+			}
+		case ',':
+			if depth == 0 {
+				if item := strings.TrimSpace(args[start:i]); item != "" {
+					result = append(result, item)
+				}
+				start = i + 1
+			}
+		}
+	}
+	if item := strings.TrimSpace(args[start:]); item != "" {
+		result = append(result, item)
+	}
+	return result
 }
 
 func namedTypesAfterArrayLen(t string) []string {
@@ -443,5 +514,5 @@ var builtinTypes = map[string]bool{
 	"uint32": true, "uint64": true, "uintptr": true, "byte": true, "rune": true,
 	"float32": true, "float64": true, "complex64": true, "complex128": true,
 	"error": true, "any": true, "interface{}": true, "struct{}": true,
-	"map": true, "chan": true, "func": true,
+	"map": true, "chan": true, "func": true, "comparable": true,
 }

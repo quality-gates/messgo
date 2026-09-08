@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"slices"
 	"sort"
+	"strings"
 	"testing"
 
 	"github.com/quality-gates/messgo/internal/model"
@@ -581,6 +582,112 @@ type C struct{ B }
 `
 	hits := analyze(t, src, "opinionated")
 	mustNotHave(t, hits, "StructEmbeddingDepth")
+}
+
+func TestStructEmbeddingDepthDoesNotTraverseLocalStructOnCrossPackageEmbedding(t *testing.T) {
+	src := `
+import (
+	"sync"
+	"other/pkg"
+)
+
+type Mutex struct {
+	A
+}
+type A struct {
+	B
+}
+type B struct {
+	C
+}
+type C struct{}
+
+type SafeCounter struct {
+	sync.Mutex
+}
+
+type SafeCounterPtr struct {
+	*sync.Mutex
+}
+
+type SafeGeneric struct {
+	pkg.Mutex[int]
+}
+
+type SafeGenericPtr struct {
+	*pkg.Mutex[int, string]
+}
+
+type DeepLocal struct {
+	Mutex
+}
+`
+	hits := analyze(t, src, "opinionated")
+	var structEmbeddingHits []hit
+	for _, h := range hits {
+		if h.rule == "StructEmbeddingDepth" {
+			structEmbeddingHits = append(structEmbeddingHits, h)
+		}
+	}
+	if len(structEmbeddingHits) != 1 {
+		t.Fatalf("expected exactly 1 StructEmbeddingDepth hit (on DeepLocal), got %d: %+v", len(structEmbeddingHits), structEmbeddingHits)
+	}
+}
+
+func TestStructEmbeddingDepthCrossPackageMultiFile(t *testing.T) {
+	file1Src := `package fixture
+type Mutex struct {
+	A
+}
+type A struct {
+	B
+}
+type B struct {
+	C
+}
+type C struct{}
+`
+	file2Src := `package fixture
+import "sync"
+type SafeCounter struct {
+	sync.Mutex
+}
+type DeepLocal struct {
+	Mutex
+}
+`
+	f1, err := model.ParseSource("a.go", []byte(file1Src))
+	if err != nil {
+		t.Fatalf("parse a.go: %v", err)
+	}
+	f2, err := model.ParseSource("b.go", []byte(file2Src))
+	if err != nil {
+		t.Fatalf("parse b.go: %v", err)
+	}
+	pkgClasses := append([]*model.Class{}, f1.Classes...)
+	pkgClasses = append(pkgClasses, f2.Classes...)
+	f1.PackageClasses = pkgClasses
+	f2.PackageClasses = pkgClasses
+
+	loader := &ruleset.Loader{}
+	sets, err := loader.Load("opinionated")
+	if err != nil {
+		t.Fatalf("load ruleset: %v", err)
+	}
+
+	vs2 := rule.Analyze(f2, sets)
+	var hits2 []string
+	for _, v := range vs2 {
+		if v.Rule.Name() == "StructEmbeddingDepth" {
+			hits2 = append(hits2, v.Description)
+		}
+	}
+	if len(hits2) != 1 {
+		t.Fatalf("expected 1 StructEmbeddingDepth hit on DeepLocal in b.go, got %d: %v", len(hits2), hits2)
+	}
+	if !strings.Contains(hits2[0], "DeepLocal") {
+		t.Errorf("expected violation to mention DeepLocal, got %s", hits2[0])
+	}
 }
 
 func TestNaming(t *testing.T) {

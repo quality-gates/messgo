@@ -131,7 +131,7 @@ func (b *fileBuilder) collectFields(c *Class, st *ast.StructType) {
 		if len(fld.Names) == 0 {
 			// Embedded field: the type name is the field name.
 			name := embeddedName(fld.Type)
-			c.Embeds = append(c.Embeds, name)
+			c.Embeds = append(c.Embeds, embeddedTypeName(fld.Type))
 			c.Fields = append(c.Fields, &Field{
 				Name:     name,
 				Type:     typeStr,
@@ -247,6 +247,8 @@ func embeddedName(e ast.Expr) string {
 	switch t := e.(type) {
 	case *ast.StarExpr:
 		return embeddedName(t.X)
+	case *ast.ParenExpr:
+		return embeddedName(t.X)
 	case *ast.Ident:
 		return t.Name
 	case *ast.SelectorExpr:
@@ -255,6 +257,24 @@ func embeddedName(e ast.Expr) string {
 		return embeddedName(t.X)
 	case *ast.IndexListExpr:
 		return embeddedName(t.X)
+	}
+	return exprString(e)
+}
+
+func embeddedTypeName(e ast.Expr) string {
+	switch t := e.(type) {
+	case *ast.StarExpr:
+		return embeddedTypeName(t.X)
+	case *ast.ParenExpr:
+		return embeddedTypeName(t.X)
+	case *ast.IndexExpr:
+		return embeddedTypeName(t.X)
+	case *ast.IndexListExpr:
+		return embeddedTypeName(t.X)
+	case *ast.Ident:
+		return t.Name
+	case *ast.SelectorExpr:
+		return exprString(t.X) + "." + t.Sel.Name
 	}
 	return exprString(e)
 }

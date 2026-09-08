@@ -26,7 +26,7 @@
 
 - Format with `gofmt`; keep `go vet` clean. Prefer packages under `cmd/messgo` and `internal/{cli,metrics,model,report,rule,rules,ruleset,runner,util}`.
 - Parse Go with `go/ast` (and existing model builders). Do not add a second parser.
-- Keep the phpmd-faithful shape: ruleset XML, exit codes `0` clean / `1` error / `2` violations.
+- Keep the phpmd-faithful shape: ruleset XML, exit codes `0` clean / `1` error / `2` violations / `3` processing error.
 - Prefer composition and small helpers in `internal/util` over growing god-functions. Do not cheat Cyclomatic Complexity or NPath limits on messgo's own code.
 - Self-analysis must stay clean on production paths: `./messgo ./internal text go --ignore-tests` (or the current equivalent) before merge when you touch analyzer code.
 - Tests assert behaviour with `mustHave` / `mustNotHave` style fixture checks and metric values against reference expectations — not incidental string snapshots of entire reports unless the report format is the behaviour under test.

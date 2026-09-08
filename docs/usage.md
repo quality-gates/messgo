@@ -57,8 +57,9 @@ the loaded ruleset does not already include.
 | Code | Meaning |
 | :--: | :--- |
 | **0** | Clean — no violations |
-| **1** | Error (bad arguments, parse failure, …) |
+| **1** | Error (bad arguments, unknown format/ruleset, unreadable path, …) |
 | **2** | Violations found |
+| **3** | Processing error (unparseable file). Takes precedence over 2. |
 
 Exit codes match phpmd so a non-zero exit fails CI without extra scripting.
 

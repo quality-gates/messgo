@@ -18,9 +18,10 @@ import (
 
 // Exit codes match PHPMD.
 const (
-	ExitSuccess   = 0
-	ExitError     = 1
-	ExitViolation = 2
+	ExitSuccess         = 0
+	ExitError           = 1
+	ExitViolation       = 2
+	ExitProcessingError = 3
 )
 
 type options struct {
@@ -204,7 +205,7 @@ func writeReport(rnd report.Renderer, opt options, rep *report.Report, stdout io
 // exitCodeFor maps the report onto PHPMD's exit-code convention.
 func exitCodeFor(rep *report.Report, opt options) int {
 	if len(rep.Errors) > 0 && !opt.ignoreErrors {
-		return ExitError
+		return ExitProcessingError
 	}
 	if len(rep.Violations) > 0 && !opt.ignoreViolations {
 		return ExitViolation
@@ -277,6 +278,6 @@ Options:
   --version                      Print version.
   --help, -h                     Show this help.
 
-Exit codes: 0 = clean, 1 = error, 2 = violations found.
+Exit codes: 0 = clean, 1 = error, 2 = violations found, 3 = processing error.
 `, version.Version, strings.Join(report.Formats(), ", "), strings.Join(ruleset.BuiltinNames(), ", "))
 }

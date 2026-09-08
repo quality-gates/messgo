@@ -100,14 +100,20 @@ func addLoopIdent(set map[*ast.Ident]bool, e ast.Expr) {
 	}
 }
 
-// defineIdents returns the LHS identifiers of a `:=` assignment.
+// DeclaredBy reports whether id's resolved object is declared by decl.
+func DeclaredBy(id *ast.Ident, decl ast.Node) bool {
+	return id != nil && id.Obj != nil && id.Obj.Decl == decl
+}
+
+// defineIdents returns the LHS identifiers newly declared by a `:=` assignment.
 func defineIdents(a *ast.AssignStmt) []*ast.Ident {
 	if a.Tok != token.DEFINE {
 		return nil
 	}
 	var ids []*ast.Ident
 	for _, lhs := range a.Lhs {
-		if id := identOf(lhs); id != nil {
+		id := identOf(lhs)
+		if DeclaredBy(id, a) {
 			ids = append(ids, id)
 		}
 	}

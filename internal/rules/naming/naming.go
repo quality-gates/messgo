@@ -276,6 +276,7 @@ func (r *ConstantNamingConventions) ApplyFile(c *rule.Context) {
 //
 // PHP4-style constructors named after the class. Adapted to Go: a method whose
 // name equals its receiver type name (a confusing "constructor-like" method).
+// The error-interface method Error() string on a type named Error is exempt.
 
 type ConstructorWithNameAsEnclosingClass struct{ *rule.Base }
 
@@ -283,7 +284,21 @@ func (r *ConstructorWithNameAsEnclosingClass) ApplyFunc(c *rule.Context, fn *mod
 	if !fn.IsMethod() {
 		return
 	}
-	if fn.Name == fn.Receiver {
-		c.ReportFunc(fn)
+	if fn.Name != fn.Receiver {
+		return
 	}
+	if isErrorInterfaceMethod(fn) {
+		return
+	}
+	c.ReportFunc(fn)
+}
+
+func isErrorInterfaceMethod(fn *model.Function) bool {
+	if fn.Name != "Error" {
+		return false
+	}
+	if len(fn.Params) != 0 || len(fn.Results) != 1 {
+		return false
+	}
+	return fn.Results[0].Type == "string"
 }

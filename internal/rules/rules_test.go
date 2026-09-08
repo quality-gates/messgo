@@ -722,6 +722,65 @@ func loop() {
 	mustNotHave(t, hits, "ShortVariable")
 }
 
+func TestConstructorWithNameAsEnclosingClassErrorIdiom(t *testing.T) {
+	tests := []struct {
+		name string
+		src  string
+		want bool
+	}{
+		{
+			name: "Error.Error() string pointer receiver",
+			src: `
+type Error struct{ Msg string }
+func (e *Error) Error() string { return e.Msg }
+`,
+			want: false,
+		},
+		{
+			name: "Error.Error() string value receiver",
+			src: `
+type Error struct{ Msg string }
+func (e Error) Error() string { return e.Msg }
+`,
+			want: false,
+		},
+		{
+			name: "same-name method on type not named Error",
+			src: `
+type Widget struct{}
+func (w *Widget) Widget() string { return "" }
+`,
+			want: true,
+		},
+		{
+			name: "String.String() is not exempted",
+			src: `
+type String struct{}
+func (s *String) String() string { return "" }
+`,
+			want: true,
+		},
+		{
+			name: "Error.Error() with extra result",
+			src: `
+type Error struct{ Msg string }
+func (e *Error) Error() (string, error) { return e.Msg, nil }
+`,
+			want: true,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			hits := analyze(t, tt.src, "naming")
+			if tt.want {
+				mustHave(t, hits, "ConstructorWithNameAsEnclosingClass")
+			} else {
+				mustNotHave(t, hits, "ConstructorWithNameAsEnclosingClass")
+			}
+		})
+	}
+}
+
 func TestUnusedCode(t *testing.T) {
 	src := `
 type widget struct {

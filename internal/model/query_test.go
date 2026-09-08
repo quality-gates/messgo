@@ -192,6 +192,82 @@ func f() { _ = map[int]int{key: 2} }
 	}
 }
 
+func TestSelectedMemberNamesTracksUnkeyedLocalStructFields(t *testing.T) {
+	f, err := ParseSource("query.go", []byte(`package sample
+import "image"
+
+type other struct {
+	otherField int
+}
+
+type key struct {
+	typ string
+	ptr any
+}
+
+type generic[T any] struct {
+	first  T
+	second T
+}
+
+type pair[A, B any] struct {
+	left  A
+	right B
+}
+
+type empty struct {
+	field int
+}
+
+var _ = key{"", nil}
+var _ = generic[int]{1, 2}
+var _ = pair[int, string]{1, ""}
+var _ = image.Point{1, 2}
+var _ = []int{1}
+var _ = [1]int{1}
+var _ = map[int]int{1: 2}
+var _ = empty{}
+var _ = unknown{1}
+`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	selected := f.SelectedMemberNames()
+	for _, name := range []string{"typ", "ptr", "first", "second", "left", "right"} {
+		if !selected[name] {
+			t.Errorf("SelectedMemberNames()[%q] = false, want true", name)
+		}
+	}
+	for _, name := range []string{"otherField", "field"} {
+		if selected[name] {
+			t.Errorf("SelectedMemberNames()[%q] = true, want false", name)
+		}
+	}
+}
+
+func TestSelectedMemberNamesUsesPackageStructsForUnkeyedLiterals(t *testing.T) {
+	use, err := ParseSource("use.go", []byte(`package sample
+var _ = key{1, 2}
+`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	declaration, err := ParseSource("key.go", []byte(`package sample
+type key struct {
+	first  int
+	second int
+}
+`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	use.PackageClasses = declaration.Classes
+	selected := use.SelectedMemberNames()
+	if !selected["first"] || !selected["second"] {
+		t.Fatalf("SelectedMemberNames() = %v, want package-declared key fields", selected)
+	}
+}
+
 func TestDuplicateLiteralKeysUseConstantValue(t *testing.T) {
 	f, err := ParseSource("query.go", []byte("package sample\nfunc f() {\n\t_ = map[int]int{1: 0, 01: 0}\n\t_ = map[string]int{\"a\": 0, `a`: 0}\n}\n"))
 	if err != nil {

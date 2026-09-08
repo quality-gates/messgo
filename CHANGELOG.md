@@ -6,6 +6,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 
 ## [Unreleased]
 
+## [0.4.2] - 2026-09-08
+
 ### Changed
 - Parse errors now exit `3` (PHPMD `EXIT_ERROR`) instead of `1`. Exit `1` remains for tool failures (bad arguments, unknown format/ruleset, unreadable path). `--ignore-errors-on-exit` still falls through to the violation check (#75).
 

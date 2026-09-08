@@ -183,25 +183,79 @@ func builtinRuleOwner(session *loadSession, name string) string {
 // case-sensitively; names that match no loaded rule are simply ignored. An
 // empty enable list means "keep everything" before disable is applied.
 func FilterRules(sets []*rule.RuleSet, enable, disable []string) {
+	ApplyRuleFilter(sets, enable, disable)
+}
+
+// FilterResult reports the outcome of a name-based rule filter.
+type FilterResult struct {
+	// Remaining is the number of rules kept after filtering.
+	Remaining int
+	// Unmatched lists requested names that matched no loaded rule, in the
+	// order given: --enable/--only entries first, then --disable entries,
+	// each deduplicated.
+	Unmatched []string
+}
+
+// ApplyRuleFilter applies the same filtering as FilterRules and additionally
+// reports how many rules survived and which requested names matched nothing.
+func ApplyRuleFilter(sets []*rule.RuleSet, enable, disable []string) FilterResult {
 	if len(enable) == 0 && len(disable) == 0 {
-		return
+		return FilterResult{Remaining: countRules(sets)}
 	}
+	matched := make(map[string]bool)
+	for _, set := range sets {
+		for _, r := range set.Rules {
+			matched[r.Name()] = true
+		}
+	}
+	res := FilterResult{Unmatched: unmatchedNames(append(append([]string{}, enable...), disable...), matched)}
 	enabled := toSet(enable)
 	disabled := toSet(disable)
 	for _, set := range sets {
-		kept := set.Rules[:0]
-		for _, r := range set.Rules {
-			name := r.Name()
-			if len(enabled) > 0 && !enabled[name] {
-				continue
-			}
-			if disabled[name] {
-				continue
-			}
-			kept = append(kept, r)
-		}
-		set.Rules = kept
+		set.Rules = filterSet(set.Rules, enabled, disabled)
+		res.Remaining += len(set.Rules)
 	}
+	return res
+}
+
+// filterSet keeps the rules of set that survive the enable whitelist and the
+// disable blacklist, in place.
+func filterSet(rules []rule.Rule, enabled, disabled map[string]bool) []rule.Rule {
+	kept := rules[:0]
+	for _, r := range rules {
+		name := r.Name()
+		if len(enabled) > 0 && !enabled[name] {
+			continue
+		}
+		if disabled[name] {
+			continue
+		}
+		kept = append(kept, r)
+	}
+	return kept
+}
+
+// unmatchedNames returns the entries of names not present in matched, keeping
+// first-seen order and dropping duplicates.
+func unmatchedNames(names []string, matched map[string]bool) []string {
+	var out []string
+	seen := make(map[string]bool, len(names))
+	for _, n := range names {
+		if matched[n] || seen[n] {
+			continue
+		}
+		seen[n] = true
+		out = append(out, n)
+	}
+	return out
+}
+
+func countRules(sets []*rule.RuleSet) int {
+	n := 0
+	for _, set := range sets {
+		n += len(set.Rules)
+	}
+	return n
 }
 
 func toSet(names []string) map[string]bool {

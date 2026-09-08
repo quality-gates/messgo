@@ -10,6 +10,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 - Parse errors now exit `3` (PHPMD `EXIT_ERROR`) instead of `1`. Exit `1` remains for tool failures (bad arguments, unknown format/ruleset, unreadable path). `--ignore-errors-on-exit` still falls through to the violation check (#75).
 
 ### Fixed
+- Fixed the CLI silently accepting malformed option values: non-numeric `--minimumpriority`/`--maximumpriority` values (e.g. `abc`, `-1`) are now a usage error instead of disabling the filter, value-taking flags with no value (including a trailing flag or a following option token) are rejected, `--help`/`-h`/`--version` short-circuit wherever they appear, surplus positional arguments are rejected, a rule filter that selects zero rules warns on stderr, and `--verbose` names unmatched `--enable`/`--disable` entries (#78).
 - Fixed empty or comma-only `paths` or `ruleset` arguments silently exiting 0 instead of reporting a usage error (#76).
 - Fixed XML, Checkstyle, and HTML reports emitting XML 1.0-disallowed control characters or invalid UTF-8 from parse errors and violation fields (#74).
 - Fixed `--exclude` with a `./` prefix failing to match files discovered by a directory walk, and report paths now use a cleaned form for both walked and explicitly listed files (#73).

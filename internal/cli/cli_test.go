@@ -278,3 +278,138 @@ func TestBlankEntriesInListsAreDropped(t *testing.T) {
 		t.Errorf("stderr mismatch:\nblank %q\nclean %q", errBlank, errClean)
 	}
 }
+
+// --- issue #78: malformed option values must not be silently accepted ---
+
+func TestInvalidPriorityValue(t *testing.T) {
+	path := writeFixture(t, "package p\nfunc f(a int) int { return a }\n")
+	cases := []struct{ flag, value string }{
+		{"--minimumpriority", "abc"},
+		{"--minimumpriority", "-1"},
+		{"--minimumpriority", "1.5"},
+		{"--minimumpriority", ""},
+		{"--maximumpriority", "abc"},
+		{"--maximumpriority", "-1"},
+	}
+	for _, tc := range cases {
+		code, out, errOut := runMain(t, path, "text", "codesize", tc.flag, tc.value)
+		if code != ExitError {
+			t.Errorf("%s %q: exit = %d, want %d", tc.flag, tc.value, code, ExitError)
+		}
+		if !strings.Contains(errOut, "invalid value for "+tc.flag) {
+			t.Errorf("%s %q: stderr should name the flag and the value, got %q", tc.flag, tc.value, errOut)
+		}
+		if out != "" {
+			t.Errorf("%s %q: expected empty stdout, got %q", tc.flag, tc.value, out)
+		}
+	}
+}
+
+func TestValidPriorityValuesStillWork(t *testing.T) {
+	path := writeFixture(t, excessiveParamsSrc)
+	code, _, errOut := runMain(t, path, "text", "codesize", "--minimumpriority", "0")
+	if code != ExitViolation {
+		t.Errorf("--minimumpriority 0: exit = %d, want %d (%q)", code, ExitViolation, errOut)
+	}
+	code, _, _ = runMain(t, path, "text", "codesize", "--minimumpriority", "+3")
+	if code != ExitViolation {
+		t.Errorf("--minimumpriority +3: exit = %d, want %d", code, ExitViolation)
+	}
+}
+
+func TestValueFlagMissingValue(t *testing.T) {
+	path := writeFixture(t, excessiveParamsSrc)
+	for _, flag := range []string{
+		"--reportfile", "--suffixes", "--exclude", "--enable", "--only", "--disable",
+		"--minimumpriority", "--maximumpriority",
+	} {
+		code, out, errOut := runMain(t, path, "text", "codesize", flag)
+		if code != ExitError {
+			t.Errorf("%s (trailing): exit = %d, want %d", flag, code, ExitError)
+		}
+		if !strings.Contains(errOut, flag+" requires a value") {
+			t.Errorf("%s (trailing): stderr should say the flag requires a value, got %q", flag, errOut)
+		}
+		if out != "" {
+			t.Errorf("%s (trailing): expected empty stdout, got %q", flag, out)
+		}
+	}
+	// A following option token is not a value.
+	code, _, errOut := runMain(t, path, "text", "codesize", "--enable", "--verbose")
+	if code != ExitError {
+		t.Errorf("--enable followed by option: exit = %d, want %d", code, ExitError)
+	}
+	if !strings.Contains(errOut, "--enable requires a value") {
+		t.Errorf("--enable followed by option: got %q", errOut)
+	}
+}
+
+func TestEnableSelectingNoRulesWarns(t *testing.T) {
+	path := writeFixture(t, excessiveParamsSrc)
+	code, out, errOut := runMain(t, path, "text", "codesize", "--enable", "Nope")
+	if code != ExitSuccess {
+		t.Errorf("exit = %d, want %d", code, ExitSuccess)
+	}
+	if out != "" {
+		t.Errorf("expected empty stdout, got %q", out)
+	}
+	if !strings.Contains(errOut, "no rules selected") {
+		t.Errorf("stderr should warn about no rules selected, got %q", errOut)
+	}
+	// Same warning when the whitelist is fully cancelled by the blacklist.
+	_, out, errOut = runMain(t, path, "text", "codesize", "--enable", "ExcessiveParameterList", "--disable", "ExcessiveParameterList")
+	if out != "" {
+		t.Errorf("expected empty stdout, got %q", out)
+	}
+	if !strings.Contains(errOut, "no rules selected") {
+		t.Errorf("stderr should warn about no rules selected, got %q", errOut)
+	}
+}
+
+func TestVerboseWarnsUnmatchedFilterNames(t *testing.T) {
+	gotoSrc := "package p\nfunc f() {\n\tgoto end\nend:\n}\n"
+	path := writeFixture(t, gotoSrc)
+	code, out, errOut := runMain(t, path, "text", "design", "--enable", "GotoStatement,Nope", "--verbose")
+	if code != ExitViolation {
+		t.Fatalf("exit = %d, want %d (out=%q err=%q)", code, ExitViolation, out, errOut)
+	}
+	if !strings.Contains(out, "GotoStatement") {
+		t.Errorf("matched rule should still fire: %q", out)
+	}
+	if !strings.Contains(errOut, "Nope") {
+		t.Errorf("verbose stderr should name the unmatched filter entry, got %q", errOut)
+	}
+}
+
+func TestInfoFlagsAnywhere(t *testing.T) {
+	path := writeFixture(t, excessiveParamsSrc)
+	code, out, errOut := runMain(t, path, "text", "codesize", "--help")
+	if code != ExitSuccess || errOut != "" {
+		t.Errorf("--help after positionals: code=%d err=%q", code, errOut)
+	}
+	if !strings.Contains(out, "Usage:") {
+		t.Errorf("--help after positionals should print usage, got %q", out)
+	}
+	code, out, _ = runMain(t, path, "text", "codesize", "--version")
+	if code != ExitSuccess || !strings.Contains(out, "messgo") {
+		t.Errorf("--version after positionals: code=%d out=%q", code, out)
+	}
+	code, out, _ = runMain(t, path, "--help", "text", "codesize")
+	if code != ExitSuccess || !strings.Contains(out, "Usage:") {
+		t.Errorf("--help between positionals: code=%d out=%q", code, out)
+	}
+}
+
+func TestSurplusPositional(t *testing.T) {
+	path := writeFixture(t, excessiveParamsSrc)
+	code, out, errOut := runMain(t, path, "text", "codesize", "extra")
+	if code != ExitError {
+		t.Errorf("exit = %d, want %d", code, ExitError)
+	}
+	if !strings.Contains(errOut, "extra") {
+		t.Errorf("stderr should mention the surplus argument, got %q", errOut)
+	}
+	if out != "" {
+		t.Errorf("expected empty stdout, got %q", out)
+	}
+}

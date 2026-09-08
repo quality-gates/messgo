@@ -829,6 +829,76 @@ func loop() {
 	mustHave(t, hits, "UnusedLocalVariable")
 }
 
+func TestUnusedLocalVariableNamedResultRedeclaration(t *testing.T) {
+	src := `
+func pair() (int, error) { return 1, nil }
+
+func f() (n int) {
+	n, err := pair()
+	if err != nil {
+		return 0
+	}
+	return
+}
+`
+	hits := analyze(t, src, "unusedcode")
+	mustNotHave(t, hits, "UnusedLocalVariable")
+}
+
+func TestUnusedLocalVariableReportsFreshLocal(t *testing.T) {
+	src := `
+func f() {
+	unused := 1
+}
+`
+	hits := analyze(t, src, "unusedcode")
+	mustHave(t, hits, "UnusedLocalVariable")
+	want := []hit{{rule: "UnusedLocalVariable", line: 3}}
+	if !slices.Equal(hits, want) {
+		t.Fatalf("unused-local hits = %v, want %v", hits, want)
+	}
+}
+
+func TestUnusedLocalVariableMixedRedeclarationLine(t *testing.T) {
+	src := `
+func f() (n int) {
+	n, unused := 1, 2
+	return
+}
+`
+	hits := analyze(t, src, "unusedcode")
+	mustHave(t, hits, "UnusedLocalVariable")
+	want := []hit{{rule: "UnusedLocalVariable", line: 3}}
+	if !slices.Equal(hits, want) {
+		t.Fatalf("unused-local hits = %v, want %v", hits, want)
+	}
+}
+
+func TestUnusedLocalVariablePureRedeclaration(t *testing.T) {
+	src := `
+func f() {
+	n := 0
+	n, err := 1, error(nil)
+	_ = err
+	_ = n
+}
+`
+	hits := analyze(t, src, "unusedcode")
+	mustNotHave(t, hits, "UnusedLocalVariable")
+}
+
+func TestUnusedLocalVariableStdlibRedeclarationShape(t *testing.T) {
+	src := `
+func token() (r rune) {
+	r, width := rune('a'), 1
+	_ = width
+	return
+}
+`
+	hits := analyze(t, src, "unusedcode")
+	mustNotHave(t, hits, "UnusedLocalVariable")
+}
+
 func TestBooleanGetMethodNameSkipsParameterizedByDefault(t *testing.T) {
 	hits := analyze(t, `
 func getReady(force bool) bool { return force }

@@ -430,7 +430,7 @@ func isReadIdentifier(id *ast.Ident, writeIdents map[*ast.Ident]bool) bool {
 }
 
 func isDeclaredBy(id *ast.Ident, decl ast.Node) bool {
-	return id != nil && id.Obj != nil && id.Obj.Decl == decl
+	return util.DeclaredBy(id, decl)
 }
 
 func isRangeDeclaredBy(id *ast.Ident, decl *ast.RangeStmt) bool {

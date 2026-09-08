@@ -99,3 +99,72 @@ func work(items []int) {
 		}
 	}
 }
+
+func TestDefineIdentsSkipsRedeclaredIdentifiers(t *testing.T) {
+	file := parseFile(t, `
+package p
+
+func pair() (int, error) { return 1, nil }
+
+func f() (n int) {
+	n, err := pair()
+	_ = err
+	return
+}
+`)
+	assign := firstDefineAssign(t, file)
+	got := defineIdentNames(assign)
+	if len(got) != 1 || got[0] != "err" {
+		t.Fatalf("defineIdents() = %v, want [err]", got)
+	}
+}
+
+func TestDefineIdentsKeepsFreshLocalsOnMixedLine(t *testing.T) {
+	file := parseFile(t, `
+package p
+
+func f() (n int) {
+	n, unused := 1, 2
+	return
+}
+`)
+	assign := firstDefineAssign(t, file)
+	got := defineIdentNames(assign)
+	if len(got) != 1 || got[0] != "unused" {
+		t.Fatalf("defineIdents() = %v, want [unused]", got)
+	}
+}
+
+func TestDefineIdentsSkipsUnresolvedIdentifiers(t *testing.T) {
+	assign := &ast.AssignStmt{
+		Tok: token.DEFINE,
+		Lhs: []ast.Expr{&ast.Ident{Name: "x"}},
+	}
+	if got := defineIdents(assign); len(got) != 0 {
+		t.Fatalf("defineIdents() = %v, want none when Obj is nil", got)
+	}
+}
+
+func firstDefineAssign(t *testing.T, file *ast.File) *ast.AssignStmt {
+	t.Helper()
+	var assign *ast.AssignStmt
+	ast.Inspect(file, func(n ast.Node) bool {
+		a, ok := n.(*ast.AssignStmt)
+		if ok && a.Tok == token.DEFINE && assign == nil {
+			assign = a
+		}
+		return true
+	})
+	if assign == nil {
+		t.Fatal("fixture had no := assignment")
+	}
+	return assign
+}
+
+func defineIdentNames(assign *ast.AssignStmt) []string {
+	var names []string
+	for _, id := range defineIdents(assign) {
+		names = append(names, id.Name)
+	}
+	return names
+}

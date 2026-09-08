@@ -9,6 +9,7 @@ import (
 	"go/ast"
 	"go/printer"
 	"go/token"
+	"strings"
 
 	"github.com/quality-gates/messgo/internal/model"
 	"github.com/quality-gates/messgo/internal/rule"
@@ -231,9 +232,9 @@ func classIndex(classes []*model.Class) map[string]*model.Class {
 }
 
 // embeddingDepth computes the maximum transitive embedding chain length from
-// name, following only same-file classes. visiting provides cycle protection.
+// name, following only within-package structs. visiting provides cycle protection.
 func embeddingDepth(name string, byName map[string]*model.Class, visiting map[string]bool) int {
-	if visiting[name] {
+	if strings.Contains(name, ".") || visiting[name] {
 		return 0
 	}
 	c, ok := byName[name]

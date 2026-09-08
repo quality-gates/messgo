@@ -1,6 +1,9 @@
 package model
 
-import "testing"
+import (
+	"slices"
+	"testing"
+)
 
 const sampleSrc = `package sample
 
@@ -231,5 +234,73 @@ func f(a *int, b []string, c map[string]int, e chan int, d ...bool) {}
 		if params[i].Type != w {
 			t.Errorf("param %d type = %q, want %q", i, params[i].Type, w)
 		}
+	}
+}
+
+func TestParseCrossPackageEmbeds(t *testing.T) {
+	src := `package p
+
+import "sync"
+import "other/pkg"
+
+type Local struct{}
+type LocalGen[T any] struct{}
+
+type Host struct {
+	Local
+	*Local
+	LocalGen[int]
+	*LocalGen[string]
+	sync.Mutex
+	*sync.Mutex
+	pkg.Bar[int]
+	*pkg.Bar[int, string]
+}
+`
+	f, err := ParseSource("x.go", []byte(src))
+	if err != nil {
+		t.Fatalf("ParseSource: %v", err)
+	}
+	var host *Class
+	for _, c := range f.Classes {
+		if c.Name == "Host" {
+			host = c
+			break
+		}
+	}
+	if host == nil {
+		t.Fatal("Host class not found")
+	}
+
+	wantEmbeds := []string{
+		"Local",
+		"Local",
+		"LocalGen",
+		"LocalGen",
+		"sync.Mutex",
+		"sync.Mutex",
+		"pkg.Bar",
+		"pkg.Bar",
+	}
+	if !slices.Equal(host.Embeds, wantEmbeds) {
+		t.Errorf("host.Embeds = %v, want %v", host.Embeds, wantEmbeds)
+	}
+
+	wantFieldNames := []string{
+		"Local",
+		"Local",
+		"LocalGen",
+		"LocalGen",
+		"Mutex",
+		"Mutex",
+		"Bar",
+		"Bar",
+	}
+	var gotFieldNames []string
+	for _, f := range host.Fields {
+		gotFieldNames = append(gotFieldNames, f.Name)
+	}
+	if !slices.Equal(gotFieldNames, wantFieldNames) {
+		t.Errorf("host.Fields = %v, want %v", gotFieldNames, wantFieldNames)
 	}
 }

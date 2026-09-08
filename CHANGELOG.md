@@ -7,6 +7,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 ## [Unreleased]
 
 ### Fixed
+- Fixed `StructEmbeddingDepth` false positives when an embedded field references an external package type that matches the name of a local struct (#58).
 - Fixed `IdenticalBranches` false positives on empty `if/else` statements (`if cond {} else {}`) (#60).
 - Fixed `UncheckedTypeAssertion` false positives on safe comma-ok type assertions wrapped in parentheses (#59).
 

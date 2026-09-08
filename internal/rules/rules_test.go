@@ -405,6 +405,100 @@ func assert(x any) (int, bool) {
 	mustNotHave(t, hits, "UncheckedTypeAssertion")
 }
 
+func TestUncheckedTypeAssertionDoesNotFireOnParenthesizedCommaOK(t *testing.T) {
+	cases := []struct {
+		name string
+		src  string
+	}{
+		{
+			name: "short declaration",
+			src: `
+func assert(x any) (int, bool) {
+	v, ok := (x.(int))
+	return v, ok
+}
+`,
+		},
+		{
+			name: "nested parentheses",
+			src: `
+func assert(x any) (int, bool) {
+	v, ok := ((x.(int)))
+	return v, ok
+}
+`,
+		},
+		{
+			name: "var declaration",
+			src: `
+func assert(x any) (int, bool) {
+	var v, ok = (x.(int))
+	return v, ok
+}
+`,
+		},
+		{
+			name: "if init statement",
+			src: `
+func assert(x any) bool {
+	if v, ok := (x.(int)); ok {
+		return v > 0
+	}
+	return false
+}
+`,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			hits := analyze(t, tc.src, "opinionated")
+			mustNotHave(t, hits, "UncheckedTypeAssertion")
+		})
+	}
+}
+
+func TestUncheckedTypeAssertionFiresOnParenthesizedUncheckedAssertion(t *testing.T) {
+	cases := []struct {
+		name string
+		src  string
+	}{
+		{
+			name: "parenthesized return",
+			src: `
+func assert(x any) int {
+	return (x.(int))
+}
+`,
+		},
+		{
+			name: "parenthesized assignment",
+			src: `
+func assert(x any) {
+	v := (x.(int))
+	println(v)
+}
+`,
+		},
+		{
+			name: "nested parenthesized assignment",
+			src: `
+func assert(x any) {
+	v := ((x.(int)))
+	println(v)
+}
+`,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			hits := analyze(t, tc.src, "opinionated")
+			mustHave(t, hits, "UncheckedTypeAssertion")
+		})
+	}
+}
+
 func TestUncheckedTypeAssertionDoesNotFireOnTypeSwitch(t *testing.T) {
 	src := `
 func classify(x any) string {

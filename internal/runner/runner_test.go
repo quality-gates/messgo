@@ -334,3 +334,40 @@ func Audit(a *Account) {
 		}
 	}
 }
+
+func TestCrossFileInterfaceSatisfiesMethodFromSiblingFile(t *testing.T) {
+	dir := t.TempDir()
+	// The interface is declared in the file analyzed after the implementation,
+	// so a first-file-only aggregation would miss it.
+	modelCode := `package account
+
+type Ledger struct{}
+
+func (l *Ledger) reconcile() {}
+`
+	ifaceCode := `package account
+
+type Book interface {
+	reconcile()
+}
+`
+	if err := os.WriteFile(filepath.Join(dir, "model.go"), []byte(modelCode), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "service.go"), []byte(ifaceCode), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	sets, err := (&ruleset.Loader{}).Load("unusedcode")
+	if err != nil {
+		t.Fatal(err)
+	}
+	ruleset.FilterRules(sets, []string{"UnusedPrivateMethod"}, nil)
+	rep, err := Run(Options{Paths: []string{dir}, RuleSets: sets})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(rep.Violations) != 0 {
+		t.Fatalf("violations = %+v, want none: reconcile() satisfies Book declared in a sibling file", rep.Violations)
+	}
+}

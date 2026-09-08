@@ -67,6 +67,11 @@ nesting+1, not just 1. An else-if chain does not add nesting; an else block
 adds +1. Boolean &&/|| sequences add 1 per operator change. Direct recursion
 and labeled break/continue each add +1.
 
+`UnusedPrivateMethod` treats a method as used when an interface declared anywhere
+in the same package (including through embedded interfaces) declares a method of
+the same name — the sealed-interface / marker-method idiom means the method is
+part of a type's contract even when never selected by name.
+
 `UncheckedTypeAssertion` (opinionated) flags type assertions used without the
 comma-ok form (`v, ok := x.(T)`), which panic on failure. Type switches are
 safe and not flagged.

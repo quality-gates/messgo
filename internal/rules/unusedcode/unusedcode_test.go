@@ -90,6 +90,92 @@ func inspect() {
 	}
 }
 
+func TestUnusedPrivateMethodSatisfiedBySamePackageInterface(t *testing.T) {
+	f, err := model.ParseSource("a.go", []byte(`package p
+
+type Node interface {
+	Pos() int
+	node()
+}
+
+type Leaf struct{ p int }
+
+func (l *Leaf) Pos() int { return l.p }
+func (l *Leaf) node()    {}
+
+func Walk(n Node) int { return n.Pos() }
+`))
+	if err != nil {
+		t.Fatalf("ParseSource: %v", err)
+	}
+
+	methodRule := &UnusedPrivateMethod{Base: rule.NewBase()}
+	violations := rule.Analyze(f, []*rule.RuleSet{{Rules: []rule.Rule{methodRule}}})
+	if len(violations) != 0 {
+		t.Fatalf("violations = %+v, want none: node() is required for *Leaf to satisfy Node", violations)
+	}
+}
+
+func TestUnusedPrivateMethodSatisfiedThroughEmbeddedInterface(t *testing.T) {
+	f, err := model.ParseSource("a.go", []byte(`package p
+
+type base interface{ hidden() }
+
+type Node interface {
+	base
+	Pos() int
+}
+
+type Leaf struct{}
+
+func (l *Leaf) Pos() int  { return 0 }
+func (l *Leaf) hidden()   {}
+
+var _ Node = (*Leaf)(nil)
+`))
+	if err != nil {
+		t.Fatalf("ParseSource: %v", err)
+	}
+
+	methodRule := &UnusedPrivateMethod{Base: rule.NewBase()}
+	violations := rule.Analyze(f, []*rule.RuleSet{{Rules: []rule.Rule{methodRule}}})
+	if len(violations) != 0 {
+		t.Fatalf("violations = %+v, want none: hidden() is inherited by Node through base", violations)
+	}
+}
+
+func TestUnusedPrivateMethodSelectionAndInterfaceInteractions(t *testing.T) {
+	f, err := model.ParseSource("a.go", []byte(`package p
+
+type Node interface{ node() }
+
+type Leaf struct{}
+
+func (l *Leaf) node()    {}
+func (l *Leaf) chosen()  {}
+func (l *Leaf) orphan()  {}
+
+func walk(l *Leaf) { l.chosen() }
+`))
+	if err != nil {
+		t.Fatalf("ParseSource: %v", err)
+	}
+
+	methodRule := &UnusedPrivateMethod{Base: rule.NewBase()}
+	violations := rule.Analyze(f, []*rule.RuleSet{{Rules: []rule.Rule{methodRule}}})
+	var names []string
+	for _, v := range violations {
+		if len(v.Args) == 1 {
+			if name, ok := v.Args[0].(string); ok {
+				names = append(names, name)
+			}
+		}
+	}
+	if len(names) != 1 || names[0] != "orphan" {
+		t.Fatalf("violations = %v, want only [orphan]: node() satisfies Node and chosen() is selected", names)
+	}
+}
+
 func BenchmarkUnusedMemberRules(b *testing.B) {
 	for _, classes := range []int{100, 200, 400} {
 		b.Run(fmt.Sprintf("classes_%d", classes), func(b *testing.B) {

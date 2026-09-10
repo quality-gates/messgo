@@ -194,11 +194,11 @@ func discover(opts Options) ([]string, error) {
 	seen := map[string]bool{}
 	add := func(p string) {
 		p = normalizePath(p)
-		abs, _ := filepath.Abs(p)
-		if seen[abs] {
+		identity := pathIdentity(p)
+		if seen[identity] {
 			return
 		}
-		seen[abs] = true
+		seen[identity] = true
 		out = append(out, p)
 	}
 	for _, p := range opts.Paths {
@@ -214,6 +214,11 @@ func discover(opts Options) ([]string, error) {
 			add(root)
 			continue
 		}
+		root, err = filepath.EvalSymlinks(root)
+		if err != nil {
+			return nil, err
+		}
+		root = normalizePath(root)
 		err = filepath.WalkDir(root, walkDirFunc(root, opts, add))
 		if err != nil {
 			return nil, err
@@ -221,6 +226,17 @@ func discover(opts Options) ([]string, error) {
 	}
 	sort.Strings(out)
 	return out, nil
+}
+
+func pathIdentity(p string) string {
+	abs, err := filepath.Abs(p)
+	if err != nil {
+		return p
+	}
+	if resolved, err := filepath.EvalSymlinks(abs); err == nil {
+		return normalizePath(resolved)
+	}
+	return normalizePath(abs)
 }
 
 func discoveryRoot(p string) string {

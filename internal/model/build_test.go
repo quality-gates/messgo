@@ -307,3 +307,31 @@ type Host struct {
 		t.Errorf("host.Fields = %v, want %v", gotFieldNames, wantFieldNames)
 	}
 }
+
+func TestAliasReceiverMethodAttachesToAliasedType(t *testing.T) {
+	src := "package p\ntype original struct{}\ntype alias = original\nfunc (alias) m() {}\n"
+	f, err := ParseSource("alias.go", []byte(src))
+	if err != nil {
+		t.Fatalf("ParseSource: %v", err)
+	}
+	if len(f.Classes) != 1 || f.Classes[0].Name != "original" {
+		t.Fatalf("Classes = %v, want [original]", f.Classes)
+	}
+	c := f.Classes[0]
+	if len(c.Methods) != 1 || c.Methods[0].Name != "m" {
+		t.Fatalf("original.Methods = %v, want [m]", c.Methods)
+	}
+	if c.Methods[0].Class != c {
+		t.Fatalf("m.Class = %v, want original", c.Methods[0].Class)
+	}
+}
+
+func TestAliasToStructLiteralStillDeclaresClass(t *testing.T) {
+	f, err := ParseSource("alias.go", []byte("package p\ntype T = struct{ A int }\n"))
+	if err != nil {
+		t.Fatalf("ParseSource: %v", err)
+	}
+	if len(f.Classes) != 1 || f.Classes[0].Name != "T" {
+		t.Fatalf("Classes = %v, want [T]", f.Classes)
+	}
+}

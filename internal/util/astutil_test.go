@@ -168,3 +168,46 @@ func defineIdentNames(assign *ast.AssignStmt) []string {
 	}
 	return names
 }
+
+func TestTypeAliasNames(t *testing.T) {
+	src := `package p
+type original struct{}
+type alias = original
+type chained = alias
+type external = other.Thing
+type literal = struct{ A int }
+type selfish = selfish
+type real original
+`
+	fset := token.NewFileSet()
+	f, err := parser.ParseFile(fset, "a.go", src, 0)
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+	got := TypeAliasNames([]*ast.File{f})
+	want := map[string]string{"alias": "original", "chained": "alias"}
+	if len(got) != len(want) {
+		t.Fatalf("TypeAliasNames = %v, want %v", got, want)
+	}
+	for k, v := range want {
+		if got[k] != v {
+			t.Errorf("TypeAliasNames[%q] = %q, want %q", k, got[k], v)
+		}
+	}
+}
+
+func TestResolveTypeAlias(t *testing.T) {
+	aliases := map[string]string{"a": "b", "b": "original", "loop": "loop2", "loop2": "loop"}
+	tests := []struct{ in, want string }{
+		{"a", "original"},
+		{"b", "original"},
+		{"original", "original"},
+		{"missing", "missing"},
+		{"loop", "loop"},
+	}
+	for _, tt := range tests {
+		if got := ResolveTypeAlias(aliases, tt.in); got != tt.want {
+			t.Errorf("ResolveTypeAlias(%q) = %q, want %q", tt.in, got, tt.want)
+		}
+	}
+}

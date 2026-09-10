@@ -144,6 +144,80 @@ var _ Node = (*Leaf)(nil)
 	}
 }
 
+func TestUnusedPrivateMethodNotSuppressedByIncompatibleInterfaceSignature(t *testing.T) {
+	cases := []struct {
+		name   string
+		iface  string
+		method string
+	}{
+		{
+			name:   "parameter count",
+			iface:  "do(int)",
+			method: "func (s S) do() {}",
+		},
+		{
+			name:   "parameter type",
+			iface:  "do(int)",
+			method: "func (s S) do(string) {}",
+		},
+		{
+			name:   "result count",
+			iface:  "do() int",
+			method: "func (s S) do() {}",
+		},
+		{
+			name:   "result type",
+			iface:  "do() int",
+			method: "func (s S) do() string { return \"\" }",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			f, err := model.ParseSource("a.go", []byte(`package p
+
+type Wants interface { `+tc.iface+` }
+
+type S struct{}
+
+`+tc.method+`
+`))
+			if err != nil {
+				t.Fatalf("ParseSource: %v", err)
+			}
+
+			methodRule := &UnusedPrivateMethod{Base: rule.NewBase()}
+			violations := rule.Analyze(f, []*rule.RuleSet{{Rules: []rule.Rule{methodRule}}})
+			if len(violations) != 1 || violations[0].Args[0] != "do" {
+				t.Fatalf("violations = %+v, want one 'do' violation: S cannot implement Wants with an incompatible signature", violations)
+			}
+		})
+	}
+}
+
+func TestUnusedPrivateMethodSuppressedByMatchingInterfaceSignature(t *testing.T) {
+	f, err := model.ParseSource("a.go", []byte(`package p
+
+type Wants interface {
+	do(int) error
+	other()
+}
+
+type S struct{}
+
+func (s S) do(i int) error { return nil }
+func (s S) other()         {}
+`))
+	if err != nil {
+		t.Fatalf("ParseSource: %v", err)
+	}
+
+	methodRule := &UnusedPrivateMethod{Base: rule.NewBase()}
+	violations := rule.Analyze(f, []*rule.RuleSet{{Rules: []rule.Rule{methodRule}}})
+	if len(violations) != 0 {
+		t.Fatalf("violations = %+v, want none: do(int) error and other() match Wants", violations)
+	}
+}
+
 func TestUnusedPrivateMethodSelectionAndInterfaceInteractions(t *testing.T) {
 	f, err := model.ParseSource("a.go", []byte(`package p
 

@@ -1644,6 +1644,24 @@ func spaced() {
 	}
 }
 
+// Regression for quality-gates/messgo#92: a comment marker inside a raw string
+// must not put the effective-LOC scan into block-comment mode. The marker and
+// control sources differ only in the string's contents, so both must exceed
+// the same effective-LOC threshold.
+func TestLongMethodIgnoreWhitespaceCountsStringLiteralLines(t *testing.T) {
+	src := `
+func f() {
+	_ = ` + "`/*\nraw content\n`" + `
+	x := 1
+	_ = x
+}
+`
+	hits := analyze(t, src, codesizeRuleset(t, "LongMethod", 3, true))
+	if got := has(hits, "LongMethod"); !got {
+		t.Fatalf("LongMethod violation = false, want true; hits = %v", hits)
+	}
+}
+
 func TestLongClassIgnoreWhitespaceOverride(t *testing.T) {
 	src := `
 type widget struct {

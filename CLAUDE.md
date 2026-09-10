@@ -17,6 +17,12 @@ go test ./...
 
 All packages pass.
 
+## Mutation testing
+
+`.github/workflows/mutation.yml` is the source for the package, timeout, coverage, and MSI arguments. To reproduce that gate locally, use the same invocation with one addition: this is a shared 8-core host, so runs must not take every core.
+
+For mutation tests, set `GOMAXPROCS=1` and pass `--workers=1` to `mutago` to keep the host responsive.
+
 ## Key packages
 
 | Package | What it does |

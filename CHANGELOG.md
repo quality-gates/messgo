@@ -6,6 +6,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 
 ## [Unreleased]
 
+## [0.4.3] - 2026-09-10
+
 ### Added
 - Guidance in `CLAUDE.md` (which root `AGENTS.md` symlinks to) capping local
   `mutago` runs at one worker (`GOMAXPROCS=1`, `--workers=1`), so reproducing

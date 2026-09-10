@@ -5,14 +5,18 @@ import (
 	"go/constant"
 	"go/token"
 	"maps"
+	"path"
+	"strconv"
 
 	"github.com/quality-gates/messgo/internal/util"
 )
 
 // Call describes a function call found inside an artifact.
 type Call struct {
-	Name string
-	Line int
+	Name        string
+	Selector    string
+	PackagePath string
+	Line        int
 }
 
 // SourcePosition identifies a position in the original source file.
@@ -66,11 +70,86 @@ func Calls(f *Function) []Call {
 	var out []Call
 	ast.Inspect(f.Body, func(n ast.Node) bool {
 		if ce, ok := n.(*ast.CallExpr); ok {
-			out = append(out, Call{Name: calleeName(ce.Fun), Line: f.File.Fset.Position(ce.Pos()).Line})
+			out = append(out, callDetails(f.File, ce))
 		}
 		return true
 	})
 	return out
+}
+
+func callDetails(file *File, ce *ast.CallExpr) Call {
+	call := Call{Name: calleeName(ce.Fun), Line: file.Fset.Position(ce.Pos()).Line}
+	if selector, ok := calledSelector(ce.Fun); ok {
+		call.Selector = selector.Sel.Name
+		call.PackagePath = importedPackagePath(file, packageQualifier(selector.X))
+	}
+	return call
+}
+
+func calledSelector(expr ast.Expr) (*ast.SelectorExpr, bool) {
+	for {
+		switch node := expr.(type) {
+		case *ast.ParenExpr:
+			expr = node.X
+		case *ast.SelectorExpr:
+			return node, true
+		default:
+			return nil, false
+		}
+	}
+}
+
+func packageQualifier(expr ast.Expr) *ast.Ident {
+	for {
+		switch node := expr.(type) {
+		case *ast.ParenExpr:
+			expr = node.X
+		case *ast.Ident:
+			return node
+		default:
+			return nil
+		}
+	}
+}
+
+func importedPackagePath(file *File, qualifier *ast.Ident) string {
+	if !resolvableImportQualifier(file, qualifier) {
+		return ""
+	}
+	for _, spec := range file.Syntax.Imports {
+		importPath, ok := importPath(spec)
+		if !ok {
+			continue
+		}
+		if !importMatchesQualifier(spec, importPath, qualifier.Name) {
+			continue
+		}
+		return importPath
+	}
+	return ""
+}
+
+func resolvableImportQualifier(file *File, qualifier *ast.Ident) bool {
+	return file != nil && file.Syntax != nil && qualifier != nil && qualifier.Obj == nil
+}
+
+func importMatchesQualifier(spec *ast.ImportSpec, importPath, qualifierName string) bool {
+	localName := path.Base(importPath)
+	if spec.Name != nil {
+		localName = spec.Name.Name
+	}
+	return localName != "_" && localName != "." && localName == qualifierName
+}
+
+func importPath(spec *ast.ImportSpec) (string, bool) {
+	if spec == nil || spec.Path == nil {
+		return "", false
+	}
+	value, err := strconv.Unquote(spec.Path.Value)
+	if err != nil {
+		return "", false
+	}
+	return value, true
 }
 
 // LoopConditionCalls returns calls to selected names found in for-loop

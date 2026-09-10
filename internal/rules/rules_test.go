@@ -1872,3 +1872,109 @@ func f() {
 	hits := analyze(t, src, "cleancode")
 	mustHave(t, hits, "DuplicatedArrayKey")
 }
+
+func TestExitExpressionResolvesImportedPackages(t *testing.T) {
+	tests := []struct {
+		name      string
+		src       string
+		wantLines []int
+	}{
+		{
+			name: "aliased os",
+			src: `import o "os"
+
+func stop() {
+	o.Exit(1)
+}`,
+			wantLines: []int{4},
+		},
+		{
+			name: "aliased syscall",
+			src: `import s "syscall"
+
+func stop() {
+	s.Exit(1)
+}`,
+			wantLines: []int{4},
+		},
+		{
+			name: "unaliased os",
+			src: `import "os"
+
+func stop() {
+	os.Exit(1)
+}`,
+			wantLines: []int{4},
+		},
+		{
+			name: "unaliased syscall",
+			src: `import "syscall"
+
+func stop() {
+	syscall.Exit(1)
+}`,
+			wantLines: []int{4},
+		},
+		{
+			name: "wrong package named os",
+			src: `import os "github.com/acme/os"
+
+func stop() {
+	os.Exit(1)
+}`,
+		},
+		{
+			name: "wrong package named syscall",
+			src: `import syscall "github.com/acme/syscall"
+
+func stop() {
+	syscall.Exit(1)
+}`,
+		},
+		{
+			name: "shadowed import",
+			src: `import "os"
+
+type target struct{}
+
+func (target) Exit(int) {}
+
+func stop(os target) {
+	os.Exit(1)
+}`,
+		},
+		{
+			name: "same package function",
+			src: `func Exit(int) {}
+
+func stop() {
+	Exit(1)
+}`,
+		},
+		{
+			name: "method",
+			src: `type target struct{}
+
+func (target) Exit(int) {}
+
+func stop(target target) {
+	target.Exit(1)
+}`,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			hits := analyze(t, tc.src, "design")
+			var gotLines []int
+			for _, h := range hits {
+				if h.rule == "ExitExpression" {
+					gotLines = append(gotLines, h.line)
+				}
+			}
+			if !slices.Equal(gotLines, tc.wantLines) {
+				t.Fatalf("ExitExpression lines = %v, want %v; all hits = %v", gotLines, tc.wantLines, hits)
+			}
+		})
+	}
+}

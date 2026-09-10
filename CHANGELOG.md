@@ -7,6 +7,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 ## [Unreleased]
 
 ### Fixed
+- Fixed recursive discovery skipping Go files whose basenames begin with `.` or
+  `_` while keeping explicitly named hidden and underscore files analyzable (#94).
 - Fixed `UnusedPrivateField` and `UnusedPrivateMethod` false negatives when
   unrelated types in the same package have same-named members: selections are
   now associated with their receiver or composite-literal type (#93).

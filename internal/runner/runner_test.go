@@ -208,6 +208,39 @@ func TestDirectoryDiscoverySkipsHiddenAndUnderscoreDirectories(t *testing.T) {
 	}
 }
 
+func TestDirectoryDiscoverySkipsHiddenAndUnderscoreFiles(t *testing.T) {
+	dir := t.TempDir()
+	src := "package fixture\ntype hidden struct {\n\tunused int\n}\n"
+	for _, name := range []string{"visible.go", ".ignored.go", "_ignored.go"} {
+		if err := os.WriteFile(filepath.Join(dir, name), []byte(src), 0o644); err != nil {
+			t.Fatalf("write %s: %v", name, err)
+		}
+	}
+	sets, err := (&ruleset.Loader{}).Load("unusedcode")
+	if err != nil {
+		t.Fatalf("load ruleset: %v", err)
+	}
+	ruleset.FilterRules(sets, []string{"UnusedPrivateField"}, nil)
+
+	recursive, err := Run(Options{Paths: []string{dir}, RuleSets: sets})
+	if err != nil {
+		t.Fatalf("recursive Run: %v", err)
+	}
+	if len(recursive.Violations) != 1 || filepath.Base(recursive.Violations[0].File) != "visible.go" {
+		t.Errorf("recursive Run violations = %+v, want only visible.go", recursive.Violations)
+	}
+
+	for _, name := range []string{".ignored.go", "_ignored.go"} {
+		explicit, err := Run(Options{Paths: []string{filepath.Join(dir, name)}, RuleSets: sets})
+		if err != nil {
+			t.Fatalf("explicit Run for %s: %v", name, err)
+		}
+		if len(explicit.Violations) != 1 || filepath.Base(explicit.Violations[0].File) != name {
+			t.Fatalf("explicit Run for %s violations = %+v, want one finding", name, explicit.Violations)
+		}
+	}
+}
+
 func TestShouldSkipDir(t *testing.T) {
 	tests := []struct {
 		name string

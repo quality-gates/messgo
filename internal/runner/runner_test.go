@@ -551,6 +551,49 @@ func TestDiscoverReportsCleanedPaths(t *testing.T) {
 	}
 }
 
+func TestRunFollowsSymlinkRootsAndDeduplicatesAliases(t *testing.T) {
+	dir := t.TempDir()
+	file := filepath.Join(dir, "fixture.go")
+	if err := os.WriteFile(file, []byte("package p\nfunc f(a, b, c, d, e, f2, g, h, i, j, k int) {}\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	root := filepath.Join(t.TempDir(), "symlink-root")
+	if err := os.Symlink(dir, root); err != nil {
+		t.Fatal(err)
+	}
+	alias := filepath.Join(t.TempDir(), "alias.go")
+	if err := os.Symlink(file, alias); err != nil {
+		t.Fatal(err)
+	}
+	sets, err := (&ruleset.Loader{}).Load("codesize")
+	if err != nil {
+		t.Fatal(err)
+	}
+	ruleset.FilterRules(sets, []string{"ExcessiveParameterList"}, nil)
+	cases := []struct {
+		name  string
+		paths []string
+	}{
+		{name: "target directory", paths: []string{dir}},
+		{name: "symlink root", paths: []string{root}},
+		{name: "target plus symlink alias", paths: []string{file, alias}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			rep, err := Run(Options{Paths: tc.paths, RuleSets: sets})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(rep.Violations) != 1 {
+				t.Fatalf("violations = %+v, want exactly one ExcessiveParameterList finding", rep.Violations)
+			}
+			if rep.Violations[0].Rule.Name() != "ExcessiveParameterList" {
+				t.Fatalf("rule = %q, want ExcessiveParameterList", rep.Violations[0].Rule.Name())
+			}
+		})
+	}
+}
+
 func TestDiscoverExcludeMatchingNothing(t *testing.T) {
 	chdirExcludeFixture(t)
 	files, err := discover(Options{Paths: []string{"proj"}, Suffixes: []string{".go"}, Exclude: []string{"./no/such"}})

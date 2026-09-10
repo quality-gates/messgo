@@ -7,6 +7,9 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 ## [Unreleased]
 
 ### Fixed
+- Fixed file discovery ignoring directory symlink roots and reporting duplicate
+  findings for symlink aliases: roots are resolved before walking and discovered
+  files are deduplicated by physical path (#104).
 - Fixed class-level rules and metrics ignoring methods declared on a type-alias
   receiver: `type alias = original` now attaches those methods to the aliased
   type, both within a file and across a package (#103).

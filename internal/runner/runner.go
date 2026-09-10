@@ -94,7 +94,7 @@ func annotatePackageGroup(group []*model.File) {
 	for _, f := range group {
 		f.PackageClasses = pkgClasses
 	}
-	attachPackageMethods(group, classByName)
+	attachPackageMethods(group, classByName, util.TypeAliasNames(asts))
 	pkgMembers := collectPackageMemberNames(group)
 	pkgMemberSelections := collectPackageMemberSelections(group)
 	var pkgInterfaces []*model.Interface
@@ -109,13 +109,13 @@ func annotatePackageGroup(group []*model.File) {
 	}
 }
 
-func attachPackageMethods(group []*model.File, classByName map[string]*model.Class) {
+func attachPackageMethods(group []*model.File, classByName map[string]*model.Class, aliases map[string]string) {
 	for _, f := range group {
 		for _, fn := range f.AllFuncs {
 			if !fn.IsMethod() {
 				continue
 			}
-			c := classByName[fn.Receiver]
+			c := classByName[util.ResolveTypeAlias(aliases, fn.Receiver)]
 			if c == nil {
 				continue
 			}

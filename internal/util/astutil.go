@@ -327,3 +327,64 @@ func CalleeName(e ast.Expr) string {
 	}
 	return ""
 }
+
+// TypeAliasNames maps each type-alias name declared across the given files
+// (`type alias = original`) to the local type name it aliases. Aliases of
+// types from other packages, and of unnamed types such as struct literals,
+// are omitted: there is no local named type for them to denote.
+func TypeAliasNames(files []*ast.File) map[string]string {
+	aliases := map[string]string{}
+	for _, f := range files {
+		for _, decl := range f.Decls {
+			if gen, ok := decl.(*ast.GenDecl); ok && gen.Tok == token.TYPE {
+				collectTypeAliases(gen, aliases)
+			}
+		}
+	}
+	return aliases
+}
+
+func collectTypeAliases(gen *ast.GenDecl, aliases map[string]string) {
+	for _, spec := range gen.Specs {
+		ts, ok := spec.(*ast.TypeSpec)
+		if !ok || !ts.Assign.IsValid() {
+			continue
+		}
+		if target := aliasTargetName(ts.Type); target != "" && target != ts.Name.Name {
+			aliases[ts.Name.Name] = target
+		}
+	}
+}
+
+// aliasTargetName unwraps pointers and generic instantiations to the bare
+// identifier naming an alias target.
+func aliasTargetName(e ast.Expr) string {
+	switch t := e.(type) {
+	case *ast.StarExpr:
+		return aliasTargetName(t.X)
+	case *ast.ParenExpr:
+		return aliasTargetName(t.X)
+	case *ast.Ident:
+		return t.Name
+	case *ast.IndexExpr:
+		return aliasTargetName(t.X)
+	case *ast.IndexListExpr:
+		return aliasTargetName(t.X)
+	}
+	return ""
+}
+
+// ResolveTypeAlias follows a chain of type aliases to the name of the defined
+// type they denote. Names that are not aliases are returned unchanged, and a
+// cyclic chain resolves to the name it started from.
+func ResolveTypeAlias(aliases map[string]string, name string) string {
+	seen := map[string]bool{}
+	for {
+		target, ok := aliases[name]
+		if !ok || seen[name] {
+			return name
+		}
+		seen[name] = true
+		name = target
+	}
+}

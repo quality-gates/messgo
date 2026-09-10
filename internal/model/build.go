@@ -6,6 +6,8 @@ import (
 	"go/token"
 	"os"
 	"strings"
+
+	"github.com/quality-gates/messgo/internal/util"
 )
 
 // Parse reads and parses a Go source file into a File model.
@@ -44,11 +46,15 @@ type fileBuilder struct {
 	f       *File
 	classes map[string]*Class
 	ifaces  map[string]*Interface
+	// aliases maps type-alias names in this file to the type they denote, so
+	// a method on an alias receiver attaches to the aliased type.
+	aliases map[string]string
 }
 
 func (b *fileBuilder) line(p token.Pos) int { return b.f.Fset.Position(p).Line }
 
 func (b *fileBuilder) build() {
+	b.aliases = util.TypeAliasNames([]*ast.File{b.f.Syntax})
 	b.collectTypes()
 	b.collectFuncs()
 }
@@ -115,7 +121,7 @@ func (b *fileBuilder) collectFuncs() {
 			b.f.Functions = append(b.f.Functions, fn)
 			continue
 		}
-		if c := b.classes[fn.Receiver]; c != nil {
+		if c := b.classes[util.ResolveTypeAlias(b.aliases, fn.Receiver)]; c != nil {
 			c.Methods = append(c.Methods, fn)
 			fn.Class = c
 		}

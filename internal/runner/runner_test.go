@@ -595,3 +595,22 @@ func sameStrings(got, want []string) bool {
 	}
 	return true
 }
+
+func TestAttachPackageMethodsResolvesCrossFileTypeAlias(t *testing.T) {
+	f1, err := model.ParseSource("a.go", []byte("package p\ntype original struct{}\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	f2, err := model.ParseSource("b.go", []byte("package p\ntype alias = original\nfunc (alias) m() {}\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	c := f1.Classes[0]
+	annotatePackages([]*model.File{f1, f2})
+	if len(c.Methods) != 1 || c.Methods[0].Name != "m" {
+		t.Fatalf("original.Methods = %v, want [m]", c.Methods)
+	}
+	if c.Methods[0].Class != c {
+		t.Fatalf("m.Class = %v, want original", c.Methods[0].Class)
+	}
+}

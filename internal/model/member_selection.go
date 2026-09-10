@@ -207,6 +207,9 @@ func (c *memberUseRecorder) recordSelector(sel *ast.SelectorExpr, types map[stri
 	names[name] = true
 	if typeName := c.resolver.expressionType(sel.X, types); typeName != "" {
 		uses[MemberKey{Type: typeName, Name: name}] = true
+		for _, key := range c.resolver.promotedMemberPath(typeName, name) {
+			uses[key] = true
+		}
 	}
 }
 
@@ -329,21 +332,62 @@ func (c *memberTypeResolver) callType(call *ast.CallExpr, types map[string]strin
 }
 
 func (c *memberTypeResolver) classMemberType(typeName, memberName string) string {
-	class := c.classes[typeName]
-	if class == nil {
+	memberType, _, ok := c.lookupMember(typeName, memberName, map[string]bool{})
+	if !ok {
 		return ""
 	}
+	return memberType
+}
+
+func (c *memberTypeResolver) promotedMemberPath(typeName, memberName string) []MemberKey {
+	_, path, ok := c.lookupMember(typeName, memberName, map[string]bool{})
+	if !ok {
+		return nil
+	}
+	return path
+}
+
+func (c *memberTypeResolver) lookupMember(typeName, memberName string, visiting map[string]bool) (string, []MemberKey, bool) {
+	class := c.classes[typeName]
+	if class == nil || visiting[typeName] {
+		return "", nil, false
+	}
+	visiting[typeName] = true
+	defer delete(visiting, typeName)
+	if memberType, ok := directMemberType(class, memberName); ok {
+		return memberType, nil, true
+	}
+	return c.lookupEmbeddedMember(class, typeName, memberName, visiting)
+}
+
+func directMemberType(class *Class, memberName string) (string, bool) {
 	for _, field := range class.Fields {
 		if field.Name == memberName {
-			return memberTypeName(field.TypeExpr)
+			return memberTypeName(field.TypeExpr), true
 		}
 	}
 	for _, method := range class.Methods {
 		if method.Name == memberName {
-			return functionResultType(method)
+			return functionResultType(method), true
 		}
 	}
-	return ""
+	return "", false
+}
+
+func (c *memberTypeResolver) lookupEmbeddedMember(class *Class, typeName, memberName string, visiting map[string]bool) (string, []MemberKey, bool) {
+	for _, field := range class.Fields {
+		if field.Ident != nil {
+			continue
+		}
+		embeddedType := memberTypeName(field.TypeExpr)
+		memberType, path, ok := c.lookupMember(embeddedType, memberName, visiting)
+		if !ok {
+			continue
+		}
+		path = append([]MemberKey{{Type: typeName, Name: field.Name}}, path...)
+		return memberType, path, true
+	}
+	return "", nil, false
 }
 
 func functionResultType(fn *Function) string {

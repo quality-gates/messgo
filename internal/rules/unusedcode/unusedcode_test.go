@@ -146,6 +146,31 @@ func use(t T) {
 	}
 }
 
+func TestUnusedPrivateFieldUsedThroughPromotedMethod(t *testing.T) {
+	f, err := model.ParseSource("embed.go", []byte(`package p
+
+type helper struct{}
+
+func (helper) Do() {}
+
+type thing struct {
+	helper
+}
+
+func use(t thing) {
+	t.Do()
+}
+`))
+	if err != nil {
+		t.Fatalf("ParseSource: %v", err)
+	}
+	fieldRule := &UnusedPrivateField{Base: rule.NewBase()}
+	violations := rule.Analyze(f, []*rule.RuleSet{{Rules: []rule.Rule{fieldRule}}})
+	if len(violations) != 0 {
+		t.Fatalf("violations = %+v, want none: t.Do() uses the embedded helper through promotion", violations)
+	}
+}
+
 func TestUnusedPrivateMethodSatisfiedBySamePackageInterface(t *testing.T) {
 	f, err := model.ParseSource("a.go", []byte(`package p
 

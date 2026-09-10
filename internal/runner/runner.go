@@ -178,6 +178,9 @@ func walkDirFunc(root string, opts Options, add func(string)) fs.WalkDirFunc {
 			}
 			return nil
 		}
+		if shouldSkipFile(d.Name()) {
+			return nil
+		}
 		if !shouldIncludeFile(path, opts) {
 			return nil
 		}
@@ -249,6 +252,10 @@ func shouldSkipDir(name string) bool {
 		return true
 	}
 	return false
+}
+
+func shouldSkipFile(name string) bool {
+	return strings.HasPrefix(name, ".") || strings.HasPrefix(name, "_")
 }
 
 func hasSuffix(path string, suffixes []string) bool {

@@ -135,6 +135,7 @@ func (b *fileBuilder) collectFields(c *Class, st *ast.StructType) {
 			c.Fields = append(c.Fields, &Field{
 				Name:     name,
 				Type:     typeStr,
+				TypeExpr: fld.Type,
 				Line:     b.line(fld.Pos()),
 				Exported: ast.IsExported(name),
 			})
@@ -144,6 +145,7 @@ func (b *fileBuilder) collectFields(c *Class, st *ast.StructType) {
 			c.Fields = append(c.Fields, &Field{
 				Name:     n.Name,
 				Type:     typeStr,
+				TypeExpr: fld.Type,
 				Line:     b.line(n.Pos()),
 				Exported: n.IsExported(),
 				Ident:    n,

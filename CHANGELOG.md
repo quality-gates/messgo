@@ -7,6 +7,9 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 ## [Unreleased]
 
 ### Fixed
+- Fixed `UnusedPrivateField` and `UnusedPrivateMethod` false negatives when
+  unrelated types in the same package have same-named members: selections are
+  now associated with their receiver or composite-literal type (#93).
 - Fixed the `ignore-whitespace` effective-LOC scan treating comment markers inside string literals (raw or interpreted) as real comments: a literal containing `/*` put the scanner into block-comment mode and omitted the following code from the effective line count, causing `LongMethod`/`LongClass` false negatives. Comment recognition now uses the Go scanner (#92).
 - Fixed `UnusedPrivateMethod` ignoring genuinely unused methods when only an incompatible interface method shares the name: the same-package-interface exemption now requires an identical method signature (parameter and result types), so a method whose signature matches no same-named interface method is still reported (#91).
 

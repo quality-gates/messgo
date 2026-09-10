@@ -26,6 +26,13 @@ const (
 	TypeFunction  NodeType = "function"
 )
 
+// MemberKey identifies a selected field or method by its owning named type.
+// Type is normalized to the receiver/literal type name without a pointer.
+type MemberKey struct {
+	Type string
+	Name string
+}
+
 // File is a parsed Go source file plus all artifacts discovered within it.
 type File struct {
 	Path       string
@@ -54,11 +61,15 @@ type File struct {
 	// cross-file interface-satisfaction analysis. When nil (file analyzed in
 	// isolation), rules fall back to this file's own Interfaces.
 	PackageInterfaces []*Interface
-	// PackageMembers holds all selected member names across every file in
-	// this file's package. It is populated by the runner after parsing,
-	// enabling cross-file unused member analysis. When nil, rules fall back
-	// to this file's own selected members.
+	// PackageMembers holds the legacy name-only selection index across every
+	// file in this file's package. It is populated by the runner for callers
+	// that need the historical name-only query.
 	PackageMembers map[string]bool
+	// PackageMemberSelections holds type-qualified member selections across
+	// every file in this file's package. It is populated by the runner after
+	// parsing, enabling cross-file unused member analysis without collisions
+	// between unrelated types.
+	PackageMemberSelections map[MemberKey]bool
 
 	analysis fileAnalysisCache
 }
@@ -66,6 +77,7 @@ type File struct {
 type fileAnalysisCache struct {
 	selectedMembersOnce sync.Once
 	selectedMembers     map[string]bool
+	selectedMemberUses  map[MemberKey]bool
 	ifaceMethodsOnce    sync.Once
 	ifaceMethods        map[string]bool
 	ifaceMethodSigs     map[string][]*Function
@@ -100,22 +112,26 @@ func (f *File) MemberSelected(name string) bool {
 	return f.analysis.selectedMembers[name]
 }
 
+// MemberSelectedForType reports whether name is selected on typeName anywhere
+// in this file (or in this file's package when package selections are set).
+func (f *File) MemberSelectedForType(typeName, name string) bool {
+	key := MemberKey{Type: typeName, Name: name}
+	if f.PackageMemberSelections != nil {
+		return f.PackageMemberSelections[key]
+	}
+	f.collectSelectedMemberNames()
+	return f.analysis.selectedMemberUses[key]
+}
+
+// SelectedMemberUses returns type-qualified member selections for a file.
+func SelectedMemberUses(f *File) map[MemberKey]bool {
+	f.collectSelectedMemberNames()
+	return maps.Clone(f.analysis.selectedMemberUses)
+}
+
 func (f *File) collectSelectedMemberNames() {
 	f.analysis.selectedMembersOnce.Do(func() {
-		f.analysis.selectedMembers = map[string]bool{}
-		classes := f.Classes
-		if f.PackageClasses != nil {
-			classes = f.PackageClasses
-		}
-		ast.Inspect(f.Syntax, func(n ast.Node) bool {
-			switch e := n.(type) {
-			case *ast.SelectorExpr:
-				f.analysis.selectedMembers[e.Sel.Name] = true
-			case *ast.CompositeLit:
-				collectCompositeMemberNames(e, f.analysis.selectedMembers, classes)
-			}
-			return true
-		})
+		f.analysis.selectedMembers, f.analysis.selectedMemberUses = collectSelectedMemberUses(f)
 	})
 }
 
@@ -210,68 +226,6 @@ func (f *File) EffectiveLinesOfCode(start, end token.Pos) int {
 	return f.analysis.effectiveLOC.LinesOfCode(f.Fset, start, end)
 }
 
-func collectCompositeMemberNames(lit *ast.CompositeLit, set map[string]bool, classes []*Class) {
-	switch lit.Type.(type) {
-	case *ast.MapType, *ast.ArrayType:
-		return
-	}
-	if name, ok := unkeyedStructName(lit); ok {
-		markStructFields(name, set, classes)
-		return
-	}
-	for _, elt := range lit.Elts {
-		kv, ok := elt.(*ast.KeyValueExpr)
-		if !ok {
-			continue
-		}
-		id, ok := kv.Key.(*ast.Ident)
-		if ok {
-			set[id.Name] = true
-		}
-	}
-}
-
-func unkeyedStructName(lit *ast.CompositeLit) (string, bool) {
-	if len(lit.Elts) == 0 {
-		return "", false
-	}
-	for _, elt := range lit.Elts {
-		if _, ok := elt.(*ast.KeyValueExpr); ok {
-			return "", false
-		}
-	}
-	return namedTypeName(lit.Type)
-}
-
-func namedTypeName(expr ast.Expr) (string, bool) {
-	switch t := expr.(type) {
-	case *ast.Ident:
-		return t.Name, true
-	case *ast.ParenExpr:
-		return namedTypeName(t.X)
-	case *ast.StarExpr:
-		return namedTypeName(t.X)
-	case *ast.IndexExpr:
-		return namedTypeName(t.X)
-	case *ast.IndexListExpr:
-		return namedTypeName(t.X)
-	default:
-		return "", false
-	}
-}
-
-func markStructFields(name string, set map[string]bool, classes []*Class) {
-	for _, class := range classes {
-		if class.Name != name {
-			continue
-		}
-		for _, field := range class.Fields {
-			set[field.Name] = true
-		}
-		return
-	}
-}
-
 // Parameter is a formal parameter of a function or method.
 type Parameter struct {
 	Name     string
@@ -286,6 +240,7 @@ type Parameter struct {
 type Field struct {
 	Name     string
 	Type     string
+	TypeExpr ast.Expr
 	Line     int
 	Exported bool
 	Static   bool // package-level var attached as a "static" field (unused for structs)

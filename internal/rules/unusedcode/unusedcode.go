@@ -1,6 +1,6 @@
 // Package unusedcode implements PHPMD's Unused Code ruleset, adapted to Go.
-// "private" maps to Go's unexported (lower-cased) identifiers, usage is
-// resolved within the analyzed file (the analog of PHPMD's class scope).
+// "private" maps to Go's unexported (lower-cased) identifiers, and usage is
+// resolved against the owning type across the analyzed package.
 package unusedcode
 
 import (
@@ -25,7 +25,7 @@ func (r *UnusedPrivateField) ApplyClass(c *rule.Context, class *model.Class) {
 		if f.Exported || f.Name == "_" {
 			continue
 		}
-		if !c.File.MemberSelected(f.Name) {
+		if !c.File.MemberSelectedForType(class.Name, f.Name) {
 			c.Report(f.Line, f.Line, f.Name)
 		}
 	}
@@ -45,7 +45,7 @@ func (r *UnusedPrivateMethod) ApplyClass(c *rule.Context, class *model.Class) {
 		// Only a matching signature can satisfy anything: a same-named
 		// interface method with an incompatible signature leaves the concrete
 		// method unused.
-		if !c.File.MemberSelected(m.Name) && !c.File.InterfaceMethodSatisfied(m) {
+		if !c.File.MemberSelectedForType(class.Name, m.Name) && !c.File.InterfaceMethodSatisfied(m) {
 			c.ReportFunc(m, m.Name)
 		}
 	}

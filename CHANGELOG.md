@@ -6,6 +6,13 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 
 ## [Unreleased]
 
+### Added
+- Guidance in `CLAUDE.md` (which root `AGENTS.md` symlinks to) capping local
+  `mutago` runs at one worker (`GOMAXPROCS=1`, `--workers=1`), so reproducing
+  the mutation gate does not saturate the shared development host. The mutation
+  workflow stays the source for the package, timeout, coverage, and MSI
+  arguments. No behavioural change (#101).
+
 ### Fixed
 - Fixed file discovery ignoring directory symlink roots and reporting duplicate
   findings for symlink aliases: roots are resolved before walking and discovered

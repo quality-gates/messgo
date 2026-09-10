@@ -4,7 +4,9 @@ package metrics
 
 import (
 	"go/ast"
+	"go/scanner"
 	"go/token"
+	"slices"
 )
 
 func ccnIncrement(n ast.Node) int {
@@ -523,8 +525,8 @@ func LinesOfCode(fset *token.FileSet, start, end token.Pos) int {
 
 // EffectiveLinesOfCode counts only lines that carry code within the span,
 // skipping blank and comment-only lines — PHPMD's `eloc` metric (used by the
-// ignore-whitespace option). It is approximate: comment markers inside string
-// literals are not specially handled.
+// ignore-whitespace option). Comments are recognised by the Go scanner, so
+// comment markers inside string literals never start a comment.
 func EffectiveLinesOfCode(fset *token.FileSet, start, end token.Pos, src []byte) int {
 	return NewEffectiveLOCIndex(src).LinesOfCode(fset, start, end)
 }
@@ -538,14 +540,11 @@ type EffectiveLOCIndex struct {
 
 // NewEffectiveLOCIndex scans src once and builds an effective-LOC prefix index.
 func NewEffectiveLOCIndex(src []byte) *EffectiveLOCIndex {
-	lines := splitLines(src)
+	lines := splitLines(maskComments(src))
 	index := &EffectiveLOCIndex{prefix: make([]int, len(lines)+1)}
-	inBlockComment := false
 	for line, raw := range lines {
-		hasCode, blockAfter := lineHasCode(raw, inBlockComment)
-		inBlockComment = blockAfter
 		index.prefix[line+1] = index.prefix[line]
-		if hasCode {
+		if lineHasCode(raw) {
 			index.prefix[line+1]++
 		}
 	}
@@ -581,55 +580,40 @@ func splitLines(src []byte) [][]byte {
 	return lines
 }
 
-func isBlockCommentEnd(line []byte, i int) bool {
-	return line[i] == '*' && i+1 < len(line) && line[i+1] == '/'
-}
-
-func checkComment(line []byte, i int) (isLine, isBlockStart, skipNext bool) {
-	if line[i] == '/' && i+1 < len(line) {
-		if line[i+1] == '/' {
-			return true, false, false
+// maskComments returns a copy of src with every Go comment replaced by
+// spaces, newlines inside block comments preserved so the line layout does
+// not change. Comments are located with the Go scanner's own tokenizer, so
+// comment-like text inside string literals is never mistaken for a comment.
+func maskComments(src []byte) []byte {
+	masked := make([]byte, len(src))
+	copy(masked, src)
+	var fset token.FileSet
+	file := fset.AddFile("", fset.Base(), len(src))
+	var s scanner.Scanner
+	s.Init(file, src, nil /* eh */, scanner.ScanComments)
+	for {
+		pos, tok, lit := s.Scan()
+		if tok == token.EOF {
+			return masked
 		}
-		if line[i+1] == '*' {
-			return false, true, true
+		if tok != token.COMMENT {
+			continue
+		}
+		start := file.Offset(pos)
+		for i := start; i < start+len(lit) && i < len(masked); i++ {
+			if masked[i] != '\n' {
+				masked[i] = ' '
+			}
 		}
 	}
-	return false, false, false
 }
 
 func isNonWhitespace(ch byte) bool {
 	return ch != ' ' && ch != '\t' && ch != '\r'
 }
 
-type commentState = bool
-
-// lineHasCode reports whether a line contains any code outside comments, given
-// whether it begins inside a block comment, and returns the block-comment state
-// at the line's end.
-func lineHasCode(line []byte, inBlock commentState) (hasCode, blockAfter commentState) {
-	for i := 0; i < len(line); i++ {
-		ch := line[i]
-		if inBlock {
-			if isBlockCommentEnd(line, i) {
-				inBlock = false
-				i++
-			}
-			continue
-		}
-		isLine, isBlockStart, skipNext := checkComment(line, i)
-		if isLine {
-			return hasCode, false
-		}
-		if isBlockStart {
-			inBlock = true
-			if skipNext {
-				i++
-			}
-			continue
-		}
-		if isNonWhitespace(ch) {
-			hasCode = true
-		}
-	}
-	return hasCode, inBlock
+// lineHasCode reports whether a line contains any non-whitespace byte. The
+// input is the comment-masked source, so no comment handling is needed here.
+func lineHasCode(line []byte) bool {
+	return slices.ContainsFunc(line, isNonWhitespace)
 }

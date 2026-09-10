@@ -186,6 +186,51 @@ func TestEffectiveLinesOfCodeIgnoresLineDirectives(t *testing.T) {
 	}
 }
 
+// Comment recognition must come from the Go scanner, not raw byte matching:
+// comment-like text inside string literals is string content, not a comment.
+func TestEffectiveLinesOfCodeIgnoresCommentMarkersInsideStringLiterals(t *testing.T) {
+	cases := []struct {
+		name string
+		src  string
+		want int
+	}{
+		{
+			name: "raw string containing block-comment marker",
+			src:  "package p\n\nfunc f() {\n\t_ = `/*\nraw content\n`\n\tx := 1\n\t_ = x\n}\n",
+			want: 7,
+		},
+		{
+			name: "interpreted string containing block-comment marker",
+			src:  "package p\n\nfunc f() {\n\t_ = \"/*\"\n\tx := 1\n\t_ = x\n}\n",
+			want: 5,
+		},
+		{
+			name: "scan continues after a real block comment closes",
+			src:  "package p\n\nfunc f() {\n\t_ = \"/*\"\n\ta := 1\n\t/* close */\n\tc := 3\n\t_ = a + c\n}\n",
+			want: 6,
+		},
+		{
+			name: "escaped backslash-quote before comment marker stays in string",
+			src:  "package p\n\nfunc f() {\n\t_ = \"say \\\"/*\\\"\"\n\tx := 1\n\t_ = x\n}\n",
+			want: 5,
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			src := []byte(tc.src)
+			fset := token.NewFileSet()
+			f, err := parser.ParseFile(fset, "x.go", src, parser.ParseComments)
+			if err != nil {
+				t.Fatal(err)
+			}
+			fd := f.Decls[0]
+			if got := EffectiveLinesOfCode(fset, fd.Pos(), fd.End(), src); got != tc.want {
+				t.Fatalf("EffectiveLinesOfCode = %d, want %d", got, tc.want)
+			}
+		})
+	}
+}
+
 func TestEffectiveLOCIndexAnswersSourceSpans(t *testing.T) {
 	src := []byte(`package p
 /*

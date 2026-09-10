@@ -7,6 +7,9 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 ## [Unreleased]
 
 ### Fixed
+- Fixed `UnusedPrivateField` falsely flagging unexported embedded fields used
+  through promoted field or method selections by recording their embedding
+  paths (#102).
 - Fixed `ExitExpression` missing aliased `os.Exit` and `syscall.Exit` calls and
   falsely reporting same-named calls from unrelated packages by resolving
   qualified calls through their imported package paths (#95).

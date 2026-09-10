@@ -55,6 +55,68 @@ func use(t T) {
 	}
 }
 
+func TestSelectedMemberUsesTrackPromotedMembers(t *testing.T) {
+	f, err := ParseSource("promoted.go", []byte(`package sample
+
+type helper struct {
+	value int
+}
+
+func (helper) Do() {}
+
+type middle struct {
+	helper
+}
+
+type unrelated struct {
+	other int
+}
+
+type thing struct {
+	ignored int
+	unrelated
+	middle
+}
+
+type shadowed struct {
+	helper
+}
+
+func (shadowed) Do() {}
+
+type cycleA struct {
+	cycleB
+}
+
+type cycleB struct {
+	cycleA
+}
+
+func use(t thing, s shadowed, c cycleA) {
+	t.Do()
+	_ = t.value
+	s.Do()
+	c.Do()
+}
+`))
+	if err != nil {
+		t.Fatalf("ParseSource: %v", err)
+	}
+
+	want := map[MemberKey]bool{
+		{Type: "thing", Name: "Do"}:      true,
+		{Type: "thing", Name: "value"}:   true,
+		{Type: "thing", Name: "middle"}:  true,
+		{Type: "middle", Name: "helper"}: true,
+		{Type: "shadowed", Name: "Do"}:   true,
+		{Type: "cycleA", Name: "Do"}:     true,
+	}
+	assertMemberUses(t, f, want)
+	if f.MemberSelectedForType("shadowed", "helper") {
+		t.Fatal("direct shadowing method incorrectly marked the embedded helper as used")
+	}
+}
+
 func TestMemberTypeResolverExpressions(t *testing.T) {
 	f, err := ParseSource("types.go", []byte(`package sample
 
@@ -110,6 +172,19 @@ func (Root) child() Leaf { return Leaf{} }
 				t.Fatalf("expressionType(%q) = %q, want %q", tc.expr, got, tc.want)
 			}
 		})
+	}
+	if path := resolver.promotedMemberPath("Root", "unknown"); path != nil {
+		t.Fatalf("promotedMemberPath(Root, unknown) = %v, want nil", path)
+	}
+	if _, _, ok := resolver.lookupMember("Missing", "unknown", map[string]bool{}); ok {
+		t.Fatal("lookupMember(Missing, unknown) = true, want false")
+	}
+	visiting := map[string]bool{}
+	if _, _, ok := resolver.lookupMember("Root", "unknown", visiting); ok {
+		t.Fatal("lookupMember(Root, unknown) = true, want false")
+	}
+	if len(visiting) != 0 {
+		t.Fatalf("lookupMember left visiting types = %v, want empty", visiting)
 	}
 }
 

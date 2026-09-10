@@ -6,6 +6,9 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 
 ## [Unreleased]
 
+### Fixed
+- Fixed `UnusedPrivateMethod` ignoring genuinely unused methods when only an incompatible interface method shares the name: the same-package-interface exemption now requires an identical method signature (parameter and result types), so a method whose signature matches no same-named interface method is still reported (#91).
+
 ## [0.4.2] - 2026-09-08
 
 ### Changed

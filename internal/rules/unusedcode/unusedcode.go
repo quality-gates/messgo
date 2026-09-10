@@ -36,14 +36,16 @@ func (r *UnusedPrivateField) ApplyClass(c *rule.Context, class *model.Class) {
 type UnusedPrivateMethod struct{ *rule.Base }
 
 func (r *UnusedPrivateMethod) ApplyClass(c *rule.Context, class *model.Class) {
-	ifaceMethods := c.File.InterfaceMethodNames()
 	for _, m := range class.Methods {
 		if m.Exported {
 			continue
 		}
 		// A method that satisfies an interface declared in the same package is
 		// used even when never selected by name (the sealed-interface idiom).
-		if !c.File.MemberSelected(m.Name) && !ifaceMethods[m.Name] {
+		// Only a matching signature can satisfy anything: a same-named
+		// interface method with an incompatible signature leaves the concrete
+		// method unused.
+		if !c.File.MemberSelected(m.Name) && !c.File.InterfaceMethodSatisfied(m) {
 			c.ReportFunc(m, m.Name)
 		}
 	}

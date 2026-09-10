@@ -68,6 +68,7 @@ type fileAnalysisCache struct {
 	selectedMembers     map[string]bool
 	ifaceMethodsOnce    sync.Once
 	ifaceMethods        map[string]bool
+	ifaceMethodSigs     map[string][]*Function
 	effectiveLOCOnce    sync.Once
 	effectiveLOC        *metrics.EffectiveLOCIndex
 }
@@ -123,6 +124,14 @@ func (f *File) collectSelectedMemberNames() {
 // including methods inherited through embedded interfaces resolved within the
 // same package. The set is computed at most once per file.
 func (f *File) InterfaceMethodNames() map[string]bool {
+	f.collectInterfaceMethods()
+	return f.analysis.ifaceMethods
+}
+
+// collectInterfaceMethods builds, at most once per file, the set of method
+// names declared by any interface in this file's package, plus the declared
+// methods grouped by name for signature matching.
+func (f *File) collectInterfaceMethods() {
 	f.analysis.ifaceMethodsOnce.Do(func() {
 		ifaces := f.Interfaces
 		if f.PackageInterfaces != nil {
@@ -134,6 +143,7 @@ func (f *File) InterfaceMethodNames() map[string]bool {
 		}
 		visited := map[string]bool{}
 		names := map[string]bool{}
+		sigs := map[string][]*Function{}
 		var visit func(i *Interface)
 		visit = func(i *Interface) {
 			if visited[i.Name] {
@@ -142,6 +152,7 @@ func (f *File) InterfaceMethodNames() map[string]bool {
 			visited[i.Name] = true
 			for _, m := range i.Methods {
 				names[m.Name] = true
+				sigs[m.Name] = append(sigs[m.Name], m)
 			}
 			for _, e := range i.Embeds {
 				if emb := byName[e]; emb != nil {
@@ -153,8 +164,41 @@ func (f *File) InterfaceMethodNames() map[string]bool {
 			visit(i)
 		}
 		f.analysis.ifaceMethods = names
+		f.analysis.ifaceMethodSigs = sigs
 	})
-	return f.analysis.ifaceMethods
+}
+
+// InterfaceMethodSatisfied reports whether fn (a concrete method) matches a
+// same-named method declared by some interface in this file's package (or this
+// file if analyzed in isolation), i.e. the method could satisfy that
+// interface's method set. Matching requires identical parameter and result
+// types, in order; a method whose signature differs from every same-named
+// interface method satisfies nothing. Computed at most once per file.
+func (f *File) InterfaceMethodSatisfied(fn *Function) bool {
+	f.collectInterfaceMethods()
+	for _, im := range f.analysis.ifaceMethodSigs[fn.Name] {
+		if sameSignature(im, fn) {
+			return true
+		}
+	}
+	return false
+}
+
+func sameSignature(a, b *Function) bool {
+	if len(a.Params) != len(b.Params) || len(a.Results) != len(b.Results) {
+		return false
+	}
+	for i := range a.Params {
+		if a.Params[i].Type != b.Params[i].Type {
+			return false
+		}
+	}
+	for i := range a.Results {
+		if a.Results[i].Type != b.Results[i].Type {
+			return false
+		}
+	}
+	return true
 }
 
 // EffectiveLinesOfCode returns the number of code-bearing physical source

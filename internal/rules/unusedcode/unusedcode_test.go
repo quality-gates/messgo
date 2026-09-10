@@ -90,6 +90,62 @@ func inspect() {
 	}
 }
 
+func TestUnusedPrivateMembersAreScopedToTheirType(t *testing.T) {
+	f, err := model.ParseSource("issue93.go", []byte(`package p
+
+type S struct {
+	secret int
+}
+
+type T struct {
+	secret int
+}
+
+var _ = T{secret: 1}
+
+func (S) do() {}
+func (T) do() {}
+
+func use(t T) {
+	t.do()
+}
+`))
+	if err != nil {
+		t.Fatalf("ParseSource: %v", err)
+	}
+
+	fieldRule := &UnusedPrivateField{Base: rule.NewBase()}
+	methodRule := &UnusedPrivateMethod{Base: rule.NewBase()}
+	violations := rule.Analyze(f, []*rule.RuleSet{{Rules: []rule.Rule{fieldRule, methodRule}}})
+	if len(violations) != 2 {
+		t.Fatalf("violations = %+v, want exactly S.secret and S.do", violations)
+	}
+
+	want := map[string]bool{
+		"field:4:secret": true,
+		"method:S:do":    true,
+	}
+	for _, violation := range violations {
+		name, ok := violation.Args[0].(string)
+		if !ok {
+			t.Fatalf("violation args = %+v, want a member name", violation.Args)
+		}
+		key := ""
+		if violation.Method == "" {
+			key = fmt.Sprintf("field:%d:%s", violation.BeginLine, name)
+		} else {
+			key = fmt.Sprintf("method:%s:%s", violation.Class, violation.Method)
+		}
+		if !want[key] {
+			t.Errorf("unexpected violation = %+v", violation)
+		}
+		delete(want, key)
+	}
+	if len(want) != 0 {
+		t.Errorf("missing violations = %v", want)
+	}
+}
+
 func TestUnusedPrivateMethodSatisfiedBySamePackageInterface(t *testing.T) {
 	f, err := model.ParseSource("a.go", []byte(`package p
 

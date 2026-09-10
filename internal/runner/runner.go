@@ -96,6 +96,7 @@ func annotatePackageGroup(group []*model.File) {
 	}
 	attachPackageMethods(group, classByName)
 	pkgMembers := collectPackageMemberNames(group)
+	pkgMemberSelections := collectPackageMemberSelections(group)
 	var pkgInterfaces []*model.Interface
 	for _, f := range group {
 		pkgInterfaces = append(pkgInterfaces, f.Interfaces...)
@@ -103,6 +104,7 @@ func annotatePackageGroup(group []*model.File) {
 	for _, f := range group {
 		f.MutatedGlobals = mutated
 		f.PackageMembers = pkgMembers
+		f.PackageMemberSelections = pkgMemberSelections
 		f.PackageInterfaces = pkgInterfaces
 	}
 }
@@ -139,6 +141,16 @@ func collectPackageMemberNames(group []*model.File) map[string]bool {
 	for _, f := range group {
 		for name := range f.SelectedMemberNames() {
 			members[name] = true
+		}
+	}
+	return members
+}
+
+func collectPackageMemberSelections(group []*model.File) map[model.MemberKey]bool {
+	members := map[model.MemberKey]bool{}
+	for _, f := range group {
+		for key := range model.SelectedMemberUses(f) {
+			members[key] = true
 		}
 	}
 	return members

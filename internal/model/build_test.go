@@ -195,6 +195,9 @@ func assertFieldMeta(t *testing.T, fld *Field, wantType string, wantExported boo
 	if fld == nil {
 		t.Fatal("field is nil")
 	}
+	if fld.TypeExpr == nil {
+		t.Errorf("field %s has no TypeExpr", fld.Name)
+	}
 	if fld.Type != wantType || fld.Exported != wantExported || fld.Line != wantLine || (fld.Ident != nil) != wantIdent {
 		t.Errorf("field %s meta = %+v", fld.Name, fld)
 	}

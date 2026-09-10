@@ -340,6 +340,62 @@ func Audit(a *Account) {
 	}
 }
 
+func TestCrossFileMemberSelectionScopesUnrelatedTypes(t *testing.T) {
+	dir := t.TempDir()
+	declarations := `package account
+
+type S struct {
+	secret int
+}
+
+type T struct {
+	secret int
+}
+
+func (S) do() {}
+func (T) do() {}
+`
+	uses := `package account
+
+var _ = T{secret: 1}
+
+func use(t T) {
+	t.do()
+}
+`
+	if err := os.WriteFile(filepath.Join(dir, "model.go"), []byte(declarations), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "service.go"), []byte(uses), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	sets, err := (&ruleset.Loader{}).Load("unusedcode")
+	if err != nil {
+		t.Fatal(err)
+	}
+	ruleset.FilterRules(sets, []string{"UnusedPrivateField", "UnusedPrivateMethod"}, nil)
+	rep, err := Run(Options{Paths: []string{dir}, RuleSets: sets})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(rep.Violations) != 2 {
+		t.Fatalf("got %d violations, want S.secret and S.do: %+v", len(rep.Violations), rep.Violations)
+	}
+	var fieldFound, methodFound bool
+	for _, violation := range rep.Violations {
+		switch violation.Rule.Name() {
+		case "UnusedPrivateField":
+			fieldFound = violation.BeginLine == 4
+		case "UnusedPrivateMethod":
+			methodFound = violation.Class == "S" && violation.Method == "do"
+		}
+	}
+	if !fieldFound || !methodFound {
+		t.Fatalf("violations = %+v, want only S.secret and S.do", rep.Violations)
+	}
+}
+
 func TestCrossFileUnkeyedLiteralPreventsUnusedFieldWarning(t *testing.T) {
 	dir := t.TempDir()
 	modelCode := `package account

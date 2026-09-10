@@ -70,7 +70,7 @@ type ExitExpression struct{ *rule.Base }
 
 func (r *ExitExpression) check(c *rule.Context, fn *model.Function) {
 	for _, call := range model.Calls(fn) {
-		if call.Name == "os.Exit" || call.Name == "syscall.Exit" {
+		if (call.PackagePath == "os" || call.PackagePath == "syscall") && call.Selector == "Exit" {
 			c.ReportFuncAt(fn, call.Line, call.Line, string(fn.NodeType()), fn.Name)
 			return
 		}

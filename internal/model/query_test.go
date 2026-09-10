@@ -82,8 +82,8 @@ func exit() {
 
 	calls := Calls(f.Functions[0])
 	want := []Call{
-		{Name: "os.Exit", Line: 4},
-		{Name: "syscall.Exit", Line: 5},
+		{Name: "os.Exit", Selector: "Exit", Line: 4},
+		{Name: "syscall.Exit", Selector: "Exit", Line: 5},
 		{Name: "println", Line: 6},
 	}
 	if len(calls) != len(want) {
@@ -93,6 +93,127 @@ func exit() {
 		if calls[i] != want[i] {
 			t.Fatalf("Calls()[%d] = %+v, want %+v", i, calls[i], want[i])
 		}
+	}
+}
+
+func TestFunctionCallsResolveImportedPackagePaths(t *testing.T) {
+	src := []byte(`package sample
+
+import (
+	o "os"
+	"syscall"
+	os "github.com/acme/os"
+)
+
+type target struct{}
+
+func (target) Exit(int) {}
+
+func stop(os target) {
+	o.Exit(1)
+	syscall.Exit(1)
+	os.Exit(1)
+}
+`)
+	f, err := ParseSource("query.go", src)
+	if err != nil {
+		t.Fatalf("ParseSource: %v", err)
+	}
+
+	calls := Calls(f.Functions[0])
+	want := []struct {
+		name, selector, packagePath string
+	}{
+		{name: "o.Exit", selector: "Exit", packagePath: "os"},
+		{name: "syscall.Exit", selector: "Exit", packagePath: "syscall"},
+		{name: "os.Exit", selector: "Exit"},
+	}
+	if len(calls) != len(want) {
+		t.Fatalf("Calls() = %+v, want %d calls", calls, len(want))
+	}
+	for i, call := range calls {
+		if call.Name != want[i].name || call.Selector != want[i].selector || call.PackagePath != want[i].packagePath {
+			t.Errorf("Calls()[%d] = %+v, want name %q, selector %q, package path %q", i, call, want[i].name, want[i].selector, want[i].packagePath)
+		}
+	}
+}
+
+func TestCallMetadataHelpers(t *testing.T) {
+	qualifier := ast.NewIdent("o")
+	selector := &ast.SelectorExpr{X: qualifier, Sel: ast.NewIdent("Exit")}
+	if got, ok := calledSelector(&ast.ParenExpr{X: selector}); !ok || got != selector {
+		t.Fatalf("calledSelector(parenthesized selector) = %v, %t; want selector, true", got, ok)
+	}
+	if got, ok := calledSelector(qualifier); ok || got != nil {
+		t.Fatalf("calledSelector(identifier) = %v, %t; want nil, false", got, ok)
+	}
+	if got := packageQualifier(&ast.ParenExpr{X: qualifier}); got != qualifier {
+		t.Fatalf("packageQualifier(parenthesized identifier) = %v, want %v", got, qualifier)
+	}
+	nestedSelector := &ast.SelectorExpr{X: qualifier, Sel: ast.NewIdent("pkg")}
+	if got := packageQualifier(nestedSelector); got != nil {
+		t.Fatalf("packageQualifier(nested selector) = %v, want nil", got)
+	}
+
+	file := &File{Syntax: &ast.File{}}
+	bound := ast.NewIdent("o")
+	bound.Obj = &ast.Object{}
+	for _, tc := range []struct {
+		name      string
+		file      *File
+		qualifier *ast.Ident
+		want      bool
+	}{
+		{name: "nil file", qualifier: qualifier},
+		{name: "nil syntax", file: &File{}, qualifier: qualifier},
+		{name: "nil qualifier", file: file},
+		{name: "bound qualifier", file: file, qualifier: bound},
+		{name: "unbound qualifier", file: file, qualifier: qualifier, want: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := resolvableImportQualifier(tc.file, tc.qualifier); got != tc.want {
+				t.Fatalf("resolvableImportQualifier() = %t, want %t", got, tc.want)
+			}
+		})
+	}
+
+	for _, tc := range []struct {
+		name        string
+		spec        *ast.ImportSpec
+		importPath  string
+		qualifier   string
+		wantMatches bool
+	}{
+		{name: "default name", spec: &ast.ImportSpec{}, importPath: "example.com/thing", qualifier: "thing", wantMatches: true},
+		{name: "explicit alias", spec: &ast.ImportSpec{Name: ast.NewIdent("o")}, importPath: "os", qualifier: "o", wantMatches: true},
+		{name: "mismatched name", spec: &ast.ImportSpec{}, importPath: "os", qualifier: "syscall"},
+		{name: "blank import", spec: &ast.ImportSpec{Name: ast.NewIdent("_")}, importPath: "os", qualifier: "_"},
+		{name: "dot import", spec: &ast.ImportSpec{Name: ast.NewIdent(".")}, importPath: "os", qualifier: "."},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := importMatchesQualifier(tc.spec, tc.importPath, tc.qualifier); got != tc.wantMatches {
+				t.Fatalf("importMatchesQualifier() = %t, want %t", got, tc.wantMatches)
+			}
+		})
+	}
+
+	for _, tc := range []struct {
+		name string
+		spec *ast.ImportSpec
+		want string
+		ok   bool
+	}{
+		{name: "nil spec"},
+		{name: "missing path", spec: &ast.ImportSpec{}},
+		{name: "invalid path literal", spec: &ast.ImportSpec{Path: &ast.BasicLit{Value: "os"}}},
+		{name: "quoted path", spec: &ast.ImportSpec{Path: &ast.BasicLit{Value: `"os"`}}, want: "os", ok: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got, ok := importPath(tc.spec)
+			if got != tc.want || ok != tc.ok {
+				t.Fatalf("importPath() = %q, %t; want %q, %t", got, ok, tc.want, tc.ok)
+			}
+		})
 	}
 }
 

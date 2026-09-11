@@ -6,6 +6,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 
 ## [Unreleased]
 
+## [0.4.4] - 2026-09-11
+
 ### Changed
 - Moved `IfStatementAssignment` from the default `go` ruleset to `opinionated`:
   plain assignments in if init statements (such as `if err = g(); err != nil`)

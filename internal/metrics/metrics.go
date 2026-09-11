@@ -360,9 +360,15 @@ func npathStmts(stmts []ast.Stmt) int {
 }
 
 func returnStmtComplexity(n *ast.ReturnStmt) int {
-	c := 1
+	// pdepend visitReturnStatement: NP(return) = E(expr), the raw boolean
+	// operator sum seeded from 0. A sum of 0 contributes no paths and falls
+	// back to 1 so the statement product is not zeroed.
+	c := 0
 	for _, r := range n.Results {
 		c = npathAdd(c, expressionComplexity(r))
+	}
+	if c == 0 {
+		return 1
 	}
 	return c
 }

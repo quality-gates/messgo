@@ -6,6 +6,14 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 
 ## [Unreleased]
 
+### Fixed
+- Fixed `NPathComplexity` overcounting boolean operators in return statements by
+  1: `returnStmtComplexity` seeded its sum with a base 1 before adding the
+  boolean-operator count, inflating every return containing at least one `&&`/`||`
+  (e.g. `return a && b` reported 2 where phpmd/pdepend reports 1). The sum now
+  starts at 0 and a zero sum falls back to 1 for bare or operator-free returns,
+  matching pdepend's `visitReturnStatement` (#110).
+
 ## [0.4.3] - 2026-09-10
 
 ### Added

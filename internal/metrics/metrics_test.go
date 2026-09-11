@@ -537,9 +537,12 @@ func TestNPathReturnBooleanExpressions(t *testing.T) {
 	}{
 		{"empty return", "func f() { return }", 1},
 		{"return literal", "func f() bool { return true }", 1},
-		{"return single bool op", "func f(a, b bool) bool { return a && b }", 2},
-		{"return two bool ops", "func f(a, b, c bool) bool { return a && b && c }", 3},
-		{"return multiple values with bool ops", "func f(a, b, c, d bool) (bool, bool) { return a && b, c || d }", 3},
+		{"return single bool op", "func f(a, b bool) bool { return a && b }", 1},
+		{"return two bool ops", "func f(a, b, c bool) bool { return a && b && c }", 2},
+		{"return three bool ops mixed", "func f(a, b, c, ok bool) bool { return a && b && c || ok }", 3},
+		{"return negated bool op", "func f(a, ok bool) bool { return !(a > false) && ok }", 1},
+		{"return grouped bool op", "func f(a, ok, b bool) bool { return (a || ok) && b }", 2},
+		{"return multiple values with bool ops", "func f(a, b, c, d bool) (bool, bool) { return a && b, c || d }", 2},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {

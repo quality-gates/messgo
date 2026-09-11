@@ -402,32 +402,62 @@ func (r *LackOfCohesionOfMethods) measure(_ *rule.Context, class *model.Class) (
 // communicating methods (those that touch a field or participate in an
 // intra-class call). A class with no such methods is trivially cohesive (1).
 func lcom4(class *model.Class) int {
-	fields := fieldNameSet(class)
+	promFields, promMethods := class.PromotedMembers()
+	fields := fieldNameSet(class, promFields)
 	methodIdx, accessorOf := indexMethods(class, fields)
+	knownMethods := methodIndexWithPromoted(methodIdx, promMethods)
 	g := newCohesionGraph(len(class.Methods))
 	for i, m := range class.Methods {
 		if accessorOf[m.Name] != "" {
 			continue
 		}
-		usedFields, calledMethods := model.ReceiverUses(m, fields, methodIdx)
-		for _, f := range usedFields {
-			g.addFieldUse(i, f)
-		}
-		for _, callee := range calledMethods {
-			if f := accessorOf[callee]; f != "" {
-				g.addFieldUse(i, f)
-			} else {
-				g.addCall(i, methodIdx[callee])
-			}
-		}
+		recordMethodUses(g, i, m, fields, knownMethods, methodIdx, promMethods, accessorOf)
 	}
 	return g.components()
 }
 
-func fieldNameSet(class *model.Class) map[string]bool {
-	fields := map[string]bool{}
+func recordMethodUses(g *cohesionGraph, i int, m *model.Function, fields map[string]bool, knownMethods, methodIdx map[string]int, promMethods map[string]bool, accessorOf map[string]string) {
+	usedFields, calledMethods := model.ReceiverUses(m, fields, knownMethods)
+	for _, f := range usedFields {
+		g.addFieldUse(i, f)
+	}
+	for _, callee := range calledMethods {
+		switch {
+		case accessorOf[callee] != "":
+			g.addFieldUse(i, accessorOf[callee])
+		case isDirectMethod(methodIdx, callee):
+			g.addCall(i, methodIdx[callee])
+		case promMethods[callee]:
+			g.addPromotedCall(i, callee)
+		}
+	}
+}
+
+func isDirectMethod(methodIdx map[string]int, name string) bool {
+	_, ok := methodIdx[name]
+	return ok
+}
+
+func methodIndexWithPromoted(methodIdx map[string]int, promMethods map[string]bool) map[string]int {
+	known := make(map[string]int, len(methodIdx)+len(promMethods))
+	for name, idx := range methodIdx {
+		known[name] = idx
+	}
+	for name := range promMethods {
+		if _, exists := known[name]; !exists {
+			known[name] = -1
+		}
+	}
+	return known
+}
+
+func fieldNameSet(class *model.Class, promFields map[string]bool) map[string]bool {
+	fields := make(map[string]bool, len(class.Fields)+len(promFields))
 	for _, f := range class.Fields {
 		fields[f.Name] = true
+	}
+	for f := range promFields {
+		fields[f] = true
 	}
 	return fields
 }
@@ -449,16 +479,18 @@ func indexMethods(class *model.Class, fields map[string]bool) (methodIdx map[str
 // cohesionGraph is a union-find over a class's methods. Methods become
 // "active" (counted) once they use a field or sit on either end of a call.
 type cohesionGraph struct {
-	parent     []int
-	active     []bool
-	fieldOwner map[string]int // field name -> first method seen using it
+	parent            []int
+	active            []bool
+	fieldOwner        map[string]int // field name -> first method seen using it
+	promotedCallOwner map[string]int // promoted method name -> first method seen calling it
 }
 
 func newCohesionGraph(n int) *cohesionGraph {
 	g := &cohesionGraph{
-		parent:     make([]int, n),
-		active:     make([]bool, n),
-		fieldOwner: map[string]int{},
+		parent:            make([]int, n),
+		active:            make([]bool, n),
+		fieldOwner:        map[string]int{},
+		promotedCallOwner: map[string]int{},
 	}
 	for i := range g.parent {
 		g.parent[i] = i
@@ -473,6 +505,15 @@ func (g *cohesionGraph) addFieldUse(method int, field string) {
 		return
 	}
 	g.fieldOwner[field] = method
+}
+
+func (g *cohesionGraph) addPromotedCall(method int, callee string) {
+	g.active[method] = true
+	if owner, ok := g.promotedCallOwner[callee]; ok {
+		g.union(method, owner)
+		return
+	}
+	g.promotedCallOwner[callee] = method
 }
 
 func (g *cohesionGraph) addCall(caller, callee int) {

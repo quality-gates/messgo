@@ -7,6 +7,11 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 ## [Unreleased]
 
 ### Fixed
+- Fixed `LackOfCohesionOfMethods` (LCOM4) silently dropping methods that only
+  touch promoted fields or call promoted methods on embedded structs: member
+  selections through the receiver now resolve promoted fields and methods through
+  embedded types within the package, participating in cohesion graph construction
+  and keeping disjoint method components active (#112).
 - Fixed `NPathComplexity` ignoring func-literal bodies in the enclosing function:
   statements and expressions containing closures now multiply the closure body's
   internal NPath execution paths into the enclosing function's path product,

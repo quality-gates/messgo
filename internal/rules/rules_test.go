@@ -1553,6 +1553,139 @@ func TestLackOfCohesionMaximumProperty(t *testing.T) {
 	}
 }
 
+func TestLackOfCohesionPromotedMembers(t *testing.T) {
+	const promotedFieldSrc = `
+type E struct{ inner int }
+
+type D struct {
+	E
+	a int
+}
+
+func (d D) Alpha() int {
+	x := d.a
+	return x + 1
+}
+
+func (d D) Prom() int {
+	z := d.inner
+	return z * 2
+}
+`
+	dir := t.TempDir()
+	path := filepath.Join(dir, "ruleset.xml")
+	xml := `<?xml version="1.0"?>
+<ruleset name="t">
+  <rule ref="design/LackOfCohesionOfMethods">
+    <properties><property name="maximum" value="0"/></properties>
+  </rule>
+</ruleset>`
+	if err := os.WriteFile(path, []byte(xml), 0o644); err != nil {
+		t.Fatalf("write ruleset: %v", err)
+	}
+	got := lcomViolations(t, promotedFieldSrc, path)
+	if got["D"] != 2 {
+		t.Errorf("promoted field: expected D to have LCOM4 = 2; got %d (all: %v)", got["D"], got)
+	}
+
+	const promotedMethodSrc = `
+type E struct{}
+func (e E) Helper() int { return 1 }
+
+type D struct {
+	E
+	a, c int
+}
+
+func (d D) Alpha() int { x := d.a; return x + 1 }
+func (d D) Beta() int  { h := d.Helper(); return h }
+func (d D) Gamma() int { y := d.c; return y * 2 }
+`
+	got2 := lcomViolations(t, promotedMethodSrc, "design")
+	if got2["D"] != 3 {
+		t.Errorf("promoted method: expected D to have LCOM4 = 3; got %d (all: %v)", got2["D"], got2)
+	}
+
+	const promotedAccessorSrc = `
+type E struct{ inner int }
+
+type D struct {
+	E
+	a int
+}
+
+func (d D) Inner() int { return d.inner }
+func (d D) Alpha() int { return d.a }
+`
+	got3 := lcomViolations(t, promotedAccessorSrc, path)
+	if got3["D"] != 1 {
+		t.Errorf("promoted accessor: expected D to have LCOM4 = 1; got %d (all: %v)", got3["D"], got3)
+	}
+
+	const sharedPromotedSrc = `
+type E struct{ inner int }
+func (e E) Helper() int { return 1 }
+
+type D struct {
+	E
+}
+
+func (d D) M1() int { return d.inner }
+func (d D) M2() int { return d.inner + 1 }
+func (d D) C1() int { return d.Helper() }
+func (d D) C2() int { return d.Helper() * 2 }
+`
+	got4 := lcomViolations(t, sharedPromotedSrc, path)
+	if got4["D"] != 2 {
+		t.Errorf("shared promoted members: expected D to have LCOM4 = 2; got %d (all: %v)", got4["D"], got4)
+	}
+}
+
+func TestLackOfCohesionPromotedMembersCrossFile(t *testing.T) {
+	const file1Src = `package sample
+type Embedded struct {
+	field int
+}
+func (e Embedded) Helper() int { return e.field }
+`
+	const file2Src = `package sample
+type Host struct {
+	Embedded
+	other int
+}
+func (h Host) A() int { return h.other + 1 }
+func (h Host) B() int { return h.Helper() }
+func (h Host) C() int { return h.field * 2 }
+`
+	f1, err := model.ParseSource("a.go", []byte(file1Src))
+	if err != nil {
+		t.Fatalf("parse a.go: %v", err)
+	}
+	f2, err := model.ParseSource("b.go", []byte(file2Src))
+	if err != nil {
+		t.Fatalf("parse b.go: %v", err)
+	}
+	pkgClasses := append([]*model.Class{}, f1.Classes...)
+	pkgClasses = append(pkgClasses, f2.Classes...)
+	f1.PackageClasses = pkgClasses
+	f2.PackageClasses = pkgClasses
+
+	sets, err := (&ruleset.Loader{}).Load("design")
+	if err != nil {
+		t.Fatalf("load design ruleset: %v", err)
+	}
+	var gotHostLCOM4 int
+	for _, v := range rule.Analyze(f2, sets) {
+		if v.Rule.Name() == "LackOfCohesionOfMethods" && v.Args[0].(string) == "Host" {
+			gotHostLCOM4 = v.Args[1].(int)
+		}
+	}
+	// A uses {other}, B calls {Helper}, C uses {field}. All 3 disjoint -> LCOM4 = 3.
+	if gotHostLCOM4 != 3 {
+		t.Errorf("cross-file: expected Host to have LCOM4 = 3; got %d", gotHostLCOM4)
+	}
+}
+
 func TestCleanCode(t *testing.T) {
 	src := `
 func process(enable bool) {

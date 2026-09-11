@@ -5,14 +5,14 @@ phpmd-format ruleset XML file.
 
 | Ruleset | What it checks |
 | :--- | :--- |
-| **`go`** | **Recommended default.** Pulls in the component rulesets below, but tunes rules whose PHP defaults misfire on idiomatic Go: drops `ShortVariable`, `Design/ExitExpression`, `Design/CountInLoopExpression`, `Design/GlobalVariable`, `CleanCode/ElseExpression`, `CleanCode/BooleanArgumentFlag`, and `UnusedCode/UnusedFormalParameter`, and raises `LongVariable`'s maximum. |
+| **`go`** | **Recommended default.** Pulls in the component rulesets below, but tunes rules whose PHP defaults misfire on idiomatic Go: drops `ShortVariable`, `Design/ExitExpression`, `Design/CountInLoopExpression`, `Design/GlobalVariable`, `CleanCode/ElseExpression`, `CleanCode/BooleanArgumentFlag`, `CleanCode/IfStatementAssignment`, and `UnusedCode/UnusedFormalParameter`, and raises `LongVariable`'s maximum. |
 | `codesize` | CyclomaticComplexity, NPathComplexity, ExcessiveMethodLength, ExcessiveClassLength, ExcessiveParameterList, ExcessivePublicCount, TooManyFields, TooManyMethods, TooManyPublicMethods, ExcessiveClassComplexity, NestingDepth, ExcessiveReturnCount, NakedReturn, CognitiveComplexity |
 | `naming` | ShortClassName, LongClassName, ShortVariable, LongVariable, ShortMethodName, ConstantNamingConventions, BooleanGetMethodName, ConstructorWithNameAsEnclosingClass |
 | `unusedcode` | UnusedPrivateField, UnusedLocalVariable, UnusedPrivateMethod, UnusedFormalParameter |
 | `cleancode` | BooleanArgumentFlag, ElseExpression, IfStatementAssignment, DuplicatedArrayKey |
 | `design` | ExitExpression, GotoStatement, CountInLoopExpression, DevelopmentCodeFragment, EmptyCatchBlock, CouplingBetweenObjects, GlobalVariable, LackOfCohesionOfMethods |
 | `controversial` | CamelCaseClassName, CamelCaseMethodName, CamelCasePropertyName, CamelCaseParameterName, CamelCaseVariableName |
-| `opinionated` | **Opt-in, not part of idiomatic Go.** Bundles the rules the `go` ruleset deliberately drops because they fight Go conventions: `ElseExpression`, `BooleanArgumentFlag`, `UnusedFormalParameter`, and `GlobalVariable`. Also includes Go-specific opinionated rules: `UncheckedTypeAssertion`, `IdenticalBranches`, `StructEmbeddingDepth`. Run them if you want a stricter, more PHP-flavoured style. |
+| `opinionated` | **Opt-in, not part of idiomatic Go.** Bundles the rules the `go` ruleset deliberately drops because they fight Go conventions: `ElseExpression`, `BooleanArgumentFlag`, `IfStatementAssignment`, `UnusedFormalParameter`, and `GlobalVariable`. Also includes Go-specific opinionated rules: `UncheckedTypeAssertion`, `IdenticalBranches`, `StructEmbeddingDepth`. Run them if you want a stricter, more PHP-flavoured style. |
 
 Rules with a direct Go analog reproduce phpmd's behavior and message templates;
 rules that are intrinsically PHP-specific are adapted to the nearest Go idiom

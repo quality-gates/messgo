@@ -106,7 +106,7 @@ func TestOverlappingRulesetsDedupe(t *testing.T) {
 func TestOpinionatedRulesNotInDefaultGo(t *testing.T) {
 	// These rules conflict with idiomatic Go and live only in the opt-in
 	// "opinionated" ruleset, not the default "go" ruleset.
-	moved := []string{"ElseExpression", "BooleanArgumentFlag", "UnusedFormalParameter", "GlobalVariable"}
+	moved := []string{"ElseExpression", "BooleanArgumentFlag", "IfStatementAssignment", "UnusedFormalParameter", "GlobalVariable"}
 	// Go-specific opinionated rules (ADR-0001 ranks 6-8) also live here.
 	goOpinionated := []string{"UncheckedTypeAssertion", "IdenticalBranches", "StructEmbeddingDepth"}
 

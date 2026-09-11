@@ -76,6 +76,24 @@ func mustNotHave(t *testing.T, hits []hit, names ...string) {
 	}
 }
 
+func countRule(hits []hit, name string) int {
+	count := 0
+	for _, h := range hits {
+		if h.rule == name {
+			count++
+		}
+	}
+	return count
+}
+
+func mustHaveCount(t *testing.T, hits []hit, name string, expected int) {
+	t.Helper()
+	mustHave(t, hits, name)
+	if got := countRule(hits, name); got != expected {
+		t.Errorf("expected %d hits for rule %q; got %d", expected, name, got)
+	}
+}
+
 func TestCodeSize(t *testing.T) {
 	src := `
 func manyParams(a, b, c, d, e, f, g, h, i, j, k int) {}
@@ -2160,4 +2178,36 @@ func stop(target target) {
 			}
 		})
 	}
+}
+
+func TestIfStatementAssignmentRulesetMembership(t *testing.T) {
+	src := `
+func g() error { return nil }
+
+func f() (err error) {
+	if err = g(); err != nil {
+		return err
+	}
+	return
+}
+`
+	t.Run("default go ruleset excludes IfStatementAssignment", func(t *testing.T) {
+		hits := analyze(t, src, "go")
+		mustNotHave(t, hits, "IfStatementAssignment")
+	})
+
+	t.Run("opinionated ruleset includes IfStatementAssignment", func(t *testing.T) {
+		hits := analyze(t, src, "opinionated")
+		mustHaveCount(t, hits, "IfStatementAssignment", 1)
+	})
+
+	t.Run("cleancode ruleset includes IfStatementAssignment", func(t *testing.T) {
+		hits := analyze(t, src, "cleancode")
+		mustHaveCount(t, hits, "IfStatementAssignment", 1)
+	})
+
+	t.Run("go and opinionated combined yields exactly one instance", func(t *testing.T) {
+		hits := analyze(t, src, "go,opinionated")
+		mustHaveCount(t, hits, "IfStatementAssignment", 1)
+	})
 }

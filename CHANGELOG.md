@@ -7,6 +7,10 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 ## [Unreleased]
 
 ### Fixed
+- Fixed `NPathComplexity` ignoring func-literal bodies in the enclosing function:
+  statements and expressions containing closures now multiply the closure body's
+  internal NPath execution paths into the enclosing function's path product,
+  consistent with pdepend and matching `CyclomaticComplexity` (#111).
 - Fixed `NPathComplexity` overcounting boolean operators in return statements by
   1: `returnStmtComplexity` seeded its sum with a base 1 before adding the
   boolean-operator count, inflating every return containing at least one `&&`/`||`

@@ -1746,6 +1746,56 @@ func complexFunc() (result int, err error) {
 	mustNotHave(t, hits, "NakedReturn")
 }
 
+func TestNPathComplexityFiresWithFuncLiterals(t *testing.T) {
+	// outer has NPath 6 (with closure NPath 3), threshold 5 -> fires.
+	src := `
+func outer(n int) int {
+	s := 0
+	if n > 0 {
+		s = 1
+	}
+	f := func(x int) int {
+		if x > 1 {
+			if x > 2 {
+				return 3
+			}
+			return 2
+		}
+		return 1
+	}
+	return s + f(n)
+}
+`
+	ruleset := codesizeRuleset(t, "NpathComplexity", 5, false)
+	hits := analyze(t, src, ruleset)
+	mustHave(t, hits, "NpathComplexity")
+}
+
+func TestNPathComplexityDoesNotFireBelowThresholdWithFuncLiterals(t *testing.T) {
+	// outer has NPath 6, threshold 7 -> does not fire.
+	src := `
+func outer(n int) int {
+	s := 0
+	if n > 0 {
+		s = 1
+	}
+	f := func(x int) int {
+		if x > 1 {
+			if x > 2 {
+				return 3
+			}
+			return 2
+		}
+		return 1
+	}
+	return s + f(n)
+}
+`
+	ruleset := codesizeRuleset(t, "NpathComplexity", 7, false)
+	hits := analyze(t, src, ruleset)
+	mustNotHave(t, hits, "NpathComplexity")
+}
+
 func TestShortMethodNameIgnoresFreeFunctions(t *testing.T) {
 	hits := analyze(t, `func Do() {}`, "naming")
 	mustNotHave(t, hits, "ShortMethodName")

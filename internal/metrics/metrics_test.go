@@ -553,3 +553,106 @@ func TestNPathReturnBooleanExpressions(t *testing.T) {
 		})
 	}
 }
+
+func TestNPathFuncLiteral(t *testing.T) {
+	tests := []struct {
+		name string
+		src  string
+		want int
+	}{
+		{
+			name: "issue 111 reproducer",
+			src: `func outer(n int) int {
+	s := 0
+	if n > 0 {
+		s = 1
+	}
+	f := func(x int) int {
+		if x > 1 {
+			if x > 2 {
+				return 3
+			}
+			return 2
+		}
+		return 1
+	}
+	return s + f(n)
+}`,
+			want: 6,
+		},
+		{
+			name: "closure assigned to variable",
+			src:  `func f() { fn := func(a bool) { if a {} }; fn(true) }`,
+			want: 2,
+		},
+		{
+			name: "closure passed as call argument",
+			src:  `func f() { call(func(a bool) { if a {} }) }`,
+			want: 2,
+		},
+		{
+			name: "multiple closures in one call",
+			src:  `func f() { call(func(a bool) { if a {} }, func(b bool) { if b {} }) }`,
+			want: 4,
+		},
+		{
+			name: "closure in go statement",
+			src:  `func f() { go func(a bool) { if a {} }(true) }`,
+			want: 2,
+		},
+		{
+			name: "closure in defer statement",
+			src:  `func f() { defer func(a bool) { if a {} }(true) }`,
+			want: 2,
+		},
+		{
+			name: "closure in var declaration",
+			src:  `func f() { var fn = func(a bool) { if a {} }; fn(true) }`,
+			want: 2,
+		},
+		{
+			name: "nested closures",
+			src:  `func f() { fn := func() { inner := func(a bool) { if a {} }; inner(true) }; fn() }`,
+			want: 2,
+		},
+		{
+			name: "closure returned",
+			src:  `func f() func(bool) { return func(a bool) { if a {} } }`,
+			want: 2,
+		},
+		{
+			name: "closure returned with boolean ops",
+			src:  `func f(x, y bool) (bool, func(bool)) { return x && y, func(a bool) { if a {} } }`,
+			want: 2,
+		},
+		{
+			name: "closure with boolean ops returned with outer boolean ops",
+			src:  `func f(a, b, c, d bool) (bool, func()) { return a && b, func() { if c && d {} } }`,
+			want: 3,
+		},
+		{
+			name: "closure inside if body",
+			src:  `func f(cond bool) { if cond { fn := func(a bool) { if a {} }; fn(true) } }`,
+			want: 3,
+		},
+		{
+			name: "empty closure does not inflate NPath",
+			src:  `func f() { fn := func() {}; fn() }`,
+			want: 1,
+		},
+		{
+			name: "closure with boolean operator in condition",
+			src:  `func f() { fn := func(a, b bool) { if a && b {} }; fn(true, true) }`,
+			want: 3,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			body := parseFuncBody(t, tc.src)
+			if got := NPathComplexity(body); got != tc.want {
+				t.Errorf("NPath(%s) = %d, want %d", tc.name, got, tc.want)
+			}
+		})
+	}
+}

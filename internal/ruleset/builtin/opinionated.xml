@@ -20,6 +20,9 @@ not part of "idiomatic Go":
   * CleanCode/BooleanArgumentFlag flags every boolean parameter. Go's own
     standard library is full of them (e.g. strconv, io, signal), so this is an
     OO Single-Responsibility opinion rather than a Go convention.
+  * CleanCode/IfStatementAssignment flags plain assignment (=) in an if-statement
+    initializer. In Go, initializing variables in `if` statements is idiomatic,
+    particularly for error handling with named or pre-declared return variables.
   * UnusedCode/UnusedFormalParameter flags unread parameters. In Go, parameters
     are routinely kept to satisfy an interface, an http.HandlerFunc signature,
     sort.Interface, or a callback shape — the compiler deliberately allows
@@ -35,6 +38,7 @@ Or combine: messgo &lt;paths&gt; &lt;format&gt; go,opinionated
 
     <rule ref="cleancode/ElseExpression"/>
     <rule ref="cleancode/BooleanArgumentFlag"/>
+    <rule ref="cleancode/IfStatementAssignment"/>
     <rule ref="unusedcode/UnusedFormalParameter"/>
     <rule ref="design/GlobalVariable"/>
 

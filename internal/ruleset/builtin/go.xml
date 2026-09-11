@@ -19,6 +19,8 @@ ruleset, but quiets a few rules whose PHP defaults are a poor fit for Go:
   * CleanCode/ElseExpression is dropped: `else` is idiomatic in Go.
   * CleanCode/BooleanArgumentFlag is dropped: boolean parameters are common in
     Go's own standard library.
+  * CleanCode/IfStatementAssignment is dropped: if-init assignments are idiomatic
+    in Go (e.g. `if err = g(); err != nil`).
   * UnusedCode/UnusedFormalParameter is dropped: unused parameters are routinely
     required to satisfy interfaces and standard signatures (e.g. http.HandlerFunc).
   * Design/GlobalVariable is dropped: some package-level variables are idiomatic
@@ -35,6 +37,7 @@ who wants the stricter, more PHP-flavoured style. See opinionated.xml.
     <rule ref="cleancode">
         <exclude name="ElseExpression"/>
         <exclude name="BooleanArgumentFlag"/>
+        <exclude name="IfStatementAssignment"/>
     </rule>
     <rule ref="controversial"/>
 

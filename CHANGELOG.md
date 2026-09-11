@@ -6,6 +6,11 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 
 ## [Unreleased]
 
+### Changed
+- Moved `IfStatementAssignment` from the default `go` ruleset to `opinionated`:
+  plain assignments in if init statements (such as `if err = g(); err != nil`)
+  are idiomatic in Go (#77).
+
 ### Fixed
 - Fixed `LackOfCohesionOfMethods` (LCOM4) silently dropping methods that only
   touch promoted fields or call promoted methods on embedded structs: member

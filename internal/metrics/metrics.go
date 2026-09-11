@@ -367,10 +367,30 @@ func returnStmtComplexity(n *ast.ReturnStmt) int {
 	for _, r := range n.Results {
 		c = npathAdd(c, expressionComplexity(r))
 	}
+	fl := funcLitsComplexity(n)
 	if c == 0 {
+		return fl
+	}
+	return npathMul(c, fl)
+}
+
+// funcLitsComplexity computes the combined NPath complexity contributed by any
+// func literals directly contained within n, multiplying their body execution
+// paths. Does not descend into nested func literals during traversal, as their
+// bodies are evaluated recursively by NPathComplexity.
+func funcLitsComplexity(n ast.Node) int {
+	if n == nil {
 		return 1
 	}
-	return c
+	prod := 1
+	ast.Inspect(n, func(node ast.Node) bool {
+		if lit, ok := node.(*ast.FuncLit); ok {
+			prod = npathMul(prod, NPathComplexity(lit.Body))
+			return false
+		}
+		return true
+	})
+	return prod
 }
 
 func npathMaxInt() int { return int(^uint(0) >> 1) }
@@ -432,7 +452,7 @@ func npathStmt(s ast.Stmt) int {
 	case *ast.ReturnStmt:
 		return returnStmtComplexity(n)
 	default:
-		return 1
+		return funcLitsComplexity(s)
 	}
 }
 
@@ -506,13 +526,18 @@ func npathSelect(body *ast.BlockStmt) int {
 }
 
 // expressionComplexity counts the boolean operators in an expression, which
-// add execution paths (each && or || adds one), matching pdepend.
+// add execution paths (each && or || adds one), matching pdepend. Func literal
+// bodies are excluded here because their execution paths are attributed via
+// NPathComplexity on the closure body.
 func expressionComplexity(e ast.Expr) int {
 	if e == nil {
 		return 0
 	}
 	count := 0
 	ast.Inspect(e, func(n ast.Node) bool {
+		if _, ok := n.(*ast.FuncLit); ok {
+			return false
+		}
 		if b, ok := n.(*ast.BinaryExpr); ok {
 			if b.Op == token.LAND || b.Op == token.LOR {
 				count++

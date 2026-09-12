@@ -151,6 +151,8 @@ func (c *memberScopeCollector) collectLocalTypes(body *ast.BlockStmt, types map[
 			c.addDeclaration(node, types)
 		case *ast.AssignStmt:
 			c.addAssignment(node, types)
+		case *ast.RangeStmt:
+			c.addRange(node, types)
 		}
 		return true
 	})
@@ -226,6 +228,21 @@ func (c *memberScopeCollector) assignmentRhsTypes(stmt *ast.AssignStmt, types ma
 		result[i] = c.resolver.expressionType(rhs, types)
 	}
 	return result
+}
+
+func (c *memberScopeCollector) addRange(stmt *ast.RangeStmt, types map[string]string) {
+	target := stmt.Value
+	if target == nil {
+		target = stmt.Key
+	}
+	id, ok := target.(*ast.Ident)
+	if !ok || id.Name == "_" {
+		return
+	}
+	typeName := c.resolver.expressionType(stmt.X, types)
+	if typeName != "" {
+		types[id.Name] = typeName
+	}
 }
 
 func (c *memberSelectionCollector) collectBody(body *ast.BlockStmt, types map[string]string, names map[string]bool, uses map[MemberKey]bool) {
@@ -350,6 +367,8 @@ func (c *memberTypeResolver) wrappedExpressionType(expr ast.Expr, types map[stri
 	case *ast.IndexExpr:
 		return c.expressionType(node.X, types)
 	case *ast.IndexListExpr:
+		return c.expressionType(node.X, types)
+	case *ast.SliceExpr:
 		return c.expressionType(node.X, types)
 	default:
 		return ""
@@ -570,6 +589,19 @@ func memberTypeName(expr ast.Expr) string {
 		return memberTypeName(node.X)
 	case *ast.IndexListExpr:
 		return memberTypeName(node.X)
+	default:
+		return containerTypeName(expr)
+	}
+}
+
+func containerTypeName(expr ast.Expr) string {
+	switch node := expr.(type) {
+	case *ast.ArrayType:
+		return memberTypeName(node.Elt)
+	case *ast.ChanType:
+		return memberTypeName(node.Value)
+	case *ast.MapType:
+		return memberTypeName(node.Value)
 	default:
 		return ""
 	}

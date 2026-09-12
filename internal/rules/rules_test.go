@@ -2428,3 +2428,129 @@ func Run() error {
 		}
 	})
 }
+
+func TestUnusedPrivateMemberRangeLoop(t *testing.T) {
+	t.Run("slice parameter iteration", func(t *testing.T) {
+		src := `
+type worker struct {
+	field int
+}
+
+func (w *worker) work() {}
+
+func Run(workers []*worker) {
+	for _, w := range workers {
+		w.work()
+		println(w.field)
+	}
+}
+`
+		hits := analyze(t, src, "unusedcode")
+		mustNotHave(t, hits, "UnusedPrivateField", "UnusedPrivateMethod")
+	})
+
+	t.Run("slice with index iteration", func(t *testing.T) {
+		src := `
+type worker struct {
+	field int
+}
+
+func (w *worker) work() {}
+
+func Run(workers []*worker) {
+	for i, w := range workers {
+		println(i)
+		w.work()
+		println(w.field)
+	}
+}
+`
+		hits := analyze(t, src, "unusedcode")
+		mustNotHave(t, hits, "UnusedPrivateField", "UnusedPrivateMethod")
+	})
+
+	t.Run("slice expression iteration", func(t *testing.T) {
+		src := `
+type worker struct {
+	field int
+}
+
+func (w *worker) work() {}
+
+func Run(workers []*worker) {
+	for _, w := range workers[1:] {
+		w.work()
+		println(w.field)
+	}
+}
+`
+		hits := analyze(t, src, "unusedcode")
+		mustNotHave(t, hits, "UnusedPrivateField", "UnusedPrivateMethod")
+	})
+
+	t.Run("map iteration value", func(t *testing.T) {
+		src := `
+type val struct {
+	vField int
+}
+func (v *val) valWork() {}
+
+func Run(m map[string]*val) {
+	for _, v := range m {
+		v.valWork()
+		println(v.vField)
+	}
+}
+`
+		hits := analyze(t, src, "unusedcode")
+		mustNotHave(t, hits, "UnusedPrivateField", "UnusedPrivateMethod")
+	})
+
+	t.Run("channel iteration", func(t *testing.T) {
+		src := `
+type worker struct {
+	field int
+}
+
+func (w *worker) work() {}
+
+func Run(ch chan *worker) {
+	for w := range ch {
+		w.work()
+		println(w.field)
+	}
+}
+`
+		hits := analyze(t, src, "unusedcode")
+		mustNotHave(t, hits, "UnusedPrivateField", "UnusedPrivateMethod")
+	})
+
+	t.Run("still reports unused members on struct when other members used in loop", func(t *testing.T) {
+		src := `
+type worker struct {
+	unusedField int
+	usedField   int
+}
+
+func (w *worker) unusedWork() {}
+func (w *worker) usedWork()   {}
+
+func Run(workers []*worker) {
+	for _, w := range workers {
+		w.usedWork()
+		println(w.usedField)
+	}
+}
+`
+		hits := analyze(t, src, "unusedcode")
+		mustHave(t, hits, "UnusedPrivateField", "UnusedPrivateMethod")
+		for _, h := range hits {
+			if h.rule == "UnusedPrivateField" && h.line != 3 {
+				t.Fatalf("unexpected UnusedPrivateField hit on line %d; hits = %v", h.line, hits)
+			}
+			if h.rule == "UnusedPrivateMethod" && h.line != 7 {
+				t.Fatalf("unexpected UnusedPrivateMethod hit on line %d; hits = %v", h.line, hits)
+			}
+		}
+	})
+}

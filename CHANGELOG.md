@@ -7,6 +7,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 ## [Unreleased]
 
 ### Fixed
+- Fixed `UnusedPrivateField` and `UnusedPrivateMethod` false positives on variables declared in `for ... range` loops: range statements now register loop iteration variables into the local type scope by resolving container element types from slices, arrays, maps, and channels, enabling member selections on iteration variables to resolve receiver types and record member uses (#121).
 - Fixed `NPathComplexity` ignoring func-literal bodies declared in `if` and
   `switch` initializers, in `if` conditions, and in type-switch guards: closures
   in those positions now multiply their internal NPath execution paths into the

@@ -509,7 +509,7 @@ func (c *memberTypeResolver) lookupMember(typeName, memberName string, visiting 
 	visiting[typeName] = true
 	defer delete(visiting, typeName)
 	if memberType, ok := directMemberType(class, memberName); ok {
-		return memberType, nil, true
+		return memberType, []MemberKey{{Type: typeName, Name: memberName}}, true
 	}
 	return c.lookupEmbeddedMember(class, typeName, memberName, visiting)
 }

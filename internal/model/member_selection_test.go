@@ -109,6 +109,8 @@ func use(t thing, s shadowed, c cycleA) {
 		{Type: "thing", Name: "value"}:   true,
 		{Type: "thing", Name: "middle"}:  true,
 		{Type: "middle", Name: "helper"}: true,
+		{Type: "helper", Name: "Do"}:     true,
+		{Type: "helper", Name: "value"}:  true,
 		{Type: "shadowed", Name: "Do"}:   true,
 		{Type: "cycleA", Name: "Do"}:     true,
 	}

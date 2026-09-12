@@ -171,6 +171,47 @@ func use(t thing) {
 	}
 }
 
+func TestUnusedPrivateMembersUsedThroughPromotedSelection(t *testing.T) {
+	f, err := model.ParseSource("promoted.go", []byte(`package p
+
+type Base struct {
+	shared string
+}
+
+func (Base) hidden() int { return 1 }
+
+type Other struct {
+	Base
+}
+
+type Outer struct {
+	Other
+}
+
+func usePromoted() int {
+	o := Other{}
+	_ = o.shared
+	return o.hidden()
+}
+
+func useNestedPromoted() int {
+	o := Outer{}
+	_ = o.shared
+	return o.hidden()
+}
+`))
+	if err != nil {
+		t.Fatalf("ParseSource: %v", err)
+	}
+
+	fieldRule := &UnusedPrivateField{Base: rule.NewBase()}
+	methodRule := &UnusedPrivateMethod{Base: rule.NewBase()}
+	violations := rule.Analyze(f, []*rule.RuleSet{{Rules: []rule.Rule{fieldRule, methodRule}}})
+	if len(violations) != 0 {
+		t.Fatalf("violations = %+v, want none: promoted selections use members declared by Base", violations)
+	}
+}
+
 func TestUnusedPrivateMethodSatisfiedBySamePackageInterface(t *testing.T) {
 	f, err := model.ParseSource("a.go", []byte(`package p
 

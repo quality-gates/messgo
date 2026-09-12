@@ -579,6 +579,46 @@ func testFunc() {
 	}
 }
 
+func TestSelectedMemberUsesPackageFunctions(t *testing.T) {
+	defFile, err := ParseSource("def.go", []byte(`package sample
+
+type Worker struct {
+	field int
+}
+
+func (w *Worker) Work() {}
+
+func newWorker() *Worker {
+	return &Worker{}
+}
+`))
+	if err != nil {
+		t.Fatalf("ParseSource def.go: %v", err)
+	}
+
+	useFile, err := ParseSource("use.go", []byte(`package sample
+
+func Run() {
+	w := newWorker()
+	w.Work()
+	_ = w.field
+}
+`))
+	if err != nil {
+		t.Fatalf("ParseSource use.go: %v", err)
+	}
+
+	useFile.PackageFunctions = defFile.Functions
+	uses := SelectedMemberUses(useFile)
+
+	if !uses[MemberKey{Type: "Worker", Name: "Work"}] {
+		t.Errorf("Worker.Work was not marked as used via PackageFunctions")
+	}
+	if !uses[MemberKey{Type: "Worker", Name: "field"}] {
+		t.Errorf("Worker.field was not marked as used via PackageFunctions")
+	}
+}
+
 func assertMemberUses(t *testing.T, f *File, want map[MemberKey]bool) {
 	t.Helper()
 	got := SelectedMemberUses(f)

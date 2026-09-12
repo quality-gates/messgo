@@ -211,10 +211,9 @@ func loadRuleSets(opt options, stderr io.Writer) ([]*rule.RuleSet, error) {
 	loader := &ruleset.Loader{
 		MinPriority: opt.minPriority,
 		MaxPriority: opt.maxPriority,
+		Verbose:     opt.verbose,
 		Warn: func(msg string) {
-			if opt.verbose {
-				fmt.Fprintln(stderr, "warning:", msg)
-			}
+			fmt.Fprintln(stderr, "warning:", msg)
 		},
 	}
 	return loader.Load(opt.rulesets)

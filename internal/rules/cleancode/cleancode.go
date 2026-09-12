@@ -28,7 +28,7 @@ type BooleanArgumentFlag struct {
 }
 
 func newBooleanArgumentFlag() rule.Rule {
-	return &BooleanArgumentFlag{Base: rule.NewBase()}
+	return &BooleanArgumentFlag{Base: rule.NewBase("exceptions", "ignorepattern")}
 }
 
 func (r *BooleanArgumentFlag) Configure(props rule.Properties) error {

@@ -30,7 +30,7 @@ type ShortClassName struct {
 }
 
 func newShortClassName() rule.Rule {
-	return &ShortClassName{Base: rule.NewBase()}
+	return &ShortClassName{Base: rule.NewBase("minimum", "exceptions")}
 }
 
 func (r *ShortClassName) Configure(props rule.Properties) error {
@@ -65,7 +65,7 @@ type LongClassName struct {
 }
 
 func newLongClassName() rule.Rule {
-	return &LongClassName{Base: rule.NewBase()}
+	return &LongClassName{Base: rule.NewBase("maximum", "subtract-prefixes", "subtract-suffixes")}
 }
 
 func (r *LongClassName) Configure(props rule.Properties) error {
@@ -97,7 +97,7 @@ type ShortVariable struct {
 }
 
 func newShortVariable() rule.Rule {
-	return &ShortVariable{Base: rule.NewBase()}
+	return &ShortVariable{Base: rule.NewBase("minimum", "exceptions")}
 }
 
 func (r *ShortVariable) Configure(props rule.Properties) error {
@@ -149,7 +149,7 @@ type LongVariable struct {
 }
 
 func newLongVariable() rule.Rule {
-	return &LongVariable{Base: rule.NewBase()}
+	return &LongVariable{Base: rule.NewBase("maximum", "subtract-prefixes", "subtract-suffixes")}
 }
 
 func (r *LongVariable) Configure(props rule.Properties) error {
@@ -194,7 +194,7 @@ type ShortMethodName struct {
 }
 
 func newShortMethodName() rule.Rule {
-	return &ShortMethodName{Base: rule.NewBase()}
+	return &ShortMethodName{Base: rule.NewBase("minimum", "exceptions")}
 }
 
 func (r *ShortMethodName) Configure(props rule.Properties) error {
@@ -225,7 +225,7 @@ type BooleanGetMethodName struct {
 }
 
 func newBooleanGetMethodName() rule.Rule {
-	return &BooleanGetMethodName{Base: rule.NewBase()}
+	return &BooleanGetMethodName{Base: rule.NewBase("checkParameterizedMethods")}
 }
 
 func (r *BooleanGetMethodName) Configure(props rule.Properties) error {

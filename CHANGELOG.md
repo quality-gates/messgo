@@ -7,6 +7,12 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 ## [Unreleased]
 
 ### Fixed
+- Fixed `NPathComplexity` ignoring func-literal bodies declared in `if` and
+  `switch` initializers, in `if` conditions, and in type-switch guards: closures
+  in those positions now multiply their internal NPath execution paths into the
+  enclosing statement's path product, and boolean operators in `if`/`switch`
+  initializer assignments are counted as `npathFor` already counts them in loop
+  clauses (#120).
 - Fixed `UnusedPrivateField` and `UnusedPrivateMethod` false positives when a type is returned by a same-package function declared in another file: package-level functions are now aggregated across all package files into `PackageFunctions` on `model.File` and attached before member selections are collected, allowing cross-file function calls to resolve their return types (#119).
 - Fixed `UnusedPrivateField` and `UnusedPrivateMethod` false positives on variables initialized from multi-return calls: function and method calls returning multiple values (such as `(*T, error)`) now have their result types mapped by index to LHS identifiers in short assignments and `var` specs, enabling member selections through those variables to resolve the target type (#118).
 

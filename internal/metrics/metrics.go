@@ -423,13 +423,29 @@ func npathMul(a, b int) int {
 func npathSwitchOrSelect(s ast.Stmt) (int, bool) {
 	switch n := s.(type) {
 	case *ast.SwitchStmt:
-		return npathSwitch(n.Body, n.Tag), true
+		return npathSwitchStmt(n), true
 	case *ast.TypeSwitchStmt:
-		return npathSwitch(n.Body, nil), true
+		return npathTypeSwitch(n), true
 	case *ast.SelectStmt:
 		return npathSelect(n.Body), true
 	}
 	return 0, false
+}
+
+// npathSwitchStmt extends pdepend's switch handling with the Go initializer:
+// boolean operators in an init assignment add paths, and func literals in the
+// initializer or tag run on every path through the switch, so their paths
+// multiply the result.
+func npathSwitchStmt(n *ast.SwitchStmt) int {
+	npath := npathAdd(npathSwitch(n.Body, n.Tag), assignExprComplexity(n.Init))
+	return npathMul(npath, npathMul(funcLitsComplexity(n.Init), funcLitsComplexity(n.Tag)))
+}
+
+// npathTypeSwitch mirrors npathSwitchStmt for a type switch, whose guard is an
+// assignment rather than a tag expression.
+func npathTypeSwitch(n *ast.TypeSwitchStmt) int {
+	npath := npathAdd(npathSwitch(n.Body, nil), assignExprComplexity(n.Init))
+	return npathMul(npath, npathMul(funcLitsComplexity(n.Init), funcLitsComplexity(n.Assign)))
 }
 
 func npathStmt(s ast.Stmt) int {
@@ -458,7 +474,11 @@ func npathStmt(s ast.Stmt) int {
 
 // npathIf implements the NPath formula for if/else chains:
 //
-//	NP(if) = NP(else-part) + NP(if-body) + Σ expr
+//	NP(if) = (NP(else-part) + NP(if-body) + Σ expr + Σ init-expr) × NP(closures)
+//
+// where the closure factor folds execution paths of func literals declared in
+// the initializer or invoked in the condition — they run on every path through
+// the if, so their paths multiply the result.
 func npathIf(n *ast.IfStmt) int {
 	expr := expressionComplexity(n.Cond)
 	body := npathStmts(n.Body.List)
@@ -474,7 +494,24 @@ func npathIf(n *ast.IfStmt) int {
 		elsePart = npathStmt(e)
 	}
 	npath := npathAdd(elsePart, body)
-	return npathAdd(npath, expr)
+	npath = npathAdd(npath, expr)
+	npath = npathAdd(npath, assignExprComplexity(n.Init))
+	return npathMul(npath, npathMul(funcLitsComplexity(n.Init), funcLitsComplexity(n.Cond)))
+}
+
+// assignExprComplexity returns the boolean-operator complexity of the right
+// hand side of an assignment statement, as npathFor's loop initialisers and
+// post statements are measured. Non-assignments contribute 0.
+func assignExprComplexity(s ast.Stmt) int {
+	a, ok := s.(*ast.AssignStmt)
+	if !ok {
+		return 0
+	}
+	npath := 0
+	for _, e := range a.Rhs {
+		npath = npathAdd(npath, expressionComplexity(e))
+	}
+	return npath
 }
 
 // npathFor follows pdepend visitForStatement: 1 + Σ E(loop expressions) +
@@ -482,16 +519,8 @@ func npathIf(n *ast.IfStmt) int {
 func npathFor(n *ast.ForStmt) int {
 	npath := 1
 	npath = npathAdd(npath, expressionComplexity(n.Cond))
-	if a, ok := n.Init.(*ast.AssignStmt); ok {
-		for _, e := range a.Rhs {
-			npath = npathAdd(npath, expressionComplexity(e))
-		}
-	}
-	if a, ok := n.Post.(*ast.AssignStmt); ok {
-		for _, e := range a.Rhs {
-			npath = npathAdd(npath, expressionComplexity(e))
-		}
-	}
+	npath = npathAdd(npath, assignExprComplexity(n.Init))
+	npath = npathAdd(npath, assignExprComplexity(n.Post))
 	return npathAdd(npath, npathStmts(n.Body.List))
 }
 

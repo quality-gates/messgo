@@ -45,6 +45,15 @@ type File struct {
 	Functions  []*Function
 	// AllFuncs includes both free functions and methods, in source order.
 	AllFuncs []*Function
+
+	PackageScope
+
+	analysis fileAnalysisCache
+}
+
+// PackageScope holds package-wide artifacts and analysis data aggregated across
+// all files in the package by the runner.
+type PackageScope struct {
 	// MutatedGlobals holds the package-level variable names that are mutated
 	// anywhere in this file's package. It is populated by the runner once all
 	// of a package's files are parsed, enabling cross-file analysis. It is nil
@@ -61,6 +70,11 @@ type File struct {
 	// cross-file interface-satisfaction analysis. When nil (file analyzed in
 	// isolation), rules fall back to this file's own Interfaces.
 	PackageInterfaces []*Interface
+	// PackageFunctions holds all package-level free functions from every file
+	// in this file's package. It is populated by the runner after parsing,
+	// enabling cross-file call return-type resolution. When nil (file analyzed
+	// in isolation), rules fall back to this file's own free functions.
+	PackageFunctions []*Function
 	// PackageMembers holds the legacy name-only selection index across every
 	// file in this file's package. It is populated by the runner for callers
 	// that need the historical name-only query.
@@ -70,8 +84,6 @@ type File struct {
 	// parsing, enabling cross-file unused member analysis without collisions
 	// between unrelated types.
 	PackageMemberSelections map[MemberKey]bool
-
-	analysis fileAnalysisCache
 }
 
 type fileAnalysisCache struct {

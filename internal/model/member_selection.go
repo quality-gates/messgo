@@ -63,8 +63,12 @@ func newMemberSelectionCollector(f *File) *memberSelectionCollector {
 	for _, iface := range ifaces {
 		ifaceByName[iface.Name] = iface
 	}
-	functions := make(map[string]*Function)
-	for _, fn := range f.AllFuncs {
+	funcs := f.AllFuncs
+	if f.PackageFunctions != nil {
+		funcs = f.PackageFunctions
+	}
+	functions := make(map[string]*Function, len(funcs))
+	for _, fn := range funcs {
 		if !fn.IsMethod() && functions[fn.Name] == nil {
 			functions[fn.Name] = fn
 		}

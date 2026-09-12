@@ -83,29 +83,32 @@ func annotatePackageGroup(group []*model.File) {
 		asts[i] = f.Syntax
 	}
 	mutated := util.MutatedGlobalNames(asts)
-	var pkgClasses []*model.Class
+	var (
+		pkgClasses    []*model.Class
+		pkgInterfaces []*model.Interface
+		pkgFunctions  []*model.Function
+	)
 	classByName := map[string]*model.Class{}
 	for _, f := range group {
 		pkgClasses = append(pkgClasses, f.Classes...)
 		for _, c := range f.Classes {
 			classByName[c.Name] = c
 		}
+		pkgInterfaces = append(pkgInterfaces, f.Interfaces...)
+		pkgFunctions = append(pkgFunctions, f.Functions...)
 	}
 	for _, f := range group {
 		f.PackageClasses = pkgClasses
+		f.PackageInterfaces = pkgInterfaces
+		f.PackageFunctions = pkgFunctions
 	}
 	attachPackageMethods(group, classByName, util.TypeAliasNames(asts))
 	pkgMembers := collectPackageMemberNames(group)
 	pkgMemberSelections := collectPackageMemberSelections(group)
-	var pkgInterfaces []*model.Interface
-	for _, f := range group {
-		pkgInterfaces = append(pkgInterfaces, f.Interfaces...)
-	}
 	for _, f := range group {
 		f.MutatedGlobals = mutated
 		f.PackageMembers = pkgMembers
 		f.PackageMemberSelections = pkgMemberSelections
-		f.PackageInterfaces = pkgInterfaces
 	}
 }
 

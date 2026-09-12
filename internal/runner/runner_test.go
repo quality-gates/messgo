@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/quality-gates/messgo/internal/model"
+	"github.com/quality-gates/messgo/internal/rule"
 	"github.com/quality-gates/messgo/internal/ruleset"
 )
 
@@ -502,6 +503,154 @@ type Book interface {
 	}
 	if len(rep.Violations) != 0 {
 		t.Fatalf("violations = %+v, want none: reconcile() satisfies Book declared in a sibling file", rep.Violations)
+	}
+}
+
+func runPackageUnusedCode(t *testing.T, files map[string]string, ruleNames ...string) []*rule.Violation {
+	t.Helper()
+	dir := t.TempDir()
+	for name, src := range files {
+		if err := os.WriteFile(filepath.Join(dir, name), []byte(src), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	sets, err := (&ruleset.Loader{}).Load("unusedcode")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(ruleNames) > 0 {
+		ruleset.FilterRules(sets, ruleNames, nil)
+	}
+	rep, err := Run(Options{Paths: []string{dir}, RuleSets: sets})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return rep.Violations
+}
+
+func TestCrossFileFunctionReturnTypePreventsUnusedMemberFalsePositive(t *testing.T) {
+	violations := runPackageUnusedCode(t, map[string]string{
+		"a.go": `package p
+type worker struct { field int }
+func (w *worker) work() {}
+func newWorker() *worker { return &worker{} }
+`,
+		"b.go": `package p
+func Run() {
+	w := newWorker()
+	w.work()
+	_ = w.field
+}
+`,
+	}, "UnusedPrivateField", "UnusedPrivateMethod")
+	if len(violations) != 0 {
+		t.Fatalf("violations = %+v, want none", violations)
+	}
+}
+
+func TestCrossFileStructValueReturnTypePreventsUnusedMemberFalsePositive(t *testing.T) {
+	violations := runPackageUnusedCode(t, map[string]string{
+		"a.go": `package p
+type S struct { count int }
+func (s S) process() {}
+func NewS() S { return S{} }
+`,
+		"b.go": `package p
+func F2() int {
+	s := NewS()
+	s.process()
+	return s.count
+}
+`,
+	}, "UnusedPrivateField", "UnusedPrivateMethod")
+	if len(violations) != 0 {
+		t.Fatalf("violations = %+v, want none", violations)
+	}
+}
+
+func TestCrossFileMultiReturnFunctionPreventsUnusedMemberFalsePositive(t *testing.T) {
+	violations := runPackageUnusedCode(t, map[string]string{
+		"a.go": `package p
+type worker struct { field int }
+func (w *worker) work() {}
+func newWorker() (*worker, error) { return &worker{}, nil }
+`,
+		"b.go": `package p
+func Run() error {
+	w, err := newWorker()
+	if err != nil {
+		return err
+	}
+	w.work()
+	_ = w.field
+	return nil
+}
+`,
+	}, "UnusedPrivateField", "UnusedPrivateMethod")
+	if len(violations) != 0 {
+		t.Fatalf("violations = %+v, want none", violations)
+	}
+}
+
+func TestCrossFileInterfaceReturnTypePreventsUnusedMemberFalsePositive(t *testing.T) {
+	violations := runPackageUnusedCode(t, map[string]string{
+		"a.go": `package p
+type worker struct { field int }
+func (w *worker) work() {}
+type creator interface {
+	Create() (*worker, error)
+}
+`,
+		"b.go": `package p
+func Run(c creator) error {
+	w, err := c.Create()
+	if err != nil {
+		return err
+	}
+	w.work()
+	_ = w.field
+	return nil
+}
+`,
+	}, "UnusedPrivateField", "UnusedPrivateMethod")
+	if len(violations) != 0 {
+		t.Fatalf("violations = %+v, want none", violations)
+	}
+}
+
+func TestCrossFileFunctionReturnTypeStillFlagsGenuinelyUnusedMembers(t *testing.T) {
+	violations := runPackageUnusedCode(t, map[string]string{
+		"a.go": `package p
+type worker struct {
+	usedField   int
+	unusedField int
+}
+func (w *worker) usedWork() {}
+func (w *worker) unusedWork() {}
+func newWorker() *worker { return &worker{} }
+`,
+		"b.go": `package p
+func Run() {
+	w := newWorker()
+	w.usedWork()
+	_ = w.usedField
+}
+`,
+	}, "UnusedPrivateField", "UnusedPrivateMethod")
+	if len(violations) != 2 {
+		t.Fatalf("got %d violations, want 2: %+v", len(violations), violations)
+	}
+	var fieldFound, methodFound bool
+	for _, v := range violations {
+		if v.Rule.Name() == "UnusedPrivateField" && v.BeginLine == 4 {
+			fieldFound = true
+		}
+		if v.Rule.Name() == "UnusedPrivateMethod" && v.Method == "unusedWork" {
+			methodFound = true
+		}
+	}
+	if !fieldFound || !methodFound {
+		t.Fatalf("violations = %+v, want unusedField and unusedWork", violations)
 	}
 }
 

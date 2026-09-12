@@ -194,3 +194,16 @@ func TestReportFuncUsesTargetFile(t *testing.T) {
 		t.Fatalf("expected fallback to main.go/main, got %v", violations[2])
 	}
 }
+
+func TestNewBaseRecordsKnownProps(t *testing.T) {
+	b := NewBase("minimum", "exceptions")
+	if b.RuleProps == nil {
+		t.Fatal("RuleProps is nil")
+	}
+	if len(b.RuleProps) != 0 {
+		t.Fatalf("RuleProps = %#v, want empty map", b.RuleProps)
+	}
+	if len(b.KnownProps) != 2 || b.KnownProps[0] != "minimum" || b.KnownProps[1] != "exceptions" {
+		t.Fatalf("KnownProps = %#v", b.KnownProps)
+	}
+}

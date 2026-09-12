@@ -1106,6 +1106,52 @@ func TestBuiltinCodesizeDoesNotWarnUnknownProperties(t *testing.T) {
 			t.Errorf("builtin codesize should not warn about properties, got %v", warns)
 			break
 		}
+		if strings.Contains(w, "skipping unimplemented") {
+			t.Errorf("unimplemented-rule warnings should stay behind Verbose, got %v", warns)
+			break
+		}
+	}
+}
+
+func TestVerboseLoaderWarnsUnimplementedRules(t *testing.T) {
+	var warns []string
+	if _, err := (&Loader{Verbose: true, Warn: func(msg string) { warns = append(warns, msg) }}).Load("design"); err != nil {
+		t.Fatal(err)
+	}
+	found := false
+	for _, w := range warns {
+		if strings.Contains(w, "skipping unimplemented") {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Errorf("Verbose loader should warn about unimplemented rules, got %v", warns)
+	}
+}
+
+func TestDuplicateUnknownPropertyWarnsOnce(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "dup.xml")
+	xml := `<ruleset name="team policy">
+  <rule ref="NPathComplexity">
+    <properties>
+      <property name="maximum" value="1"/>
+      <property name="maximum" value="2"/>
+    </properties>
+  </rule>
+</ruleset>`
+	if err := os.WriteFile(path, []byte(xml), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	warns, _ := loadWithWarns(t, path)
+	count := 0
+	for _, w := range warns {
+		if strings.Contains(w, `rule NPathComplexity has no property "maximum"`) {
+			count++
+		}
+	}
+	if count != 1 {
+		t.Errorf("duplicate unknown property warnings = %d, want 1 (%v)", count, warns)
 	}
 }
 

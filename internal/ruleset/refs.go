@@ -312,21 +312,10 @@ func warnSkipped(e *refExpander, format string, args ...any) {
 }
 
 func warnUnknownProperties(e *refExpander, def xmlRule, ov *xmlRule, r rule.Rule) {
-	if ov == nil {
-		return
-	}
 	known := declaredPropertyNames(r)
-	if len(known) == 0 || fromBuiltin(e) {
-		addPropertyNames(known, def.Properties)
-	}
 	for _, name := range unknownPropertyNames(known, ov.Properties) {
 		e.warn("rule %s has no property %q; ignored", def.Name, name)
 	}
-}
-
-func fromBuiltin(e *refExpander) bool {
-	n := len(e.active)
-	return n > 0 && strings.HasPrefix(e.active[n-1], "builtin:")
 }
 
 type propertyNameLister interface {
@@ -342,14 +331,6 @@ func declaredPropertyNames(r rule.Rule) map[string]bool {
 		addNames(set, lister.PropertyNames())
 	}
 	return set
-}
-
-func addPropertyNames(set map[string]bool, props xmlProperties) {
-	for _, p := range props.Property {
-		if p.Name != "" {
-			set[p.Name] = true
-		}
-	}
 }
 
 func addNames(set map[string]bool, names []string) {

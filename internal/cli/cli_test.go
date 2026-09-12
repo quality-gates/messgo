@@ -480,6 +480,14 @@ func TestBuiltinRulesetDoesNotWarnUnknownProperties(t *testing.T) {
 	}
 }
 
+func TestVerboseWarnsUnimplementedRules(t *testing.T) {
+	src := writeFixture(t, "package p\nfunc f() int { return 1 }\n")
+	_, _, errOut := runMain(t, src, "text", "design", "--verbose")
+	if !strings.Contains(errOut, "skipping unimplemented") {
+		t.Errorf("verbose stderr should warn about unimplemented rules, got %q", errOut)
+	}
+}
+
 func TestSurplusPositional(t *testing.T) {
 	path := writeFixture(t, excessiveParamsSrc)
 	code, out, errOut := runMain(t, path, "text", "codesize", "extra")

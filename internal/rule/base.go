@@ -14,6 +14,7 @@ type Base struct {
 	RuleDesc    string
 	RuleSince   string
 	RuleProps   Properties
+	KnownProps  []string
 }
 
 func (b *Base) Name() string        { return b.RuleName }
@@ -77,5 +78,8 @@ func Registered(class string) bool {
 	return ok
 }
 
-// NewBase is a helper for constructors.
-func NewBase() *Base { return &Base{RuleProps: Properties{}} }
+// NewBase is a helper for constructors. knownProps names the properties the
+// rule reads from ruleset XML.
+func NewBase(knownProps ...string) *Base {
+	return &Base{RuleProps: Properties{}, KnownProps: knownProps}
+}

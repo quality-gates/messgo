@@ -946,6 +946,215 @@ func thresholdLoaderFile(paramCount int) *model.File {
 	return file
 }
 
+func loadWithWarns(t *testing.T, spec string) ([]string, *rule.RuleSet) {
+	t.Helper()
+	var warns []string
+	sets, err := (&Loader{Warn: func(msg string) { warns = append(warns, msg) }}).Load(spec)
+	if err != nil {
+		t.Fatalf("load %q: %v", spec, err)
+	}
+	if len(sets) != 1 {
+		t.Fatalf("expected 1 ruleset, got %d", len(sets))
+	}
+	return warns, sets[0]
+}
+
+func TestUnknownOverridePropertyWarns(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "wrongprop.xml")
+	xml := `<ruleset name="team policy">
+  <rule ref="NPathComplexity">
+    <properties><property name="maximum" value="1"/></properties>
+  </rule>
+</ruleset>`
+	if err := os.WriteFile(path, []byte(xml), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	warns, set := loadWithWarns(t, path)
+	if ruleByName(set, "NPathComplexity") == nil {
+		t.Fatal("NPathComplexity should still load")
+	}
+	if got := rule.BaseOf(ruleByName(set, "NPathComplexity")).RuleProps.Int("minimum", 0); got != 0 {
+		t.Errorf("unknown property must not become minimum, got %d", got)
+	}
+	found := false
+	for _, w := range warns {
+		if strings.Contains(w, `rule NPathComplexity has no property "maximum"`) {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Errorf("expected unknown-property warning, got %v", warns)
+	}
+}
+
+func TestKnownOverridePropertySilent(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "rightprop.xml")
+	xml := `<ruleset name="team policy">
+  <rule ref="NPathComplexity">
+    <properties><property name="minimum" value="1"/></properties>
+  </rule>
+</ruleset>`
+	if err := os.WriteFile(path, []byte(xml), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	warns, set := loadWithWarns(t, path)
+	np := ruleByName(set, "NPathComplexity")
+	if np == nil {
+		t.Fatal("NPathComplexity should load")
+	}
+	if got := rule.BaseOf(np).RuleProps.Int("minimum", 0); got != 1 {
+		t.Errorf("minimum override = %d, want 1", got)
+	}
+	for _, w := range warns {
+		if strings.Contains(w, "has no property") {
+			t.Errorf("known property should not warn, got %v", warns)
+			break
+		}
+	}
+}
+
+func TestInlineUnknownPropertyWarns(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "inline.xml")
+	xml := `<ruleset name="team policy">
+  <rule name="NPathComplexity" message="npath" class="PHPMD\Rule\Design\NpathComplexity">
+    <properties><property name="maximum" value="1"/></properties>
+  </rule>
+</ruleset>`
+	if err := os.WriteFile(path, []byte(xml), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	warns, _ := loadWithWarns(t, path)
+	found := false
+	for _, w := range warns {
+		if strings.Contains(w, `rule NPathComplexity has no property "maximum"`) {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Errorf("expected inline unknown-property warning, got %v", warns)
+	}
+}
+
+func TestInlineKnownPropertySilent(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "inline.xml")
+	xml := `<ruleset name="team policy">
+  <rule name="NPathComplexity" message="npath" class="PHPMD\Rule\Design\NpathComplexity">
+    <properties><property name="minimum" value="1"/></properties>
+  </rule>
+  <rule name="ExcessiveMethodLength" message="long" class="PHPMD\Rule\Design\LongMethod">
+    <properties>
+      <property name="minimum" value="50"/>
+      <property name="ignore-whitespace" value="true"/>
+    </properties>
+  </rule>
+</ruleset>`
+	if err := os.WriteFile(path, []byte(xml), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	warns, set := loadWithWarns(t, path)
+	np := ruleByName(set, "NPathComplexity")
+	if np == nil {
+		t.Fatal("NPathComplexity should load")
+	}
+	if got := rule.BaseOf(np).RuleProps.Int("minimum", 0); got != 1 {
+		t.Errorf("NPathComplexity minimum = %d, want 1", got)
+	}
+	lm := ruleByName(set, "ExcessiveMethodLength")
+	if lm == nil {
+		t.Fatal("ExcessiveMethodLength should load")
+	}
+	if got := rule.BaseOf(lm).RuleProps.Bool("ignore-whitespace", false); !got {
+		t.Error("ignore-whitespace override was dropped")
+	}
+	for _, w := range warns {
+		if strings.Contains(w, "has no property") {
+			t.Errorf("known inline properties should not warn, got %v", warns)
+			break
+		}
+	}
+}
+
+func TestRuleWithNoPropertiesDoesNotWarn(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "noprops.xml")
+	xml := `<ruleset name="team policy">
+  <rule ref="GotoStatement"/>
+</ruleset>`
+	if err := os.WriteFile(path, []byte(xml), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	warns, set := loadWithWarns(t, path)
+	if ruleByName(set, "GotoStatement") == nil {
+		t.Fatal("GotoStatement should load")
+	}
+	for _, w := range warns {
+		if strings.Contains(w, "has no property") {
+			t.Errorf("rule with no properties should not warn, got %v", warns)
+			break
+		}
+	}
+}
+
+func TestBuiltinCodesizeDoesNotWarnUnknownProperties(t *testing.T) {
+	warns, set := loadWithWarns(t, "codesize")
+	if ruleByName(set, "CyclomaticComplexity") == nil {
+		t.Fatal("codesize should contain CyclomaticComplexity")
+	}
+	for _, w := range warns {
+		if strings.Contains(w, "has no property") {
+			t.Errorf("builtin codesize should not warn about properties, got %v", warns)
+			break
+		}
+		if strings.Contains(w, "skipping unimplemented") {
+			t.Errorf("unimplemented-rule warnings should stay behind Verbose, got %v", warns)
+			break
+		}
+	}
+}
+
+func TestVerboseLoaderWarnsUnimplementedRules(t *testing.T) {
+	var warns []string
+	if _, err := (&Loader{Verbose: true, Warn: func(msg string) { warns = append(warns, msg) }}).Load("design"); err != nil {
+		t.Fatal(err)
+	}
+	found := false
+	for _, w := range warns {
+		if strings.Contains(w, "skipping unimplemented") {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Errorf("Verbose loader should warn about unimplemented rules, got %v", warns)
+	}
+}
+
+func TestDuplicateUnknownPropertyWarnsOnce(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "dup.xml")
+	xml := `<ruleset name="team policy">
+  <rule ref="NPathComplexity">
+    <properties>
+      <property name="maximum" value="1"/>
+      <property name="maximum" value="2"/>
+    </properties>
+  </rule>
+</ruleset>`
+	if err := os.WriteFile(path, []byte(xml), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	warns, _ := loadWithWarns(t, path)
+	count := 0
+	for _, w := range warns {
+		if strings.Contains(w, `rule NPathComplexity has no property "maximum"`) {
+			count++
+		}
+	}
+	if count != 1 {
+		t.Errorf("duplicate unknown property warnings = %d, want 1 (%v)", count, warns)
+	}
+}
+
 func TestLoadCustomRulesetReferencingOpinionatedRule(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "ruleset.xml")
 	xml := `<?xml version="1.0"?>

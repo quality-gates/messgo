@@ -78,7 +78,7 @@ type UnusedLocalVariable struct {
 }
 
 func newUnusedLocalVariable() rule.Rule {
-	return &UnusedLocalVariable{Base: rule.NewBase()}
+	return &UnusedLocalVariable{Base: rule.NewBase("exceptions", "allow-unused-foreach-variables")}
 }
 
 func (r *UnusedLocalVariable) Configure(props rule.Properties) error {

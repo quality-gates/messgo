@@ -91,6 +91,21 @@ func NewThresholdRule(decl ThresholdDeclaration) *ThresholdRule {
 	return &ThresholdRule{decl: decl, threshold: decl.Default, interfaceThresh: decl.InterfaceDefault}
 }
 
+// PropertyNames returns the threshold property keys this rule reads.
+func (r *ThresholdRule) PropertyNames() []string {
+	if r == nil {
+		return nil
+	}
+	names := make([]string, 0, 2)
+	if r.decl.Property != "" {
+		names = append(names, r.decl.Property)
+	}
+	if r.decl.InterfaceProperty != "" {
+		names = append(names, r.decl.InterfaceProperty)
+	}
+	return names
+}
+
 // Configure parses and stores typed threshold configuration once at load time.
 func (r *ThresholdRule) Configure(props Properties) error {
 	threshold, err := intProperty(props, r.decl.Property, r.decl.Default)

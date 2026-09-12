@@ -45,7 +45,7 @@ type GlobalVariable struct {
 }
 
 func newGlobalVariable() rule.Rule {
-	return &GlobalVariable{Base: rule.NewBase()}
+	return &GlobalVariable{Base: rule.NewBase("report-immutable")}
 }
 
 func (r *GlobalVariable) Configure(props rule.Properties) error {
@@ -113,7 +113,7 @@ type DevelopmentCodeFragment struct {
 }
 
 func newDevelopmentCodeFragment() rule.Rule {
-	return &DevelopmentCodeFragment{Base: rule.NewBase()}
+	return &DevelopmentCodeFragment{Base: rule.NewBase("unwanted-functions", "ignore-namespaces")}
 }
 
 func (r *DevelopmentCodeFragment) Configure(props rule.Properties) error {

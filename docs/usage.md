@@ -12,6 +12,8 @@ messgo <paths> <format> <ruleset[,ruleset...]> [options]
 - **format** — `text`, `xml`, `json`, `html`, `ansi`, `github`, `gitlab`,
   `checkstyle`, or `sarif`.
 - **ruleset** — one or more built-in names or paths to phpmd-format ruleset XML.
+  A property name a rule does not declare is ignored and writes a warning to
+  stderr, even without `--verbose`.
 
 `text` format prints one finding per line as `file:line  Rule  message`.
 

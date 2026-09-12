@@ -13,10 +13,18 @@ import (
 
 func init() {
 	rule.Register("PHPMD\\Rule\\Controversial\\CamelCaseClassName", func() rule.Rule { return &CamelCaseClassName{Base: rule.NewBase()} })
-	rule.Register("PHPMD\\Rule\\Controversial\\CamelCaseMethodName", func() rule.Rule { return &CamelCaseMethodName{Base: rule.NewBase()} })
-	rule.Register("PHPMD\\Rule\\Controversial\\CamelCasePropertyName", func() rule.Rule { return &CamelCasePropertyName{Base: rule.NewBase()} })
-	rule.Register("PHPMD\\Rule\\Controversial\\CamelCaseParameterName", func() rule.Rule { return &CamelCaseParameterName{Base: rule.NewBase()} })
-	rule.Register("PHPMD\\Rule\\Controversial\\CamelCaseVariableName", func() rule.Rule { return &CamelCaseVariableName{Base: rule.NewBase()} })
+	rule.Register("PHPMD\\Rule\\Controversial\\CamelCaseMethodName", func() rule.Rule {
+		return &CamelCaseMethodName{Base: rule.NewBase("allow-underscore", "allow-underscore-test")}
+	})
+	rule.Register("PHPMD\\Rule\\Controversial\\CamelCasePropertyName", func() rule.Rule {
+		return &CamelCasePropertyName{Base: rule.NewBase("allow-underscore", "allow-underscore-test")}
+	})
+	rule.Register("PHPMD\\Rule\\Controversial\\CamelCaseParameterName", func() rule.Rule {
+		return &CamelCaseParameterName{Base: rule.NewBase("allow-underscore")}
+	})
+	rule.Register("PHPMD\\Rule\\Controversial\\CamelCaseVariableName", func() rule.Rule {
+		return &CamelCaseVariableName{Base: rule.NewBase("allow-underscore")}
+	})
 }
 
 // isCamelCase reports whether name follows Go's MixedCaps convention: it

@@ -7,6 +7,11 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 ## [Unreleased]
 
 ### Fixed
+- Fixed unknown ruleset property names being silently ignored: a property
+  the referenced rule does not declare now warns on stderr without
+  `--verbose` (for example `rule NPathComplexity has no property "maximum"; ignored`),
+  matching the existing unknown-rule warning channel. Valid property
+  overrides are unchanged (#123).
 - Fixed `UnusedPrivateField` and `UnusedPrivateMethod` false positives when a
   member declared on an embedded type is used through a promoted selection:
   promoted member paths now credit the declaring type, including nested

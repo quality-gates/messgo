@@ -400,6 +400,94 @@ func TestInfoFlagsAnywhere(t *testing.T) {
 	}
 }
 
+func writeRuleset(t *testing.T, xml string) string {
+	t.Helper()
+	path := filepath.Join(t.TempDir(), "ruleset.xml")
+	if err := os.WriteFile(path, []byte(xml), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	return path
+}
+
+func TestUnknownRulePropertyWarnsWithoutVerbose(t *testing.T) {
+	src := writeFixture(t, "package p\nfunc heavy() {\n\tif true {\n\t\tif true {\n\t\t\t_ = 1\n\t\t}\n\t}\n}\n")
+	rules := writeRuleset(t, `<ruleset name="team policy">
+  <rule ref="NPathComplexity">
+    <properties><property name="maximum" value="1"/></properties>
+  </rule>
+</ruleset>`)
+	code, out, errOut := runMain(t, src, "text", rules)
+	if code != ExitSuccess {
+		t.Errorf("exit = %d, want %d (out=%q err=%q)", code, ExitSuccess, out, errOut)
+	}
+	if out != "" {
+		t.Errorf("unknown property must not apply the override, got stdout %q", out)
+	}
+	if !strings.Contains(errOut, `rule NPathComplexity has no property "maximum"`) {
+		t.Errorf("stderr should name the unknown property without --verbose, got %q", errOut)
+	}
+	if !strings.Contains(errOut, "warning:") {
+		t.Errorf("stderr should use the warning channel, got %q", errOut)
+	}
+}
+
+func TestKnownRulePropertyAppliesWithoutWarning(t *testing.T) {
+	src := writeFixture(t, "package p\nfunc heavy() {\n\tif true {\n\t\tif true {\n\t\t\t_ = 1\n\t\t}\n\t}\n}\n")
+	rules := writeRuleset(t, `<ruleset name="team policy">
+  <rule ref="NPathComplexity">
+    <properties><property name="minimum" value="1"/></properties>
+  </rule>
+</ruleset>`)
+	code, out, errOut := runMain(t, src, "text", rules)
+	if code != ExitViolation {
+		t.Errorf("exit = %d, want %d (out=%q err=%q)", code, ExitViolation, out, errOut)
+	}
+	if !strings.Contains(out, "NPathComplexity") {
+		t.Errorf("known property should apply, got stdout %q", out)
+	}
+	if strings.Contains(errOut, "has no property") {
+		t.Errorf("known property should not warn, got stderr %q", errOut)
+	}
+}
+
+func TestInlineUnknownRulePropertyWarns(t *testing.T) {
+	src := writeFixture(t, "package p\nfunc f() {}\n")
+	rules := writeRuleset(t, `<ruleset name="team policy">
+  <rule name="NPathComplexity" message="npath" class="PHPMD\Rule\Design\NpathComplexity">
+    <properties><property name="maximum" value="1"/></properties>
+  </rule>
+</ruleset>`)
+	code, _, errOut := runMain(t, src, "text", rules)
+	if code != ExitSuccess {
+		t.Errorf("exit = %d, want %d (err=%q)", code, ExitSuccess, errOut)
+	}
+	if !strings.Contains(errOut, `rule NPathComplexity has no property "maximum"`) {
+		t.Errorf("inline unknown property should warn, got %q", errOut)
+	}
+}
+
+func TestBuiltinRulesetDoesNotWarnUnknownProperties(t *testing.T) {
+	src := writeFixture(t, "package p\nfunc f() int { return 1 }\n")
+	code, out, errOut := runMain(t, src, "text", "codesize")
+	if code != ExitSuccess {
+		t.Errorf("exit = %d, want %d (out=%q err=%q)", code, ExitSuccess, out, errOut)
+	}
+	if strings.Contains(errOut, "has no property") {
+		t.Errorf("builtin ruleset should not warn about declared properties, got %q", errOut)
+	}
+	if strings.Contains(errOut, "skipping unimplemented") {
+		t.Errorf("unimplemented-rule warnings should stay behind --verbose, got %q", errOut)
+	}
+}
+
+func TestVerboseWarnsUnimplementedRules(t *testing.T) {
+	src := writeFixture(t, "package p\nfunc f() int { return 1 }\n")
+	_, _, errOut := runMain(t, src, "text", "design", "--verbose")
+	if !strings.Contains(errOut, "skipping unimplemented") {
+		t.Errorf("verbose stderr should warn about unimplemented rules, got %q", errOut)
+	}
+}
+
 func TestSurplusPositional(t *testing.T) {
 	path := writeFixture(t, excessiveParamsSrc)
 	code, out, errOut := runMain(t, path, "text", "codesize", "extra")

@@ -252,13 +252,13 @@ func resolvePath(part, fromDir string) string {
 func (e *refExpander) buildRule(setName string, def xmlRule, ov *xmlRule) (rule.Rule, error) {
 	ctor, ok := rule.Lookup(def.Class)
 	if !ok {
-		e.warn("skipping unimplemented rule %s (%s)", def.Name, def.Class)
+		warnSkipped(e, "skipping unimplemented rule %s (%s)", def.Name, def.Class)
 		return nil, nil
 	}
 	r := ctor()
 	base := rule.BaseOf(r)
 	if base == nil {
-		e.warn("rule %s does not expose metadata", def.Name)
+		warnSkipped(e, "rule %s does not expose metadata", def.Name)
 		return nil, nil
 	}
 	base.RuleName = def.Name
@@ -272,6 +272,7 @@ func (e *refExpander) buildRule(setName string, def xmlRule, ov *xmlRule) (rule.
 		base.RulePrio = *def.Priority
 	}
 	base.RuleProps = mergeProps(def.Properties, ov.Properties)
+	warnUnknownProperties(e, def, ov, r)
 	if ov.Priority != nil {
 		base.RulePrio = *ov.Priority
 	}
@@ -302,4 +303,54 @@ func (e *refExpander) warn(format string, args ...any) {
 	if e.session.loader.Warn != nil {
 		e.session.loader.Warn(fmt.Sprintf(format, args...))
 	}
+}
+
+func warnSkipped(e *refExpander, format string, args ...any) {
+	if e.session.loader.Verbose {
+		e.warn(format, args...)
+	}
+}
+
+func warnUnknownProperties(e *refExpander, def xmlRule, ov *xmlRule, r rule.Rule) {
+	known := declaredPropertyNames(r)
+	for _, name := range unknownPropertyNames(known, ov.Properties) {
+		e.warn("rule %s has no property %q; ignored", def.Name, name)
+	}
+}
+
+type propertyNameLister interface {
+	PropertyNames() []string
+}
+
+func declaredPropertyNames(r rule.Rule) map[string]bool {
+	set := map[string]bool{}
+	if base := rule.BaseOf(r); base != nil {
+		addNames(set, base.KnownProps)
+	}
+	if lister, ok := r.(propertyNameLister); ok {
+		addNames(set, lister.PropertyNames())
+	}
+	return set
+}
+
+func addNames(set map[string]bool, names []string) {
+	for _, name := range names {
+		if name != "" {
+			set[name] = true
+		}
+	}
+}
+
+func unknownPropertyNames(known map[string]bool, props xmlProperties) []string {
+	var unknown []string
+	seen := map[string]bool{}
+	for _, p := range props.Property {
+		if p.Name == "" || !hasPropValue(p) || known[p.Name] || seen[p.Name] {
+			continue
+		}
+		seen[p.Name] = true
+		unknown = append(unknown, p.Name)
+	}
+	sort.Strings(unknown)
+	return unknown
 }

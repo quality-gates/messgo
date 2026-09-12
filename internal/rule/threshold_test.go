@@ -84,6 +84,25 @@ func TestThresholdRuleAllowsStrictBoundaryAtThreshold(t *testing.T) {
 	}
 }
 
+func TestThresholdRulePropertyNames(t *testing.T) {
+	var nilRule *ThresholdRule
+	if got := nilRule.PropertyNames(); got != nil {
+		t.Fatalf("nil receiver PropertyNames = %#v, want nil", got)
+	}
+	empty := NewThresholdRule(ThresholdDeclaration{})
+	if got := empty.PropertyNames(); len(got) != 0 {
+		t.Fatalf("empty declaration PropertyNames = %#v, want empty", got)
+	}
+	only := NewThresholdRule(ThresholdDeclaration{Property: "minimum"})
+	if got := only.PropertyNames(); len(got) != 1 || got[0] != "minimum" {
+		t.Fatalf("PropertyNames = %#v, want [minimum]", got)
+	}
+	both := NewThresholdRule(ThresholdDeclaration{Property: "maxmethods", InterfaceProperty: "maxifacemethods"})
+	if got := both.PropertyNames(); len(got) != 2 || got[0] != "maxmethods" || got[1] != "maxifacemethods" {
+		t.Fatalf("PropertyNames = %#v, want [maxmethods maxifacemethods]", got)
+	}
+}
+
 func TestThresholdRuleRejectsInvalidThresholdAtConfigureTime(t *testing.T) {
 	r := newThresholdRuleFixture(AtOrAbove)
 

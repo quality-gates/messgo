@@ -76,7 +76,7 @@ type CyclomaticComplexity struct {
 }
 
 func newCyclomaticComplexity() rule.Rule {
-	r := &CyclomaticComplexity{Base: rule.NewBase()}
+	r := &CyclomaticComplexity{Base: rule.NewBase("showClassesComplexity", "showMethodsComplexity")}
 	r.ThresholdRule = rule.NewThresholdRule(rule.ThresholdDeclaration{
 		Property:   "reportLevel",
 		Default:    10,
@@ -191,7 +191,7 @@ type NakedReturn struct {
 }
 
 func newNakedReturn() rule.Rule {
-	return &NakedReturn{Base: rule.NewBase(), minLOC: 50, minCCN: 10}
+	return &NakedReturn{Base: rule.NewBase("minloc", "minccn"), minLOC: 50, minCCN: 10}
 }
 
 func (r *NakedReturn) Configure(props rule.Properties) error {
@@ -277,7 +277,7 @@ type LongMethod struct {
 }
 
 func newLongMethod() rule.Rule {
-	r := &LongMethod{Base: rule.NewBase()}
+	r := &LongMethod{Base: rule.NewBase("ignore-whitespace")}
 	r.ThresholdRule = rule.NewThresholdRule(rule.ThresholdDeclaration{
 		Property:   "minimum",
 		Default:    100,
@@ -309,7 +309,7 @@ type LongClass struct {
 }
 
 func newLongClass() rule.Rule {
-	r := &LongClass{Base: rule.NewBase()}
+	r := &LongClass{Base: rule.NewBase("ignore-whitespace")}
 	r.ThresholdRule = rule.NewThresholdRule(rule.ThresholdDeclaration{
 		Property:    "minimum",
 		Default:     1000,
@@ -421,7 +421,7 @@ type TooManyMethods struct {
 }
 
 func newTooManyMethods() rule.Rule {
-	r := &TooManyMethods{Base: rule.NewBase()}
+	r := &TooManyMethods{Base: rule.NewBase("ignorepattern")}
 	r.ThresholdRule = rule.NewThresholdRule(rule.ThresholdDeclaration{
 		Property:          "maxmethods",
 		Default:           25,
@@ -474,7 +474,7 @@ type TooManyPublicMethods struct {
 }
 
 func newTooManyPublicMethods() rule.Rule {
-	r := &TooManyPublicMethods{Base: rule.NewBase()}
+	r := &TooManyPublicMethods{Base: rule.NewBase("ignorepattern")}
 	r.ThresholdRule = rule.NewThresholdRule(rule.ThresholdDeclaration{
 		Property:    "maxmethods",
 		Default:     10,

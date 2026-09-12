@@ -90,8 +90,10 @@ type Loader struct {
 	// MaxPriority drops rules with a numerically smaller priority value (higher
 	// importance), mirroring PHPMD's --maximumpriority. Zero means no limit.
 	MaxPriority int
-	// Warn receives messages about skipped/unknown rules.
+	// Warn receives messages about skipped/unknown rules and unknown properties.
 	Warn func(string)
+	// Verbose enables diagnostics for skipped unimplemented rules.
+	Verbose bool
 }
 
 // Load resolves a comma-separated list of ruleset identifiers or file paths

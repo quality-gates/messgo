@@ -341,6 +341,13 @@ func TestMemberTypeNameExpressions(t *testing.T) {
 		"*T":            "T",
 		"Generic[int]":  "Generic",
 		"Generic[A, B]": "Generic",
+		"[]T":           "T",
+		"[]*T":          "T",
+		"[3]T":          "T",
+		"chan T":        "T",
+		"chan *T":       "T",
+		"map[string]T":  "T",
+		"map[string]*T": "T",
 		"42":            "",
 	}
 	for source, want := range cases {
@@ -629,5 +636,135 @@ func assertMemberUses(t *testing.T, f *File, want map[MemberKey]bool) {
 		if !got[key] {
 			t.Errorf("SelectedMemberUses()[%+v] = false, want true", key)
 		}
+	}
+}
+
+func TestSelectedMemberUsesRangeLoops(t *testing.T) {
+	cases := []struct {
+		name string
+		src  string
+		want map[MemberKey]bool
+	}{
+		{
+			name: "slice parameter value iteration",
+			src: `package p
+type Worker struct { field int }
+func (w *Worker) Work() {}
+func Run(workers []*Worker) {
+	for _, w := range workers {
+		w.Work()
+		_ = w.field
+	}
+}`,
+			want: map[MemberKey]bool{
+				{Type: "Worker", Name: "Work"}:  true,
+				{Type: "Worker", Name: "field"}: true,
+			},
+		},
+		{
+			name: "map iteration value",
+			src: `package p
+type Val struct { vField int }
+func (v *Val) ValWork() {}
+func Run(m map[string]*Val) {
+	for _, v := range m {
+		v.ValWork()
+		_ = v.vField
+	}
+}`,
+			want: map[MemberKey]bool{
+				{Type: "Val", Name: "ValWork"}: true,
+				{Type: "Val", Name: "vField"}:  true,
+			},
+		},
+		{
+			name: "channel iteration",
+			src: `package p
+type Worker struct { field int }
+func (w *Worker) Work() {}
+func Run(ch chan *Worker) {
+	for w := range ch {
+		w.Work()
+		_ = w.field
+	}
+}`,
+			want: map[MemberKey]bool{
+				{Type: "Worker", Name: "Work"}:  true,
+				{Type: "Worker", Name: "field"}: true,
+			},
+		},
+		{
+			name: "slice expression range",
+			src: `package p
+type Worker struct { field int }
+func (w *Worker) Work() {}
+func Run(workers []*Worker) {
+	for _, w := range workers[1:] {
+		w.Work()
+	}
+}`,
+			want: map[MemberKey]bool{
+				{Type: "Worker", Name: "Work"}: true,
+			},
+		},
+		{
+			name: "range without iteration variables",
+			src: `package p
+type Worker struct{}
+func Run(workers []*Worker) {
+	for range workers {}
+}`,
+			want: map[MemberKey]bool{},
+		},
+		{
+			name: "range with blank iteration variables",
+			src: `package p
+type Worker struct{}
+func Run(workers []*Worker, ch chan *Worker) {
+	for _, _ = range workers {}
+	for _ = range ch {}
+}`,
+			want: map[MemberKey]bool{},
+		},
+		{
+			name: "range over untyped identifier",
+			src: `package p
+type Worker struct{}
+func (w *Worker) Work() {}
+func Run() {
+	var workers any
+	for _, w := range workers.([]*Worker) {
+		w.Work()
+	}
+}`,
+			want: map[MemberKey]bool{
+				{Type: "Worker", Name: "Work"}: true,
+			},
+		},
+	}
+
+	for _, tt := range cases {
+		t.Run(tt.name, func(t *testing.T) {
+			f, err := ParseSource("test.go", []byte(tt.src))
+			if err != nil {
+				t.Fatalf("ParseSource: %v", err)
+			}
+			assertMemberUses(t, f, tt.want)
+		})
+	}
+}
+
+func TestAddRangeSkipsBlankIdentifier(t *testing.T) {
+	collector := newMemberSelectionCollector(&File{Syntax: &ast.File{}})
+	types := map[string]string{
+		"workers": "Worker",
+	}
+	stmt := &ast.RangeStmt{
+		Value: &ast.Ident{Name: "_"},
+		X:     &ast.Ident{Name: "workers"},
+	}
+	collector.scope.addRange(stmt, types)
+	if _, ok := types["_"]; ok {
+		t.Fatalf("addRange recorded blank identifier in types map")
 	}
 }

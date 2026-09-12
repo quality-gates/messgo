@@ -1922,6 +1922,24 @@ func outer(n int) int {
 	mustHave(t, hits, "NpathComplexity")
 }
 
+func TestNPathComplexityFiresForClosureInIfInitializer(t *testing.T) {
+	// Issue 120: the closure in the if initializer carries 2 paths and the
+	// if itself 2, so f has NPath 4 -> fires at threshold 3.
+	src := `
+func f(cond bool) {
+	if fn := func(a bool) {
+		if a {
+		}
+	}; cond {
+		_ = fn
+	}
+}
+`
+	ruleset := codesizeRuleset(t, "NpathComplexity", 3, false)
+	hits := analyze(t, src, ruleset)
+	mustHave(t, hits, "NpathComplexity")
+}
+
 func TestNPathComplexityDoesNotFireBelowThresholdWithFuncLiterals(t *testing.T) {
 	// outer has NPath 6, threshold 7 -> does not fire.
 	src := `

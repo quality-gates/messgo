@@ -645,6 +645,51 @@ func TestNPathFuncLiteral(t *testing.T) {
 			src:  `func f() { fn := func(a, b bool) { if a && b {} }; fn(true, true) }`,
 			want: 3,
 		},
+		{
+			name: "issue 120: closure in if initializer",
+			src:  `func f(cond bool) { if fn := func(a bool) { if a {} }; cond { _ = fn } }`,
+			want: 4,
+		},
+		{
+			name: "issue 120: closure invoked in if condition",
+			src:  `func f(cond bool) { if (func(a bool) bool { if a { return true }; return false })(cond) { } }`,
+			want: 4,
+		},
+		{
+			name: "issue 120: closure in switch initializer",
+			src:  `func f(cond bool) { switch fn := func(a bool) { if a {} }; { case cond: _ = fn } }`,
+			want: 2,
+		},
+		{
+			name: "issue 120: closure in switch tag",
+			src:  `func f(x bool) { switch (func() int { if x { return 1 }; return 0 })() { case 0: } }`,
+			want: 2,
+		},
+		{
+			name: "issue 120: closure in type switch assign",
+			src:  `func f(x interface{}, b bool) { switch v := (func(i interface{}) interface{} { if b { return nil }; return i })(x).(type) { case int: _ = v } }`,
+			want: 2,
+		},
+		{
+			name: "empty closure in if initializer does not inflate NPath",
+			src:  `func f(cond bool) { if fn := func() {}; cond { _ = fn } }`,
+			want: 2,
+		},
+		{
+			name: "boolean operators in if initializer assignment",
+			src:  `func f(a, b, c bool) { if x := a && b; c { } }`,
+			want: 3,
+		},
+		{
+			name: "boolean operators in switch initializer assignment",
+			src:  `func f(a, b bool) { switch c := a && b; c { case true: } }`,
+			want: 2,
+		},
+		{
+			name: "closure in if condition with outer boolean operators",
+			src:  `func f(a, b, x bool) { if (func() bool { if x { return true }; return false })() && a || b { } }`,
+			want: 8,
+		},
 	}
 
 	for _, tc := range tests {

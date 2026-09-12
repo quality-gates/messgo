@@ -2211,3 +2211,202 @@ func f() (err error) {
 		mustHaveCount(t, hits, "IfStatementAssignment", 1)
 	})
 }
+
+func TestUnusedPrivateMemberMultiReturnCall(t *testing.T) {
+	t.Run("function returning multi-value", func(t *testing.T) {
+		src := `
+type worker struct {
+	field int
+}
+
+func (w *worker) work() {}
+
+func newWorker() (*worker, error) {
+	return &worker{}, nil
+}
+
+func Run() error {
+	w, err := newWorker()
+	if err != nil {
+		return err
+	}
+	w.work()
+	println(w.field)
+	return nil
+}
+`
+		hits := analyze(t, src, "unusedcode")
+		mustNotHave(t, hits, "UnusedPrivateField", "UnusedPrivateMethod")
+	})
+
+	t.Run("method returning multi-value", func(t *testing.T) {
+		src := `
+type worker struct {
+	field int
+}
+
+func (w *worker) work() {}
+
+type factory struct{}
+
+func (f *factory) Create() (*worker, error) {
+	return &worker{}, nil
+}
+
+func Run(f *factory) error {
+	w, err := f.Create()
+	if err != nil {
+		return err
+	}
+	w.work()
+	println(w.field)
+	return nil
+}
+`
+		hits := analyze(t, src, "unusedcode")
+		mustNotHave(t, hits, "UnusedPrivateField", "UnusedPrivateMethod")
+	})
+
+	t.Run("interface method returning multi-value", func(t *testing.T) {
+		src := `
+type worker struct {
+	field int
+}
+
+func (w *worker) work() {}
+
+type workerCreator interface {
+	Create() (*worker, error)
+}
+
+func Run(c workerCreator) error {
+	w, err := c.Create()
+	if err != nil {
+		return err
+	}
+	w.work()
+	println(w.field)
+	return nil
+}
+`
+		hits := analyze(t, src, "unusedcode")
+		mustNotHave(t, hits, "UnusedPrivateField", "UnusedPrivateMethod")
+	})
+
+	t.Run("promoted method returning multi-value", func(t *testing.T) {
+		src := `
+type worker struct {
+	field int
+}
+
+func (w *worker) work() {}
+
+type baseCreator struct{}
+
+func (baseCreator) Create() (*worker, error) {
+	return &worker{}, nil
+}
+
+type compositeCreator struct {
+	baseCreator
+}
+
+func Run(c compositeCreator) error {
+	w, err := c.Create()
+	if err != nil {
+		return err
+	}
+	w.work()
+	println(w.field)
+	return nil
+}
+`
+		hits := analyze(t, src, "unusedcode")
+		mustNotHave(t, hits, "UnusedPrivateField", "UnusedPrivateMethod")
+	})
+
+	t.Run("var declaration with multi-return call", func(t *testing.T) {
+		src := `
+type worker struct {
+	field int
+}
+
+func (w *worker) work() {}
+
+func newWorker() (*worker, error) {
+	return &worker{}, nil
+}
+
+func Run() error {
+	var w, err = newWorker()
+	if err != nil {
+		return err
+	}
+	w.work()
+	println(w.field)
+	return nil
+}
+`
+		hits := analyze(t, src, "unusedcode")
+		mustNotHave(t, hits, "UnusedPrivateField", "UnusedPrivateMethod")
+	})
+
+	t.Run("second position assignment and blank identifier", func(t *testing.T) {
+		src := `
+type worker struct {
+	field int
+}
+
+func (w *worker) work() {}
+
+func newWorker() (error, *worker) {
+	return nil, &worker{}
+}
+
+func Run() error {
+	_, w := newWorker()
+	w.work()
+	println(w.field)
+	return nil
+}
+`
+		hits := analyze(t, src, "unusedcode")
+		mustNotHave(t, hits, "UnusedPrivateField", "UnusedPrivateMethod")
+	})
+
+	t.Run("genuinely unused members still flagged with multi-return call", func(t *testing.T) {
+		src := `
+type worker struct {
+	usedField   int
+	unusedField int
+}
+
+func (w *worker) usedWork() {}
+func (w *worker) unusedWork() {}
+
+func newWorker() (*worker, error) {
+	return &worker{}, nil
+}
+
+func Run() error {
+	w, err := newWorker()
+	if err != nil {
+		return err
+	}
+	w.usedWork()
+	println(w.usedField)
+	return nil
+}
+`
+		hits := analyze(t, src, "unusedcode")
+		mustHave(t, hits, "UnusedPrivateField", "UnusedPrivateMethod")
+		for _, h := range hits {
+			if h.rule == "UnusedPrivateField" && h.line != 4 {
+				t.Fatalf("unexpected UnusedPrivateField hit on line %d; hits = %v", h.line, hits)
+			}
+			if h.rule == "UnusedPrivateMethod" && h.line != 8 {
+				t.Fatalf("unexpected UnusedPrivateMethod hit on line %d; hits = %v", h.line, hits)
+			}
+		}
+	})
+}

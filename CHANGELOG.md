@@ -6,6 +6,9 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 
 ## [Unreleased]
 
+### Fixed
+- Fixed `UnusedPrivateField` and `UnusedPrivateMethod` false positives on variables initialized from multi-return calls: function and method calls returning multiple values (such as `(*T, error)`) now have their result types mapped by index to LHS identifiers in short assignments and `var` specs, enabling member selections through those variables to resolve the target type (#118).
+
 ## [0.4.4] - 2026-09-11
 
 ### Changed

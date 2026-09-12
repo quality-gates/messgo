@@ -12,8 +12,9 @@ type memberSelectionCollector struct {
 }
 
 type memberTypeResolver struct {
-	classes   map[string]*Class
-	functions map[string]*Function
+	classes    map[string]*Class
+	interfaces map[string]*Interface
+	functions  map[string]*Function
 }
 
 type memberScopeCollector struct {
@@ -54,6 +55,14 @@ func newMemberSelectionCollector(f *File) *memberSelectionCollector {
 	for _, class := range classes {
 		classByName[class.Name] = class
 	}
+	ifaces := f.Interfaces
+	if f.PackageInterfaces != nil {
+		ifaces = f.PackageInterfaces
+	}
+	ifaceByName := make(map[string]*Interface, len(ifaces))
+	for _, iface := range ifaces {
+		ifaceByName[iface.Name] = iface
+	}
 	functions := make(map[string]*Function)
 	for _, fn := range f.AllFuncs {
 		if !fn.IsMethod() && functions[fn.Name] == nil {
@@ -61,7 +70,11 @@ func newMemberSelectionCollector(f *File) *memberSelectionCollector {
 		}
 	}
 	collector := &memberSelectionCollector{
-		types: memberTypeResolver{classes: classByName, functions: functions},
+		types: memberTypeResolver{
+			classes:    classByName,
+			interfaces: ifaceByName,
+			functions:  functions,
+		},
 	}
 	collector.scope.resolver = &collector.types
 	collector.recorder.resolver = &collector.types
@@ -154,27 +167,61 @@ func (c *memberScopeCollector) addDeclaration(stmt *ast.DeclStmt, types map[stri
 
 func (c *memberScopeCollector) addValueSpec(spec *ast.ValueSpec, types map[string]string) {
 	declaredType := memberTypeName(spec.Type)
+	valueTypes := c.valueSpecRhsTypes(spec, declaredType, types)
 	for index, name := range spec.Names {
-		typeName := declaredType
-		if typeName == "" && index < len(spec.Values) {
-			typeName = c.resolver.expressionType(spec.Values[index], types)
+		if name.Name == "_" || index >= len(valueTypes) {
+			continue
 		}
-		if typeName != "" && name.Name != "_" {
-			types[name.Name] = typeName
+		if valueTypes[index] != "" {
+			types[name.Name] = valueTypes[index]
 		}
 	}
 }
 
-func (c *memberScopeCollector) addAssignment(stmt *ast.AssignStmt, types map[string]string) {
-	for index, lhs := range stmt.Lhs {
-		name, ok := lhs.(*ast.Ident)
-		if !ok || name.Name == "_" || index >= len(stmt.Rhs) {
-			continue
+func (c *memberScopeCollector) valueSpecRhsTypes(spec *ast.ValueSpec, declaredType string, types map[string]string) []string {
+	if declaredType != "" {
+		result := make([]string, len(spec.Names))
+		for i := range result {
+			result[i] = declaredType
 		}
-		if typeName := c.resolver.expressionType(stmt.Rhs[index], types); typeName != "" {
-			types[name.Name] = typeName
+		return result
+	}
+	if len(spec.Values) == 1 && len(spec.Names) > 1 {
+		if call, ok := unwrapParen(spec.Values[0]).(*ast.CallExpr); ok {
+			return c.resolver.callResultTypes(call, types)
 		}
 	}
+	result := make([]string, len(spec.Values))
+	for i, v := range spec.Values {
+		result[i] = c.resolver.expressionType(v, types)
+	}
+	return result
+}
+
+func (c *memberScopeCollector) addAssignment(stmt *ast.AssignStmt, types map[string]string) {
+	rhsTypes := c.assignmentRhsTypes(stmt, types)
+	for index, lhs := range stmt.Lhs {
+		name, ok := lhs.(*ast.Ident)
+		if !ok || name.Name == "_" || index >= len(rhsTypes) {
+			continue
+		}
+		if rhsTypes[index] != "" {
+			types[name.Name] = rhsTypes[index]
+		}
+	}
+}
+
+func (c *memberScopeCollector) assignmentRhsTypes(stmt *ast.AssignStmt, types map[string]string) []string {
+	if len(stmt.Rhs) == 1 && len(stmt.Lhs) > 1 {
+		if call, ok := unwrapParen(stmt.Rhs[0]).(*ast.CallExpr); ok {
+			return c.resolver.callResultTypes(call, types)
+		}
+	}
+	result := make([]string, len(stmt.Rhs))
+	for i, rhs := range stmt.Rhs {
+		result[i] = c.resolver.expressionType(rhs, types)
+	}
+	return result
 }
 
 func (c *memberSelectionCollector) collectBody(body *ast.BlockStmt, types map[string]string, names map[string]bool, uses map[MemberKey]bool) {
@@ -314,21 +361,105 @@ func (c *memberTypeResolver) selectorType(sel *ast.SelectorExpr, types map[strin
 }
 
 func (c *memberTypeResolver) callType(call *ast.CallExpr, types map[string]string) string {
-	if id, ok := call.Fun.(*ast.Ident); ok {
-		if id.Name == "new" && len(call.Args) == 1 {
-			return memberTypeName(call.Args[0])
-		}
-		if _, ok := c.classes[id.Name]; ok {
-			return id.Name
-		}
-		if fn := c.functions[id.Name]; fn != nil {
-			return functionResultType(fn)
-		}
-	}
-	if sel, ok := call.Fun.(*ast.SelectorExpr); ok {
-		return c.selectorType(sel, types)
+	results := c.callResultTypes(call, types)
+	if len(results) == 1 {
+		return results[0]
 	}
 	return ""
+}
+
+func (c *memberTypeResolver) callResultTypes(call *ast.CallExpr, types map[string]string) []string {
+	if call == nil {
+		return nil
+	}
+	fun := unwrapParen(call.Fun)
+	if id, ok := fun.(*ast.Ident); ok {
+		return resolveIdentCall(c.classes, c.functions, id, call.Args)
+	}
+	if sel, ok := fun.(*ast.SelectorExpr); ok {
+		return resolveSelectorCall(c, sel, types)
+	}
+	return nil
+}
+
+func resolveIdentCall(classes map[string]*Class, functions map[string]*Function, id *ast.Ident, args []ast.Expr) []string {
+	if id.Name == "new" && len(args) == 1 {
+		if typeName := memberTypeName(args[0]); typeName != "" {
+			return []string{typeName}
+		}
+		return nil
+	}
+	if _, ok := classes[id.Name]; ok {
+		return []string{id.Name}
+	}
+	if fn := functions[id.Name]; fn != nil {
+		return functionResultTypes(fn)
+	}
+	return nil
+}
+
+func resolveSelectorCall(r *memberTypeResolver, sel *ast.SelectorExpr, types map[string]string) []string {
+	baseType := r.expressionType(sel.X, types)
+	if baseType == "" {
+		return nil
+	}
+	method := lookupMethod(r.classes, r.interfaces, baseType, sel.Sel.Name, map[string]bool{})
+	if method == nil {
+		return nil
+	}
+	return functionResultTypes(method)
+}
+
+func lookupMethod(classes map[string]*Class, ifaces map[string]*Interface, typeName, methodName string, visiting map[string]bool) *Function {
+	if visiting[typeName] {
+		return nil
+	}
+	visiting[typeName] = true
+	defer delete(visiting, typeName)
+
+	if class := classes[typeName]; class != nil {
+		if method := classMethod(classes, ifaces, class, methodName, visiting); method != nil {
+			return method
+		}
+	}
+	if iface := ifaces[typeName]; iface != nil {
+		if method := interfaceMethod(classes, ifaces, iface, methodName, visiting); method != nil {
+			return method
+		}
+	}
+	return nil
+}
+
+func classMethod(classes map[string]*Class, ifaces map[string]*Interface, class *Class, methodName string, visiting map[string]bool) *Function {
+	for _, method := range class.Methods {
+		if method.Name == methodName {
+			return method
+		}
+	}
+	for _, field := range class.Fields {
+		if field.Ident != nil {
+			continue
+		}
+		embeddedType := memberTypeName(field.TypeExpr)
+		if method := lookupMethod(classes, ifaces, embeddedType, methodName, visiting); method != nil {
+			return method
+		}
+	}
+	return nil
+}
+
+func interfaceMethod(classes map[string]*Class, ifaces map[string]*Interface, iface *Interface, methodName string, visiting map[string]bool) *Function {
+	for _, method := range iface.Methods {
+		if method.Name == methodName {
+			return method
+		}
+	}
+	for _, embed := range iface.Embeds {
+		if method := lookupMethod(classes, ifaces, embed, methodName, visiting); method != nil {
+			return method
+		}
+	}
+	return nil
 }
 
 func (c *memberTypeResolver) classMemberType(typeName, memberName string) string {
@@ -390,14 +521,35 @@ func (c *memberTypeResolver) lookupEmbeddedMember(class *Class, typeName, member
 	return "", nil, false
 }
 
+func functionResultTypes(fn *Function) []string {
+	if fn == nil || len(fn.Results) == 0 {
+		return nil
+	}
+	results := make([]string, len(fn.Results))
+	for i, res := range fn.Results {
+		if res.Field != nil {
+			results[i] = memberTypeName(res.Field.Type)
+		}
+	}
+	return results
+}
+
 func functionResultType(fn *Function) string {
-	if len(fn.Results) != 1 {
-		return ""
+	results := functionResultTypes(fn)
+	if len(results) == 1 {
+		return results[0]
 	}
-	if fn.Results[0].Field == nil {
-		return ""
+	return ""
+}
+
+func unwrapParen(expr ast.Expr) ast.Expr {
+	for {
+		paren, ok := expr.(*ast.ParenExpr)
+		if !ok {
+			return expr
+		}
+		expr = paren.X
 	}
-	return memberTypeName(fn.Results[0].Field.Type)
 }
 
 func memberTypeName(expr ast.Expr) string {

@@ -4,6 +4,7 @@ import (
 	"go/ast"
 	"go/parser"
 	"go/token"
+	"slices"
 	"testing"
 )
 
@@ -367,6 +368,214 @@ func TestFunctionResultType(t *testing.T) {
 	}
 	if got := functionResultType(&Function{Results: []*Parameter{{Field: &ast.Field{Type: &ast.Ident{Name: "Leaf"}}}}}); got != "Leaf" {
 		t.Fatalf("functionResultType(Leaf) = %q, want Leaf", got)
+	}
+}
+
+func TestFunctionResultTypes(t *testing.T) {
+	if got := functionResultTypes(nil); got != nil {
+		t.Fatalf("functionResultTypes(nil) = %v, want nil", got)
+	}
+	if got := functionResultTypes(&Function{}); got != nil {
+		t.Fatalf("functionResultTypes(empty) = %v, want nil", got)
+	}
+	fn := &Function{
+		Results: []*Parameter{
+			{Field: nil},
+			{Field: &ast.Field{Type: &ast.StarExpr{X: &ast.Ident{Name: "Worker"}}}},
+			{Field: &ast.Field{Type: &ast.Ident{Name: "error"}}},
+		},
+	}
+	got := functionResultTypes(fn)
+	if !slices.Equal(got, []string{"", "Worker", "error"}) {
+		t.Fatalf("functionResultTypes(multi) = %v, want [\"\" Worker error]", got)
+	}
+}
+
+func TestUnwrapParen(t *testing.T) {
+	ident := &ast.Ident{Name: "x"}
+	if got := unwrapParen(ident); got != ident {
+		t.Fatalf("unwrapParen(ident) = %v, want %v", got, ident)
+	}
+	paren1 := &ast.ParenExpr{X: ident}
+	paren2 := &ast.ParenExpr{X: paren1}
+	if got := unwrapParen(paren2); got != ident {
+		t.Fatalf("unwrapParen(paren2) = %v, want %v", got, ident)
+	}
+}
+
+func TestCallResultTypes(t *testing.T) {
+	f, err := ParseSource("calls.go", []byte(`package sample
+
+type Leaf struct{ value int }
+type Root struct{ leaf Leaf }
+func (Root) Child() Leaf { return Leaf{} }
+func (Root) Pair() (Leaf, Leaf) { return Leaf{}, Leaf{} }
+type Composite struct{ Root }
+
+type BaseIface interface {
+	BaseCall() (Leaf, Leaf)
+}
+
+type SubIface interface {
+	BaseIface
+	SubCall() Leaf
+}
+
+func makeLeaf() Leaf { return Leaf{} }
+func makePair() (Leaf, Leaf) { return Leaf{}, Leaf{} }
+`))
+	if err != nil {
+		t.Fatalf("ParseSource: %v", err)
+	}
+	collector := newMemberSelectionCollector(f)
+	resolver := &collector.types
+	types := map[string]string{
+		"root": "Root",
+		"comp": "Composite",
+		"sub":  "SubIface",
+	}
+
+	if got := resolver.callResultTypes(nil, types); got != nil {
+		t.Fatalf("callResultTypes(nil) = %v, want nil", got)
+	}
+
+	cases := []struct {
+		expr string
+		want []string
+	}{
+		{expr: "new(Leaf)", want: []string{"Leaf"}},
+		{expr: "new()", want: nil},
+		{expr: "Leaf(0)", want: []string{"Leaf"}},
+		{expr: "makeLeaf()", want: []string{"Leaf"}},
+		{expr: "makePair()", want: []string{"Leaf", "Leaf"}},
+		{expr: "root.Child()", want: []string{"Leaf"}},
+		{expr: "root.Pair()", want: []string{"Leaf", "Leaf"}},
+		{expr: "comp.Child()", want: []string{"Leaf"}},
+		{expr: "comp.Pair()", want: []string{"Leaf", "Leaf"}},
+		{expr: "sub.SubCall()", want: []string{"Leaf"}},
+		{expr: "sub.BaseCall()", want: []string{"Leaf", "Leaf"}},
+		{expr: "unknown()", want: nil},
+		{expr: "root.Unknown()", want: nil},
+		{expr: "sub.Unknown()", want: nil},
+		{expr: "unknown.Child()", want: nil},
+	}
+	for _, tc := range cases {
+		t.Run(tc.expr, func(t *testing.T) {
+			expr, err := parser.ParseExpr(tc.expr)
+			if err != nil {
+				t.Fatalf("ParseExpr: %v", err)
+			}
+			call, ok := expr.(*ast.CallExpr)
+			if !ok {
+				t.Fatalf("%s is not a call", tc.expr)
+			}
+			got := resolver.callResultTypes(call, types)
+			if !slices.Equal(got, tc.want) {
+				t.Fatalf("callResultTypes(%s) = %v, want %v", tc.expr, got, tc.want)
+			}
+		})
+	}
+
+	visiting := map[string]bool{}
+	if got := lookupMethod(resolver.classes, resolver.interfaces, "Root", "Unknown", visiting); got != nil {
+		t.Fatalf("lookupMethod(Unknown) = %v, want nil", got)
+	}
+	if len(visiting) != 0 {
+		t.Fatalf("visiting map was not cleared: %v", visiting)
+	}
+	if got := lookupMethod(resolver.classes, resolver.interfaces, "NonExistent", "Child", visiting); got != nil {
+		t.Fatalf("lookupMethod(NonExistent) = %v, want nil", got)
+	}
+	visitingCycle := map[string]bool{"Cycle": true}
+	if got := lookupMethod(resolver.classes, resolver.interfaces, "Cycle", "Child", visitingCycle); got != nil {
+		t.Fatalf("lookupMethod(visiting cycle) = %v, want nil", got)
+	}
+}
+
+func TestSelectedMemberUsesMultiReturnCalls(t *testing.T) {
+	f, err := ParseSource("multi_return.go", []byte(`package sample
+
+type WorkerA struct { fieldA int }
+func (w *WorkerA) WorkA() {}
+func newWorkerA() (*WorkerA, error) { return &WorkerA{}, nil }
+
+type WorkerB struct { fieldB int }
+func (w *WorkerB) WorkB() {}
+func newWorkerB() (error, *WorkerB) { return nil, &WorkerB{} }
+
+type WorkerC struct { fieldC int }
+func (w *WorkerC) WorkC() {}
+func newWorkerC() (*WorkerC, error) { return &WorkerC{}, nil }
+
+type WorkerD struct { fieldD int }
+func (w *WorkerD) WorkD() {}
+type FactoryD struct{}
+func (FactoryD) CreateD() (*WorkerD, error) { return &WorkerD{}, nil }
+
+type WorkerE struct { fieldE int }
+func (w *WorkerE) WorkE() {}
+type BaseE struct{}
+func (BaseE) CreateE() (*WorkerE, error) { return &WorkerE{}, nil }
+type CompositeE struct{ BaseE }
+
+type WorkerF struct { fieldF int }
+func (w *WorkerF) WorkF() {}
+
+type WorkerG struct { fieldG int }
+func (w *WorkerG) WorkG() {}
+
+func testFunc() {
+	wA, errA := newWorkerA()
+	_ = errA
+	wA.WorkA()
+	_ = wA.fieldA
+
+	_, wB := newWorkerB()
+	wB.WorkB()
+	_ = wB.fieldB
+
+	var wC, errC = newWorkerC()
+	_ = errC
+	wC.WorkC()
+	_ = wC.fieldC
+
+	var f FactoryD
+	wD, errD := f.CreateD()
+	_ = errD
+	wD.WorkD()
+	_ = wD.fieldD
+
+	var comp CompositeE
+	wE, errE := comp.CreateE()
+	_ = errE
+	wE.WorkE()
+	_ = wE.fieldE
+
+	var wF1, wF2 WorkerF
+	wF1.WorkF()
+	wF2.WorkF()
+
+	wG1, wG2 := WorkerG{}, WorkerG{}
+	wG1.WorkG()
+	wG2.WorkG()
+}
+`))
+	if err != nil {
+		t.Fatalf("ParseSource: %v", err)
+	}
+
+	for _, check := range []struct{ typ, member string }{
+		{"WorkerA", "fieldA"}, {"WorkerA", "WorkA"},
+		{"WorkerB", "fieldB"}, {"WorkerB", "WorkB"},
+		{"WorkerC", "fieldC"}, {"WorkerC", "WorkC"},
+		{"WorkerD", "fieldD"}, {"WorkerD", "WorkD"},
+		{"WorkerE", "fieldE"}, {"WorkerE", "WorkE"},
+		{"WorkerF", "WorkF"},
+		{"WorkerG", "WorkG"},
+	} {
+		if !f.MemberSelectedForType(check.typ, check.member) {
+			t.Errorf("%s.%s was not marked as selected", check.typ, check.member)
+		}
 	}
 }
 

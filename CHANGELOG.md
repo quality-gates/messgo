@@ -6,6 +6,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 
 ## [Unreleased]
 
+## [0.4.5] - 2026-09-13
+
 ### Fixed
 - Fixed unknown ruleset property names being silently ignored: a property
   the referenced rule does not declare now warns on stderr without

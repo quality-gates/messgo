@@ -7,6 +7,10 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 ## [Unreleased]
 
 ### Fixed
+- Fixed the controversial CamelCase rules ignoring `allow-underscore` and
+  `allow-underscore-test` overrides: one leading underscore is now permitted
+  when configured, and underscores are permitted in `Test`-prefixed method and
+  property names when the test-specific option is enabled (#134).
 - Fixed `NPathComplexity` ignoring boolean operators and func-literal bodies in
   `switch` case labels: a tagless `switch { case a && b: }` now counts the same
   paths as the equivalent `if a && b { } else { }` chain, and a func literal

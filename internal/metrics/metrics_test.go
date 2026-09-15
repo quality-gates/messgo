@@ -671,6 +671,74 @@ func TestNPathFuncLiteral(t *testing.T) {
 			want: 2,
 		},
 		{
+			name: "issue 132: closure in for initializer",
+			src: `func f(cond bool) {
+	for fn := func(a bool) {
+		if a {}
+	}; cond; {
+		_ = fn
+	}
+}`,
+			want: 4,
+		},
+		{
+			name: "issue 132: closure in for condition",
+			src: `func f() {
+	for ; (func(a bool) bool {
+		if a {}
+		return true
+	})(true); {
+	}
+}`,
+			want: 4,
+		},
+		{
+			name: "issue 132: closure in for post",
+			src: `func f(cond bool) {
+	for ; cond; (func(a bool) { if a {} })(true) {
+	}
+}`,
+			want: 4,
+		},
+		{
+			name: "issue 132: closure in range expression",
+			src: `func f() {
+	for v := range (func() []int {
+		if true {}
+		return []int{1}
+	})() {
+		_ = v
+	}
+}`,
+			want: 4,
+		},
+		{
+			name: "issue 132: closure in select communication",
+			src: `func f(ch chan<- int) {
+	select {
+	case ch <- (func(a, b, c, d bool) int {
+		if a {}
+		return 1
+	})(true, true, true, true):
+			default:
+		}
+}`,
+			want: 3,
+		},
+		{
+			name: "issue 132: closure in select receive",
+			src: `func f(ch <-chan int) {
+	select {
+	case <- (func() <-chan int {
+		if true {}
+		return ch
+	})():
+	default:
+	}
+}`,
+			want: 3,
+		},
+		{
 			name: "empty closure in if initializer does not inflate NPath",
 			src:  `func f(cond bool) { if fn := func() {}; cond { _ = fn } }`,
 			want: 2,

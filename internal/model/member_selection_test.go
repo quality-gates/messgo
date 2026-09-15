@@ -810,6 +810,37 @@ func Run(groups [][]*Worker) {
 			},
 		},
 		{
+			name: "map with a memberless key type still binds the value",
+			src: `package p
+type Key struct { kField int }
+func (k Key) KWork() {}
+func Run(m map[Key]struct{}) {
+	for k := range m {
+		k.KWork()
+		_ = k.kField
+	}
+}`,
+			want: map[MemberKey]bool{
+				{Type: "Key", Name: "KWork"}:  true,
+				{Type: "Key", Name: "kField"}: true,
+			},
+		},
+		{
+			name: "range key of unresolved type does not clobber an outer binding",
+			src: `package p
+type Worker struct{}
+func (w Worker) Work() {}
+func Run(k Worker, m map[struct{}]int) {
+	for k := range m {
+		_ = k
+	}
+	k.Work()
+}`,
+			want: map[MemberKey]bool{
+				{Type: "Worker", Name: "Work"}: true,
+			},
+		},
+		{
 			name: "range without iteration variables",
 			src: `package p
 type Worker struct{}

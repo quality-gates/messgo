@@ -156,7 +156,9 @@ func f(items []int) {
 func TestUnusedLocalVariableAllowUnusedForeachStillReportsNonLoop(t *testing.T) {
 	f, err := model.ParseSource("repro.go", []byte(`package p
 
-func f() {
+func f(items []int) {
+	for i := range items {
+	}
 	unused := 1
 }
 `))

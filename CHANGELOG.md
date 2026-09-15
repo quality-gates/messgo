@@ -7,6 +7,9 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 ## [Unreleased]
 
 ### Fixed
+- Fixed `NPathComplexity` ignoring func-literal bodies in `for` headers, range
+  expressions, and `select` communication clauses: closure paths in those
+  positions now multiply the enclosing loop or select-clause paths (#132).
 - Fixed `UnusedPrivateField` and `UnusedPrivateMethod` false positives when a
   member is used through the key variable of a map range loop. Range iteration
   variables are now bound by container shape: a map binds its key type to the

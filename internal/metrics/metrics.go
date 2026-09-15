@@ -459,8 +459,10 @@ func npathStmt(s ast.Stmt) int {
 		return npathFor(n)
 	case *ast.RangeStmt:
 		// pdepend visitForeachStatement: E(iterable) + 1 + NP(body).
+		// Func literals in the iterable multiply every range path.
 		npath := npathAdd(expressionComplexity(n.X), 1)
-		return npathAdd(npath, npathStmts(n.Body.List))
+		npath = npathAdd(npath, npathStmts(n.Body.List))
+		return npathMul(npath, funcLitsComplexity(n.X))
 	case *ast.BlockStmt:
 		return npathStmts(n.List)
 	case *ast.LabeledStmt:
@@ -515,13 +517,17 @@ func assignExprComplexity(s ast.Stmt) int {
 }
 
 // npathFor follows pdepend visitForStatement: 1 + Σ E(loop expressions) +
-// NP(body). Init/Cond/Post each contribute their boolean-op complexity.
+// NP(body). Init/Cond/Post each contribute their boolean-op complexity, while
+// func literals in the header multiply the complete loop path count.
 func npathFor(n *ast.ForStmt) int {
 	npath := 1
 	npath = npathAdd(npath, expressionComplexity(n.Cond))
 	npath = npathAdd(npath, assignExprComplexity(n.Init))
 	npath = npathAdd(npath, assignExprComplexity(n.Post))
-	return npathAdd(npath, npathStmts(n.Body.List))
+	npath = npathAdd(npath, npathStmts(n.Body.List))
+	closures := npathMul(funcLitsComplexity(n.Init), funcLitsComplexity(n.Cond))
+	closures = npathMul(closures, funcLitsComplexity(n.Post))
+	return npathMul(npath, closures)
 }
 
 // npathSwitch follows pdepend visitSwitchStatement: E(tag) plus the sum over
@@ -540,12 +546,14 @@ func npathSwitch(body *ast.BlockStmt, tag ast.Expr) int {
 	return npath
 }
 
-// npathSelect treats each comm clause like a switch label.
+// npathSelect treats each comm clause like a switch label. Func literals in a
+// communication expression multiply that clause's paths.
 func npathSelect(body *ast.BlockStmt) int {
 	npath := 0
 	for _, c := range body.List {
 		if cc, ok := c.(*ast.CommClause); ok {
-			npath = npathAdd(npath, npathStmts(cc.Body))
+			clausePaths := npathMul(funcLitsComplexity(cc.Comm), npathStmts(cc.Body))
+			npath = npathAdd(npath, clausePaths)
 		}
 	}
 	if npath == 0 {

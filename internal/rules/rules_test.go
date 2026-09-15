@@ -1028,6 +1028,41 @@ func loop() {
 	mustHave(t, hits, "UnusedLocalVariable")
 }
 
+func TestUnusedLocalVariableAllowUnusedForeachVariables(t *testing.T) {
+	src := `package p
+
+func f(items []int) {
+	for i := range items {
+	}
+}
+`
+	f, err := model.ParseSource("repro.go", []byte(src))
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+
+	rulesetPath := filepath.Join(t.TempDir(), "rules.xml")
+	rulesetXML := `<?xml version="1.0"?>
+<ruleset name="test">
+  <rule ref="unusedcode/UnusedLocalVariable">
+    <properties>
+      <property name="allow-unused-foreach-variables" value="true"/>
+    </properties>
+  </rule>
+</ruleset>`
+	if err := os.WriteFile(rulesetPath, []byte(rulesetXML), 0o644); err != nil {
+		t.Fatalf("write ruleset: %v", err)
+	}
+
+	sets, err := (&ruleset.Loader{}).Load(rulesetPath)
+	if err != nil {
+		t.Fatalf("load ruleset: %v", err)
+	}
+	if violations := rule.Analyze(f, sets); len(violations) != 0 {
+		t.Fatalf("allow-unused-foreach-variables should suppress unused range variables, got %d", len(violations))
+	}
+}
+
 func TestUnusedLocalVariableNamedResultRedeclaration(t *testing.T) {
 	src := `
 func pair() (int, error) { return 1, nil }

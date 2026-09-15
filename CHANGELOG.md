@@ -7,6 +7,9 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 ## [Unreleased]
 
 ### Fixed
+- Fixed `UnusedLocalVariable` silently ignoring `allow-unused-foreach-variables`:
+  unused range and for-loop iteration variables are now skipped when the
+  property is set to `true` (#135).
 - Fixed the controversial CamelCase rules ignoring `allow-underscore` and
   `allow-underscore-test` overrides: one leading underscore is now permitted
   when configured, and underscores are permitted in `Test`-prefixed method and

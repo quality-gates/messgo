@@ -310,6 +310,64 @@ func TestNPathCoversRangeSwitchSelectLoopAndReturnForms(t *testing.T) {
 	}
 }
 
+func TestNPathCountsCaseLabelBooleanOperatorsAndFuncLiterals(t *testing.T) {
+	switchForm := parseFuncBody(t, `func f(a, b bool) int {
+	switch {
+	case a && b:
+		return 1
+	default:
+		return 0
+	}
+}`)
+	ifForm := parseFuncBody(t, `func f(a, b bool) int {
+	if a && b {
+		return 1
+	} else {
+		return 0
+	}
+}`)
+	// A tagless switch is an if/else chain in disguise, so the boolean
+	// operator in the case label must branch exactly as the if condition does.
+	if got, want := NPathComplexity(switchForm), NPathComplexity(ifForm); got != want {
+		t.Errorf("NPathComplexity(switch form) = %d, want %d (the equivalent if form)", got, want)
+	}
+	if got := NPathComplexity(switchForm); got != 3 {
+		t.Errorf("NPathComplexity(switch form) = %d, want 3", got)
+	}
+
+	// A func literal invoked in a case label runs on every path through that
+	// clause, so its two body paths multiply the clause's single body path;
+	// the default label adds one more.
+	litForm := parseFuncBody(t, `func f(a bool) int {
+	switch {
+	case (func() bool {
+		if a {
+			return true
+		}
+		return false
+	})():
+		return 1
+	default:
+		return 0
+	}
+}`)
+	if got := NPathComplexity(litForm); got != 3 {
+		t.Errorf("NPathComplexity(func literal case label) = %d, want 3", got)
+	}
+
+	// Multiple expressions on one label each contribute their own operators.
+	multiLabel := parseFuncBody(t, `func f(v int, a, b, c bool) int {
+	switch v {
+	case boolToInt(a && b), boolToInt(b || c):
+		return 1
+	}
+	return 0
+}`)
+	if got := NPathComplexity(multiLabel); got != 3 {
+		t.Errorf("NPathComplexity(multi-expression case label) = %d, want 3", got)
+	}
+}
+
 func TestNestingDepth(t *testing.T) {
 	tests := []struct {
 		name string

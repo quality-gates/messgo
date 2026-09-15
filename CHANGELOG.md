@@ -7,6 +7,10 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 ## [Unreleased]
 
 ### Fixed
+- Fixed `NPathComplexity` ignoring boolean operators and func-literal bodies in
+  `switch` case labels: a tagless `switch { case a && b: }` now counts the same
+  paths as the equivalent `if a && b { } else { }` chain, and a func literal
+  invoked in a case label multiplies that clause's paths (#133).
 - Fixed `NPathComplexity` ignoring func-literal bodies in `for` headers, range
   expressions, and `select` communication clauses: closure paths in those
   positions now multiply the enclosing loop or select-clause paths (#132).

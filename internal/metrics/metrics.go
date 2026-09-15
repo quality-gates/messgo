@@ -537,13 +537,29 @@ func npathSwitch(body *ast.BlockStmt, tag ast.Expr) int {
 	npath := expressionComplexity(tag)
 	for _, c := range body.List {
 		if cc, ok := c.(*ast.CaseClause); ok {
-			npath = npathAdd(npath, npathStmts(cc.Body))
+			npath = npathAdd(npath, npathCaseClause(cc))
 		}
 	}
 	if npath == 0 {
 		return 1
 	}
 	return npath
+}
+
+// npathCaseClause returns the paths contributed by a single case label: the
+// NPath of its body plus the boolean-operator complexity of its label
+// expressions, which branch just as an if condition does. Func literals
+// invoked in a label run on every path through that clause, so their paths
+// multiply the clause. A default label has no expressions and contributes
+// only its body.
+func npathCaseClause(cc *ast.CaseClause) int {
+	npath := npathStmts(cc.Body)
+	closures := 1
+	for _, e := range cc.List {
+		npath = npathAdd(npath, expressionComplexity(e))
+		closures = npathMul(closures, funcLitsComplexity(e))
+	}
+	return npathMul(npath, closures)
 }
 
 // npathSelect treats each comm clause like a switch label. Func literals in a

@@ -85,8 +85,8 @@ func newMemberSelectionCollector(f *File) *memberSelectionCollector {
 	return collector
 }
 
-func (c *memberSelectionCollector) packageTypes(f *File) map[string]string {
-	types := map[string]string{}
+func (c *memberSelectionCollector) packageTypes(f *File) map[string]memberVarType {
+	types := map[string]memberVarType{}
 	for _, decl := range f.Syntax.Decls {
 		gen, ok := decl.(*ast.GenDecl)
 		if !ok || gen.Tok != token.VAR {
@@ -102,7 +102,7 @@ func (c *memberSelectionCollector) packageTypes(f *File) map[string]string {
 	return types
 }
 
-func (c *memberSelectionCollector) collectFunc(decl *ast.FuncDecl, packageTypes map[string]string, names map[string]bool, uses map[MemberKey]bool) {
+func (c *memberSelectionCollector) collectFunc(decl *ast.FuncDecl, packageTypes map[string]memberVarType, names map[string]bool, uses map[MemberKey]bool) {
 	types := cloneMemberTypes(packageTypes)
 	c.scope.addFuncParameters(decl, types)
 	if decl.Body == nil {
@@ -112,15 +112,15 @@ func (c *memberSelectionCollector) collectFunc(decl *ast.FuncDecl, packageTypes 
 	c.collectBody(decl.Body, types, names, uses)
 }
 
-func cloneMemberTypes(source map[string]string) map[string]string {
-	clone := make(map[string]string, len(source))
+func cloneMemberTypes(source map[string]memberVarType) map[string]memberVarType {
+	clone := make(map[string]memberVarType, len(source))
 	for name, typeName := range source {
 		clone[name] = typeName
 	}
 	return clone
 }
 
-func (c *memberScopeCollector) addFuncParameters(decl *ast.FuncDecl, types map[string]string) {
+func (c *memberScopeCollector) addFuncParameters(decl *ast.FuncDecl, types map[string]memberVarType) {
 	if decl.Recv != nil {
 		addNamedFieldTypes(decl.Recv.List, types)
 	}
@@ -130,19 +130,19 @@ func (c *memberScopeCollector) addFuncParameters(decl *ast.FuncDecl, types map[s
 	addNamedFieldTypes(decl.Type.Params.List, types)
 }
 
-func addNamedFieldTypes(fields []*ast.Field, types map[string]string) {
+func addNamedFieldTypes(fields []*ast.Field, types map[string]memberVarType) {
 	for _, field := range fields {
-		typeName := memberTypeName(field.Type)
-		if typeName == "" {
+		fieldType := memberVarTypeOf(field.Type)
+		if fieldType.empty() {
 			continue
 		}
 		for _, name := range field.Names {
-			types[name.Name] = typeName
+			types[name.Name] = fieldType
 		}
 	}
 }
 
-func (c *memberScopeCollector) collectLocalTypes(body *ast.BlockStmt, types map[string]string) {
+func (c *memberScopeCollector) collectLocalTypes(body *ast.BlockStmt, types map[string]memberVarType) {
 	ast.Inspect(body, func(n ast.Node) bool {
 		switch node := n.(type) {
 		case *ast.FuncLit:
@@ -158,7 +158,7 @@ func (c *memberScopeCollector) collectLocalTypes(body *ast.BlockStmt, types map[
 	})
 }
 
-func (c *memberScopeCollector) addDeclaration(stmt *ast.DeclStmt, types map[string]string) {
+func (c *memberScopeCollector) addDeclaration(stmt *ast.DeclStmt, types map[string]memberVarType) {
 	gen, ok := stmt.Decl.(*ast.GenDecl)
 	if !ok || gen.Tok != token.VAR {
 		return
@@ -171,22 +171,22 @@ func (c *memberScopeCollector) addDeclaration(stmt *ast.DeclStmt, types map[stri
 	}
 }
 
-func (c *memberScopeCollector) addValueSpec(spec *ast.ValueSpec, types map[string]string) {
-	declaredType := memberTypeName(spec.Type)
+func (c *memberScopeCollector) addValueSpec(spec *ast.ValueSpec, types map[string]memberVarType) {
+	declaredType := memberVarTypeOf(spec.Type)
 	valueTypes := c.valueSpecRhsTypes(spec, declaredType, types)
 	for index, name := range spec.Names {
 		if name.Name == "_" || index >= len(valueTypes) {
 			continue
 		}
-		if valueTypes[index] != "" {
+		if !valueTypes[index].empty() {
 			types[name.Name] = valueTypes[index]
 		}
 	}
 }
 
-func (c *memberScopeCollector) valueSpecRhsTypes(spec *ast.ValueSpec, declaredType string, types map[string]string) []string {
-	if declaredType != "" {
-		result := make([]string, len(spec.Names))
+func (c *memberScopeCollector) valueSpecRhsTypes(spec *ast.ValueSpec, declaredType memberVarType, types map[string]memberVarType) []memberVarType {
+	if !declaredType.empty() {
+		result := make([]memberVarType, len(spec.Names))
 		for i := range result {
 			result[i] = declaredType
 		}
@@ -197,55 +197,76 @@ func (c *memberScopeCollector) valueSpecRhsTypes(spec *ast.ValueSpec, declaredTy
 			return c.resolver.callResultTypes(call, types)
 		}
 	}
-	result := make([]string, len(spec.Values))
+	result := make([]memberVarType, len(spec.Values))
 	for i, v := range spec.Values {
-		result[i] = c.resolver.expressionType(v, types)
+		result[i] = c.resolver.resolvedType(v, types)
 	}
 	return result
 }
 
-func (c *memberScopeCollector) addAssignment(stmt *ast.AssignStmt, types map[string]string) {
+func (c *memberScopeCollector) addAssignment(stmt *ast.AssignStmt, types map[string]memberVarType) {
 	rhsTypes := c.assignmentRhsTypes(stmt, types)
 	for index, lhs := range stmt.Lhs {
 		name, ok := lhs.(*ast.Ident)
 		if !ok || name.Name == "_" || index >= len(rhsTypes) {
 			continue
 		}
-		if rhsTypes[index] != "" {
+		if !rhsTypes[index].empty() {
 			types[name.Name] = rhsTypes[index]
 		}
 	}
 }
 
-func (c *memberScopeCollector) assignmentRhsTypes(stmt *ast.AssignStmt, types map[string]string) []string {
+func (c *memberScopeCollector) assignmentRhsTypes(stmt *ast.AssignStmt, types map[string]memberVarType) []memberVarType {
 	if len(stmt.Rhs) == 1 && len(stmt.Lhs) > 1 {
 		if call, ok := unwrapParen(stmt.Rhs[0]).(*ast.CallExpr); ok {
 			return c.resolver.callResultTypes(call, types)
 		}
 	}
-	result := make([]string, len(stmt.Rhs))
+	result := make([]memberVarType, len(stmt.Rhs))
 	for i, rhs := range stmt.Rhs {
-		result[i] = c.resolver.expressionType(rhs, types)
+		result[i] = c.resolver.resolvedType(rhs, types)
 	}
 	return result
 }
 
-func (c *memberScopeCollector) addRange(stmt *ast.RangeStmt, types map[string]string) {
-	target := stmt.Value
-	if target == nil {
-		target = stmt.Key
-	}
-	id, ok := target.(*ast.Ident)
-	if !ok || id.Name == "_" {
-		return
-	}
-	typeName := c.resolver.expressionType(stmt.X, types)
-	if typeName != "" {
-		types[id.Name] = typeName
+// addRange binds the iteration variables of a range statement. Which variable
+// carries the container's member-bearing type depends on the container: a map
+// yields key then value, a sequence yields index then element, and a channel
+// yields the element in the first variable.
+func (c *memberScopeCollector) addRange(stmt *ast.RangeStmt, types map[string]memberVarType) {
+	subject := c.resolver.resolvedType(stmt.X, types)
+	switch subject.kind {
+	case containerMap:
+		bindRangeVar(stmt.Key, memberVarType{name: subject.key}, types)
+		bindRangeVar(stmt.Value, memberVarType{name: subject.name}, types)
+	case containerSequence:
+		bindRangeVar(stmt.Value, memberVarType{name: subject.name}, types)
+	case containerChannel:
+		bindRangeVar(stmt.Key, memberVarType{name: subject.name}, types)
+	default:
+		bindRangeVar(rangeElementVar(stmt), memberVarType{name: subject.name}, types)
 	}
 }
 
-func (c *memberSelectionCollector) collectBody(body *ast.BlockStmt, types map[string]string, names map[string]bool, uses map[MemberKey]bool) {
+// rangeElementVar picks the variable that holds the element of a container of
+// unknown shape, preferring the value variable when the statement has one.
+func rangeElementVar(stmt *ast.RangeStmt) ast.Expr {
+	if stmt.Value != nil {
+		return stmt.Value
+	}
+	return stmt.Key
+}
+
+func bindRangeVar(target ast.Expr, varType memberVarType, types map[string]memberVarType) {
+	id, ok := target.(*ast.Ident)
+	if !ok || id.Name == "_" || varType.empty() {
+		return
+	}
+	types[id.Name] = varType
+}
+
+func (c *memberSelectionCollector) collectBody(body *ast.BlockStmt, types map[string]memberVarType, names map[string]bool, uses map[MemberKey]bool) {
 	ast.Inspect(body, func(n ast.Node) bool {
 		switch node := n.(type) {
 		case *ast.FuncLit:
@@ -263,14 +284,14 @@ func (c *memberSelectionCollector) collectBody(body *ast.BlockStmt, types map[st
 	})
 }
 
-func (c *memberScopeCollector) addFuncLiteralParameters(lit *ast.FuncLit, types map[string]string) {
+func (c *memberScopeCollector) addFuncLiteralParameters(lit *ast.FuncLit, types map[string]memberVarType) {
 	if lit.Type == nil || lit.Type.Params == nil {
 		return
 	}
 	addNamedFieldTypes(lit.Type.Params.List, types)
 }
 
-func (c *memberUseRecorder) recordSelector(sel *ast.SelectorExpr, types map[string]string, names map[string]bool, uses map[MemberKey]bool) {
+func (c *memberUseRecorder) recordSelector(sel *ast.SelectorExpr, types map[string]memberVarType, names map[string]bool, uses map[MemberKey]bool) {
 	name := sel.Sel.Name
 	names[name] = true
 	if typeName := c.resolver.expressionType(sel.X, types); typeName != "" {
@@ -339,16 +360,22 @@ func (c *memberUseRecorder) recordUnkeyedMembers(typeName string, lit *ast.Compo
 	}
 }
 
-func (c *memberTypeResolver) expressionType(expr ast.Expr, types map[string]string) string {
+// expressionType is the member-bearing type name of an expression, discarding
+// the container shape that resolvedType carries.
+func (c *memberTypeResolver) expressionType(expr ast.Expr, types map[string]memberVarType) string {
+	return c.resolvedType(expr, types).name
+}
+
+func (c *memberTypeResolver) resolvedType(expr ast.Expr, types map[string]memberVarType) memberVarType {
 	switch node := expr.(type) {
 	case *ast.Ident:
 		return types[node.Name]
 	case *ast.SelectorExpr:
 		return c.selectorType(node, types)
 	case *ast.CompositeLit:
-		return memberTypeName(node.Type)
+		return memberVarTypeOf(node.Type)
 	case *ast.TypeAssertExpr:
-		return memberTypeName(node.Type)
+		return memberVarTypeOf(node.Type)
 	case *ast.CallExpr:
 		return c.callType(node, types)
 	default:
@@ -356,42 +383,48 @@ func (c *memberTypeResolver) expressionType(expr ast.Expr, types map[string]stri
 	}
 }
 
-func (c *memberTypeResolver) wrappedExpressionType(expr ast.Expr, types map[string]string) string {
+func (c *memberTypeResolver) wrappedExpressionType(expr ast.Expr, types map[string]memberVarType) memberVarType {
 	switch node := expr.(type) {
 	case *ast.ParenExpr:
-		return c.expressionType(node.X, types)
+		return c.resolvedType(node.X, types)
 	case *ast.StarExpr:
-		return c.expressionType(node.X, types)
+		return c.resolvedType(node.X, types)
 	case *ast.UnaryExpr:
-		return c.expressionType(node.X, types)
-	case *ast.IndexExpr:
-		return c.expressionType(node.X, types)
-	case *ast.IndexListExpr:
-		return c.expressionType(node.X, types)
+		return c.resolvedType(node.X, types)
 	case *ast.SliceExpr:
-		return c.expressionType(node.X, types)
+		return c.resolvedType(node.X, types)
+	case *ast.IndexExpr:
+		return elementType(c.resolvedType(node.X, types))
+	case *ast.IndexListExpr:
+		return elementType(c.resolvedType(node.X, types))
 	default:
-		return ""
+		return memberVarType{}
 	}
 }
 
-func (c *memberTypeResolver) selectorType(sel *ast.SelectorExpr, types map[string]string) string {
+// elementType drops the container shape: indexing a container yields an element,
+// which is no longer that container.
+func elementType(container memberVarType) memberVarType {
+	return memberVarType{name: container.name}
+}
+
+func (c *memberTypeResolver) selectorType(sel *ast.SelectorExpr, types map[string]memberVarType) memberVarType {
 	baseType := c.expressionType(sel.X, types)
 	if baseType == "" {
-		return ""
+		return memberVarType{}
 	}
 	return c.classMemberType(baseType, sel.Sel.Name)
 }
 
-func (c *memberTypeResolver) callType(call *ast.CallExpr, types map[string]string) string {
+func (c *memberTypeResolver) callType(call *ast.CallExpr, types map[string]memberVarType) memberVarType {
 	results := c.callResultTypes(call, types)
 	if len(results) == 1 {
 		return results[0]
 	}
-	return ""
+	return memberVarType{}
 }
 
-func (c *memberTypeResolver) callResultTypes(call *ast.CallExpr, types map[string]string) []string {
+func (c *memberTypeResolver) callResultTypes(call *ast.CallExpr, types map[string]memberVarType) []memberVarType {
 	if call == nil {
 		return nil
 	}
@@ -405,15 +438,15 @@ func (c *memberTypeResolver) callResultTypes(call *ast.CallExpr, types map[strin
 	return nil
 }
 
-func resolveIdentCall(classes map[string]*Class, functions map[string]*Function, id *ast.Ident, args []ast.Expr) []string {
+func resolveIdentCall(classes map[string]*Class, functions map[string]*Function, id *ast.Ident, args []ast.Expr) []memberVarType {
 	if id.Name == "new" && len(args) == 1 {
-		if typeName := memberTypeName(args[0]); typeName != "" {
-			return []string{typeName}
+		if argType := memberVarTypeOf(args[0]); !argType.empty() {
+			return []memberVarType{argType}
 		}
 		return nil
 	}
 	if _, ok := classes[id.Name]; ok {
-		return []string{id.Name}
+		return []memberVarType{{name: id.Name}}
 	}
 	if fn := functions[id.Name]; fn != nil {
 		return functionResultTypes(fn)
@@ -421,7 +454,7 @@ func resolveIdentCall(classes map[string]*Class, functions map[string]*Function,
 	return nil
 }
 
-func resolveSelectorCall(r *memberTypeResolver, sel *ast.SelectorExpr, types map[string]string) []string {
+func resolveSelectorCall(r *memberTypeResolver, sel *ast.SelectorExpr, types map[string]memberVarType) []memberVarType {
 	baseType := r.expressionType(sel.X, types)
 	if baseType == "" {
 		return nil
@@ -485,10 +518,10 @@ func interfaceMethod(classes map[string]*Class, ifaces map[string]*Interface, if
 	return nil
 }
 
-func (c *memberTypeResolver) classMemberType(typeName, memberName string) string {
+func (c *memberTypeResolver) classMemberType(typeName, memberName string) memberVarType {
 	memberType, _, ok := c.lookupMember(typeName, memberName, map[string]bool{})
 	if !ok {
-		return ""
+		return memberVarType{}
 	}
 	return memberType
 }
@@ -501,10 +534,10 @@ func (c *memberTypeResolver) promotedMemberPath(typeName, memberName string) []M
 	return path
 }
 
-func (c *memberTypeResolver) lookupMember(typeName, memberName string, visiting map[string]bool) (string, []MemberKey, bool) {
+func (c *memberTypeResolver) lookupMember(typeName, memberName string, visiting map[string]bool) (memberVarType, []MemberKey, bool) {
 	class := c.classes[typeName]
 	if class == nil || visiting[typeName] {
-		return "", nil, false
+		return memberVarType{}, nil, false
 	}
 	visiting[typeName] = true
 	defer delete(visiting, typeName)
@@ -514,10 +547,10 @@ func (c *memberTypeResolver) lookupMember(typeName, memberName string, visiting 
 	return c.lookupEmbeddedMember(class, typeName, memberName, visiting)
 }
 
-func directMemberType(class *Class, memberName string) (string, bool) {
+func directMemberType(class *Class, memberName string) (memberVarType, bool) {
 	for _, field := range class.Fields {
 		if field.Name == memberName {
-			return memberTypeName(field.TypeExpr), true
+			return memberVarTypeOf(field.TypeExpr), true
 		}
 	}
 	for _, method := range class.Methods {
@@ -525,10 +558,10 @@ func directMemberType(class *Class, memberName string) (string, bool) {
 			return functionResultType(method), true
 		}
 	}
-	return "", false
+	return memberVarType{}, false
 }
 
-func (c *memberTypeResolver) lookupEmbeddedMember(class *Class, typeName, memberName string, visiting map[string]bool) (string, []MemberKey, bool) {
+func (c *memberTypeResolver) lookupEmbeddedMember(class *Class, typeName, memberName string, visiting map[string]bool) (memberVarType, []MemberKey, bool) {
 	for _, field := range class.Fields {
 		if field.Ident != nil {
 			continue
@@ -541,28 +574,28 @@ func (c *memberTypeResolver) lookupEmbeddedMember(class *Class, typeName, member
 		path = append([]MemberKey{{Type: typeName, Name: field.Name}}, path...)
 		return memberType, path, true
 	}
-	return "", nil, false
+	return memberVarType{}, nil, false
 }
 
-func functionResultTypes(fn *Function) []string {
+func functionResultTypes(fn *Function) []memberVarType {
 	if fn == nil || len(fn.Results) == 0 {
 		return nil
 	}
-	results := make([]string, len(fn.Results))
+	results := make([]memberVarType, len(fn.Results))
 	for i, res := range fn.Results {
 		if res.Field != nil {
-			results[i] = memberTypeName(res.Field.Type)
+			results[i] = memberVarTypeOf(res.Field.Type)
 		}
 	}
 	return results
 }
 
-func functionResultType(fn *Function) string {
+func functionResultType(fn *Function) memberVarType {
 	results := functionResultTypes(fn)
 	if len(results) == 1 {
 		return results[0]
 	}
-	return ""
+	return memberVarType{}
 }
 
 func unwrapParen(expr ast.Expr) ast.Expr {
@@ -591,6 +624,54 @@ func memberTypeName(expr ast.Expr) string {
 		return memberTypeName(node.X)
 	default:
 		return containerTypeName(expr)
+	}
+}
+
+// containerKind is the shape of a container type, which decides how a range
+// statement over it binds its iteration variables.
+type containerKind int
+
+const (
+	containerNone containerKind = iota
+	containerSequence
+	containerMap
+	containerChannel
+)
+
+// memberVarType is the member-bearing type of an expression. For a container it
+// records the element type in name, plus the shape and, for maps, the key type,
+// so callers can tell a map key from a map value.
+type memberVarType struct {
+	name string
+	key  string
+	kind containerKind
+}
+
+func (t memberVarType) empty() bool {
+	return t.name == "" && t.key == ""
+}
+
+func memberVarTypeOf(expr ast.Expr) memberVarType {
+	kind, key := containerShape(expr)
+	return memberVarType{name: memberTypeName(expr), key: key, kind: kind}
+}
+
+// containerShape reports the container shape of a type expression and, for a
+// map, the member-bearing type name of its key.
+func containerShape(expr ast.Expr) (containerKind, string) {
+	switch node := expr.(type) {
+	case *ast.ParenExpr:
+		return containerShape(node.X)
+	case *ast.StarExpr:
+		return containerShape(node.X)
+	case *ast.ArrayType:
+		return containerSequence, ""
+	case *ast.ChanType:
+		return containerChannel, ""
+	case *ast.MapType:
+		return containerMap, memberTypeName(node.Key)
+	default:
+		return containerNone, ""
 	}
 }
 

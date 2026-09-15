@@ -140,7 +140,7 @@ func (Root) child() Leaf { return Leaf{} }
 	}
 	collector := newMemberSelectionCollector(f)
 	resolver := &collector.types
-	types := map[string]string{"leaf": "Leaf", "root": "Root", "generic": "Generic"}
+	types := map[string]memberVarType{"leaf": {name: "Leaf"}, "root": {name: "Root"}, "generic": {name: "Generic"}}
 
 	cases := []struct {
 		expr string
@@ -322,10 +322,10 @@ func TestMemberSelectionHelpersHandleMissingSyntax(t *testing.T) {
 	names := map[string]bool{}
 	uses := map[MemberKey]bool{}
 	collector.collectFunc(&ast.FuncDecl{Type: &ast.FuncType{}}, nil, names, uses)
-	collector.scope.addFuncParameters(&ast.FuncDecl{}, map[string]string{})
-	collector.scope.addFuncLiteralParameters(&ast.FuncLit{}, map[string]string{})
-	collector.scope.addDeclaration(&ast.DeclStmt{}, map[string]string{})
-	collector.scope.addAssignment(&ast.AssignStmt{Lhs: []ast.Expr{&ast.Ident{Name: "x"}}}, map[string]string{})
+	collector.scope.addFuncParameters(&ast.FuncDecl{}, map[string]memberVarType{})
+	collector.scope.addFuncLiteralParameters(&ast.FuncLit{}, map[string]memberVarType{})
+	collector.scope.addDeclaration(&ast.DeclStmt{}, map[string]memberVarType{})
+	collector.scope.addAssignment(&ast.AssignStmt{Lhs: []ast.Expr{&ast.Ident{Name: "x"}}}, map[string]memberVarType{})
 
 	file := &File{Syntax: &ast.File{Decls: []ast.Decl{
 		&ast.GenDecl{Tok: token.VAR, Specs: []ast.Spec{&ast.TypeSpec{}}},
@@ -365,17 +365,52 @@ func TestMemberTypeNameExpressions(t *testing.T) {
 	}
 }
 
+func TestMemberVarTypeOfContainerShapes(t *testing.T) {
+	cases := []struct {
+		source string
+		want   memberVarType
+	}{
+		{source: "T", want: memberVarType{name: "T"}},
+		{source: "[]T", want: memberVarType{name: "T", kind: containerSequence}},
+		{source: "[3]T", want: memberVarType{name: "T", kind: containerSequence}},
+		{source: "*[]T", want: memberVarType{name: "T", kind: containerSequence}},
+		{source: "([]T)", want: memberVarType{name: "T", kind: containerSequence}},
+		{source: "chan T", want: memberVarType{name: "T", kind: containerChannel}},
+		{source: "map[K]V", want: memberVarType{name: "V", key: "K", kind: containerMap}},
+		{source: "map[*K]*V", want: memberVarType{name: "V", key: "K", kind: containerMap}},
+		{source: "map[K]struct{}", want: memberVarType{key: "K", kind: containerMap}},
+		{source: "42", want: memberVarType{}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.source, func(t *testing.T) {
+			expr, err := parser.ParseExpr(tc.source)
+			if err != nil {
+				t.Fatalf("ParseExpr: %v", err)
+			}
+			if got := memberVarTypeOf(expr); got != tc.want {
+				t.Fatalf("memberVarTypeOf(%q) = %+v, want %+v", tc.source, got, tc.want)
+			}
+		})
+	}
+	if got := memberVarTypeOf(&ast.MapType{Key: &ast.Ident{Name: "K"}, Value: &ast.Ident{Name: "V"}}); got.empty() {
+		t.Fatal("memberVarTypeOf(map) reported an empty type")
+	}
+	if !(memberVarType{}).empty() {
+		t.Fatal("zero memberVarType is not empty")
+	}
+}
+
 func TestFunctionResultType(t *testing.T) {
-	if got := functionResultType(&Function{}); got != "" {
+	if got := functionResultType(&Function{}).name; got != "" {
 		t.Fatalf("functionResultType(no results) = %q, want empty", got)
 	}
-	if got := functionResultType(&Function{Results: []*Parameter{{}, {}}}); got != "" {
+	if got := functionResultType(&Function{Results: []*Parameter{{}, {}}}).name; got != "" {
 		t.Fatalf("functionResultType(multiple results) = %q, want empty", got)
 	}
-	if got := functionResultType(&Function{Results: []*Parameter{{Field: &ast.Field{}}}}); got != "" {
+	if got := functionResultType(&Function{Results: []*Parameter{{Field: &ast.Field{}}}}).name; got != "" {
 		t.Fatalf("functionResultType(no result type) = %q, want empty", got)
 	}
-	if got := functionResultType(&Function{Results: []*Parameter{{Field: &ast.Field{Type: &ast.Ident{Name: "Leaf"}}}}}); got != "Leaf" {
+	if got := functionResultType(&Function{Results: []*Parameter{{Field: &ast.Field{Type: &ast.Ident{Name: "Leaf"}}}}}).name; got != "Leaf" {
 		t.Fatalf("functionResultType(Leaf) = %q, want Leaf", got)
 	}
 }
@@ -394,7 +429,7 @@ func TestFunctionResultTypes(t *testing.T) {
 			{Field: &ast.Field{Type: &ast.Ident{Name: "error"}}},
 		},
 	}
-	got := functionResultTypes(fn)
+	got := memberTypeNames(functionResultTypes(fn))
 	if !slices.Equal(got, []string{"", "Worker", "error"}) {
 		t.Fatalf("functionResultTypes(multi) = %v, want [\"\" Worker error]", got)
 	}
@@ -438,10 +473,10 @@ func makePair() (Leaf, Leaf) { return Leaf{}, Leaf{} }
 	}
 	collector := newMemberSelectionCollector(f)
 	resolver := &collector.types
-	types := map[string]string{
-		"root": "Root",
-		"comp": "Composite",
-		"sub":  "SubIface",
+	types := map[string]memberVarType{
+		"root": {name: "Root"},
+		"comp": {name: "Composite"},
+		"sub":  {name: "SubIface"},
 	}
 
 	if got := resolver.callResultTypes(nil, types); got != nil {
@@ -478,7 +513,7 @@ func makePair() (Leaf, Leaf) { return Leaf{}, Leaf{} }
 			if !ok {
 				t.Fatalf("%s is not a call", tc.expr)
 			}
-			got := resolver.callResultTypes(call, types)
+			got := memberTypeNames(resolver.callResultTypes(call, types))
 			if !slices.Equal(got, tc.want) {
 				t.Fatalf("callResultTypes(%s) = %v, want %v", tc.expr, got, tc.want)
 			}
@@ -628,6 +663,17 @@ func Run() {
 	}
 }
 
+func memberTypeNames(types []memberVarType) []string {
+	if types == nil {
+		return nil
+	}
+	names := make([]string, len(types))
+	for i, t := range types {
+		names[i] = t.name
+	}
+	return names
+}
+
 func assertMemberUses(t *testing.T, f *File, want map[MemberKey]bool) {
 	t.Helper()
 	got := SelectedMemberUses(f)
@@ -680,6 +726,46 @@ func Run(m map[string]*Val) {
 			},
 		},
 		{
+			name: "map key iteration",
+			src: `package p
+type Key struct { kField int }
+func (k Key) KWork() {}
+type Val struct { vField int }
+func (v Val) VWork() {}
+func Run(m map[Key]Val) {
+	for k := range m {
+		k.KWork()
+		_ = k.kField
+	}
+}`,
+			want: map[MemberKey]bool{
+				{Type: "Key", Name: "KWork"}:  true,
+				{Type: "Key", Name: "kField"}: true,
+			},
+		},
+		{
+			name: "map key and value iteration",
+			src: `package p
+type Key struct { kField int }
+func (k Key) KWork() {}
+type Val struct { vField int }
+func (v Val) VWork() {}
+func Run(m map[Key]Val) {
+	for k, v := range m {
+		k.KWork()
+		_ = k.kField
+		v.VWork()
+		_ = v.vField
+	}
+}`,
+			want: map[MemberKey]bool{
+				{Type: "Key", Name: "KWork"}:  true,
+				{Type: "Key", Name: "kField"}: true,
+				{Type: "Val", Name: "VWork"}:  true,
+				{Type: "Val", Name: "vField"}: true,
+			},
+		},
+		{
 			name: "channel iteration",
 			src: `package p
 type Worker struct { field int }
@@ -704,6 +790,51 @@ func Run(workers []*Worker) {
 	for _, w := range workers[1:] {
 		w.Work()
 	}
+}`,
+			want: map[MemberKey]bool{
+				{Type: "Worker", Name: "Work"}: true,
+			},
+		},
+		{
+			name: "range over an indexed container",
+			src: `package p
+type Worker struct { field int }
+func (w *Worker) Work() {}
+func Run(groups [][]*Worker) {
+	for _, w := range groups[0] {
+		w.Work()
+	}
+}`,
+			want: map[MemberKey]bool{
+				{Type: "Worker", Name: "Work"}: true,
+			},
+		},
+		{
+			name: "map with a memberless key type still binds the value",
+			src: `package p
+type Key struct { kField int }
+func (k Key) KWork() {}
+func Run(m map[Key]struct{}) {
+	for k := range m {
+		k.KWork()
+		_ = k.kField
+	}
+}`,
+			want: map[MemberKey]bool{
+				{Type: "Key", Name: "KWork"}:  true,
+				{Type: "Key", Name: "kField"}: true,
+			},
+		},
+		{
+			name: "range key of unresolved type does not clobber an outer binding",
+			src: `package p
+type Worker struct{}
+func (w Worker) Work() {}
+func Run(k Worker, m map[struct{}]int) {
+	for k := range m {
+		_ = k
+	}
+	k.Work()
 }`,
 			want: map[MemberKey]bool{
 				{Type: "Worker", Name: "Work"}: true,
@@ -758,8 +889,8 @@ func Run() {
 
 func TestAddRangeSkipsBlankIdentifier(t *testing.T) {
 	collector := newMemberSelectionCollector(&File{Syntax: &ast.File{}})
-	types := map[string]string{
-		"workers": "Worker",
+	types := map[string]memberVarType{
+		"workers": {name: "Worker", kind: containerSequence},
 	}
 	stmt := &ast.RangeStmt{
 		Value: &ast.Ident{Name: "_"},
@@ -768,5 +899,47 @@ func TestAddRangeSkipsBlankIdentifier(t *testing.T) {
 	collector.scope.addRange(stmt, types)
 	if _, ok := types["_"]; ok {
 		t.Fatalf("addRange recorded blank identifier in types map")
+	}
+}
+
+func TestAddRangeBindsIterationVariablesByContainerShape(t *testing.T) {
+	src := `package p
+type Key struct{}
+type Val struct{}
+func Run(m map[Key]Val, workers []Val, ch chan Val, n int) {
+	for k, v := range m {
+		_, _ = k, v
+	}
+	for i, w := range workers {
+		_, _ = i, w
+	}
+	for c := range ch {
+		_ = c
+	}
+	for u := range n {
+		_ = u
+	}
+}`
+	f, err := ParseSource("shapes.go", []byte(src))
+	if err != nil {
+		t.Fatalf("ParseSource: %v", err)
+	}
+	collector := newMemberSelectionCollector(f)
+	decl, ok := f.Syntax.Decls[len(f.Syntax.Decls)-1].(*ast.FuncDecl)
+	if !ok {
+		t.Fatalf("last declaration is not a function")
+	}
+	types := map[string]memberVarType{}
+	collector.scope.addFuncParameters(decl, types)
+	collector.scope.collectLocalTypes(decl.Body, types)
+
+	want := map[string]string{"k": "Key", "v": "Val", "w": "Val", "c": "Val", "u": "int"}
+	for name, typeName := range want {
+		if got := types[name].name; got != typeName {
+			t.Errorf("types[%q] = %q, want %q", name, got, typeName)
+		}
+	}
+	if got, ok := types["i"]; ok {
+		t.Errorf("types[\"i\"] = %+v, want no binding for a slice index variable", got)
 	}
 }

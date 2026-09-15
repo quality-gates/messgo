@@ -2506,6 +2506,52 @@ func Run(m map[string]*val) {
 		mustNotHave(t, hits, "UnusedPrivateField", "UnusedPrivateMethod")
 	})
 
+	t.Run("map key iteration", func(t *testing.T) {
+		src := `
+type tracker struct {
+	count int
+}
+
+func (t *tracker) helper() int { return 1 }
+
+func Run(m map[tracker]string) {
+	for t := range m {
+		_ = t.helper()
+		_ = t.count
+	}
+}
+`
+		hits := analyze(t, src, "unusedcode")
+		mustNotHave(t, hits, "UnusedPrivateField", "UnusedPrivateMethod")
+	})
+
+	t.Run("map key and value iteration", func(t *testing.T) {
+		src := `
+type key struct {
+	kField int
+}
+
+func (k key) kWork() {}
+
+type val struct {
+	vField int
+}
+
+func (v val) vWork() {}
+
+func Run(m map[key]val) {
+	for k, v := range m {
+		k.kWork()
+		_ = k.kField
+		v.vWork()
+		_ = v.vField
+	}
+}
+`
+		hits := analyze(t, src, "unusedcode")
+		mustNotHave(t, hits, "UnusedPrivateField", "UnusedPrivateMethod")
+	})
+
 	t.Run("channel iteration", func(t *testing.T) {
 		src := `
 type worker struct {

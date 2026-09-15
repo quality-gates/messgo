@@ -6,6 +6,15 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 
 ## [Unreleased]
 
+### Fixed
+- Fixed `UnusedPrivateField` and `UnusedPrivateMethod` false positives when a
+  member is used through the key variable of a map range loop. Range iteration
+  variables are now bound by container shape: a map binds its key type to the
+  key variable and its value type to the value variable, a slice or array binds
+  its element type to the value variable only (the index variable is no longer
+  bound to the element type), and a channel binds its element type to the first
+  variable (#131).
+
 ## [0.4.5] - 2026-09-13
 
 ### Fixed

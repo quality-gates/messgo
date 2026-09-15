@@ -37,6 +37,10 @@ The controversial CamelCase rules honor their PHPMD properties: set
 `allow-underscore-test=true` on method/property rules to permit underscores in
 `Test`-prefixed names. Internal or multiple leading underscores remain invalid.
 
+`UnusedLocalVariable` honors `allow-unused-foreach-variables`: set it to `true`
+to skip unused range and for-loop iteration variables. Other unused locals are
+still reported.
+
 `LackOfCohesionOfMethods` computes the **LCOM4** cohesion metric per struct
 type: methods are linked when they use a common field or call one another
 through the receiver, and the metric is the number of disconnected method

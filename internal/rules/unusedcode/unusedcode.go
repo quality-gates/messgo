@@ -74,7 +74,8 @@ func (r *UnusedFormalParameter) ApplyFunc(c *rule.Context, fn *model.Function) {
 
 type UnusedLocalVariable struct {
 	*rule.Base
-	exceptions []string
+	exceptions         []string
+	allowUnusedForeach bool
 }
 
 func newUnusedLocalVariable() rule.Rule {
@@ -83,6 +84,7 @@ func newUnusedLocalVariable() rule.Rule {
 
 func (r *UnusedLocalVariable) Configure(props rule.Properties) error {
 	r.exceptions = util.SplitToList(props.String("exceptions", ""))
+	r.allowUnusedForeach = props.Bool("allow-unused-foreach-variables", false)
 	return nil
 }
 
@@ -91,6 +93,9 @@ func (r *UnusedLocalVariable) check(c *rule.Context, fn *model.Function) {
 	reported := map[string]bool{}
 	for _, v := range locals {
 		if model.IdentifierRead(fn, v.Ident) || reported[v.Name] || util.Contains(r.exceptions, v.Name) {
+			continue
+		}
+		if r.allowUnusedForeach && v.IsLoop {
 			continue
 		}
 		reported[v.Name] = true

@@ -90,6 +90,89 @@ func inspect() {
 	}
 }
 
+func TestUnusedLocalVariableAllowUnusedForeachVariables(t *testing.T) {
+	src := `package p
+
+func f(items []int) {
+	for i := range items {
+	}
+}
+`
+	f, err := model.ParseSource("repro.go", []byte(src))
+	if err != nil {
+		t.Fatalf("ParseSource: %v", err)
+	}
+	if len(f.Functions) != 1 {
+		t.Fatalf("functions = %d, want 1", len(f.Functions))
+	}
+	locals := model.LocalVariables(f.Functions[0])
+	if len(locals) != 1 || locals[0].Name != "i" || !locals[0].IsLoop {
+		t.Fatalf("locals = %+v, want loop variable i", locals)
+	}
+
+	tests := []struct {
+		name      string
+		props     rule.Properties
+		wantNames []string
+	}{
+		{
+			name:      "allowed",
+			props:     rule.Properties{"allow-unused-foreach-variables": "true"},
+			wantNames: nil,
+		},
+		{
+			name:      "default",
+			props:     rule.Properties{},
+			wantNames: []string{"i"},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			local := newUnusedLocalVariable().(*UnusedLocalVariable)
+			if err := local.Configure(tt.props); err != nil {
+				t.Fatalf("Configure: %v", err)
+			}
+			violations := rule.Analyze(f, []*rule.RuleSet{{Rules: []rule.Rule{local}}})
+			var names []string
+			for _, v := range violations {
+				name, ok := v.Args[0].(string)
+				if !ok {
+					t.Fatalf("violation argument type = %T, want string", v.Args[0])
+				}
+				names = append(names, name)
+			}
+			if len(names) != len(tt.wantNames) {
+				t.Fatalf("violations = %v, want %v", names, tt.wantNames)
+			}
+			for i, name := range names {
+				if name != tt.wantNames[i] {
+					t.Fatalf("violations = %v, want %v", names, tt.wantNames)
+				}
+			}
+		})
+	}
+}
+
+func TestUnusedLocalVariableAllowUnusedForeachStillReportsNonLoop(t *testing.T) {
+	f, err := model.ParseSource("repro.go", []byte(`package p
+
+func f() {
+	unused := 1
+}
+`))
+	if err != nil {
+		t.Fatalf("ParseSource: %v", err)
+	}
+	local := newUnusedLocalVariable().(*UnusedLocalVariable)
+	if err := local.Configure(rule.Properties{"allow-unused-foreach-variables": "true"}); err != nil {
+		t.Fatalf("Configure: %v", err)
+	}
+	violations := rule.Analyze(f, []*rule.RuleSet{{Rules: []rule.Rule{local}}})
+	if len(violations) != 1 || violations[0].Args[0] != "unused" {
+		t.Fatalf("violations = %+v, want one unused violation", violations)
+	}
+}
+
 func TestUnusedPrivateMembersAreScopedToTheirType(t *testing.T) {
 	f, err := model.ParseSource("issue93.go", []byte(`package p
 

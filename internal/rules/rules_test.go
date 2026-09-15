@@ -1747,6 +1747,174 @@ func snake_method(under_score int) {}
 	)
 }
 
+func TestControversialAllowUnderscore(t *testing.T) {
+	src := `package fixture
+
+type T struct{}
+
+func (t *T) _privateMethod() {}
+`
+	f, err := model.ParseSource("fixture.go", []byte(src))
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+
+	rulesetPath := filepath.Join(t.TempDir(), "rules.xml")
+	rulesetXML := `<?xml version="1.0"?>
+<ruleset name="test">
+  <rule ref="controversial/CamelCaseMethodName">
+    <properties>
+      <property name="allow-underscore" value="true"/>
+    </properties>
+  </rule>
+</ruleset>`
+	if err := os.WriteFile(rulesetPath, []byte(rulesetXML), 0o644); err != nil {
+		t.Fatalf("write ruleset: %v", err)
+	}
+
+	sets, err := (&ruleset.Loader{}).Load(rulesetPath)
+	if err != nil {
+		t.Fatalf("load ruleset: %v", err)
+	}
+	if len(sets) != 1 || len(sets[0].Rules) != 1 {
+		t.Fatalf("expected one configured rule, got %d sets", len(sets))
+	}
+	if _, ok := sets[0].Rules[0].(rule.Configurable); !ok {
+		t.Fatal("CamelCaseMethodName should implement rule.Configurable")
+	}
+	if violations := rule.Analyze(f, sets); len(violations) != 0 {
+		t.Fatalf("allow-underscore should suppress the method violation, got %d", len(violations))
+	}
+}
+
+func analyzeControversialRule(t *testing.T, src, ref, properties string) []hit {
+	t.Helper()
+	f, err := model.ParseSource("fixture.go", []byte("package fixture\n"+src))
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+
+	rulesetPath := filepath.Join(t.TempDir(), "rules.xml")
+	rulesetXML := fmt.Sprintf(`<?xml version="1.0"?>
+<ruleset name="test">
+  <rule ref="%s">
+    <properties>%s</properties>
+  </rule>
+</ruleset>`, ref, properties)
+	if err := os.WriteFile(rulesetPath, []byte(rulesetXML), 0o644); err != nil {
+		t.Fatalf("write ruleset: %v", err)
+	}
+
+	sets, err := (&ruleset.Loader{}).Load(rulesetPath)
+	if err != nil {
+		t.Fatalf("load ruleset: %v", err)
+	}
+	var hits []hit
+	for _, v := range rule.Analyze(f, sets) {
+		hits = append(hits, hit{v.Rule.Name(), v.BeginLine - 1})
+	}
+	return hits
+}
+
+func TestControversialAllowUnderscoreOnAllRules(t *testing.T) {
+	tests := []struct {
+		name string
+		ref  string
+		src  string
+	}{
+		{
+			name: "method",
+			ref:  "controversial/CamelCaseMethodName",
+			src:  "type T struct{}\n\nfunc (t *T) _privateMethod() {}",
+		},
+		{
+			name: "property",
+			ref:  "controversial/CamelCasePropertyName",
+			src:  "type T struct { _privateField int }",
+		},
+		{
+			name: "parameter",
+			ref:  "controversial/CamelCaseParameterName",
+			src:  "func process(_parameterName int) {}",
+		},
+		{
+			name: "variable",
+			ref:  "controversial/CamelCaseVariableName",
+			src:  "func process() { _localName := 1; _ = _localName }",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			hits := analyzeControversialRule(t, tt.src, tt.ref, `<property name="allow-underscore" value="true"/>`)
+			if has(hits, strings.TrimPrefix(tt.ref, "controversial/")) {
+				t.Fatalf("allow-underscore should suppress the %s violation, got %v", tt.name, hits)
+			}
+		})
+	}
+}
+
+func TestControversialUnderscoreOptionsKeepOtherNamesInvalid(t *testing.T) {
+	tests := []struct {
+		name string
+		ref  string
+		src  string
+	}{
+		{
+			name: "internal underscore",
+			ref:  "controversial/CamelCaseMethodName",
+			src:  "func private_method() {}",
+		},
+		{
+			name: "multiple leading underscores",
+			ref:  "controversial/CamelCaseVariableName",
+			src:  "func process() { __localName := 1; _ = __localName }",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			hits := analyzeControversialRule(t, tt.src, tt.ref, `<property name="allow-underscore" value="true"/>`)
+			if !has(hits, strings.TrimPrefix(tt.ref, "controversial/")) {
+				t.Fatalf("allow-underscore should not suppress %s, got %v", tt.name, hits)
+			}
+		})
+	}
+}
+
+func TestControversialAllowUnderscoreTest(t *testing.T) {
+	tests := []struct {
+		name          string
+		ref           string
+		src           string
+		wantViolation bool
+	}{
+		{
+			name: "method",
+			ref:  "controversial/CamelCaseMethodName",
+			src:  "type T struct{}\n\nfunc (t *T) Test_Feature() {}",
+		},
+		{
+			name: "property",
+			ref:  "controversial/CamelCasePropertyName",
+			src:  "type T struct { Test_Feature int }",
+		},
+		{
+			name:          "ordinary method remains invalid",
+			ref:           "controversial/CamelCaseMethodName",
+			src:           "func private_method() {}",
+			wantViolation: true,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			hits := analyzeControversialRule(t, tt.src, tt.ref, `<property name="allow-underscore-test" value="true"/>`)
+			gotViolation := has(hits, strings.TrimPrefix(tt.ref, "controversial/"))
+			if gotViolation != tt.wantViolation {
+				t.Fatalf("allow-underscore-test violation = %t, want %t; hits = %v", gotViolation, tt.wantViolation, hits)
+			}
+		})
+	}
+}
+
 func TestCleanCodeNoFalsePositives(t *testing.T) {
 	// Idiomatic Go that should be clean under cleancode.
 	src := `

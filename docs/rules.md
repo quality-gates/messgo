@@ -32,6 +32,11 @@ the package. Effectively-constant globals — sentinel errors, compiled regexps,
 lookup tables — stay silent. Set `report-immutable=true` to also surface
 read-only globals.
 
+The controversial CamelCase rules honor their PHPMD properties: set
+`allow-underscore=true` to permit one leading underscore, and set
+`allow-underscore-test=true` on method/property rules to permit underscores in
+`Test`-prefixed names. Internal or multiple leading underscores remain invalid.
+
 `LackOfCohesionOfMethods` computes the **LCOM4** cohesion metric per struct
 type: methods are linked when they use a common field or call one another
 through the receiver, and the metric is the number of disconnected method

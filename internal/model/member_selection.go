@@ -275,6 +275,9 @@ func (c *memberSelectionCollector) collectBody(body *ast.BlockStmt, types map[st
 			c.scope.collectLocalTypes(node.Body, nestedTypes)
 			c.collectBody(node.Body, nestedTypes, names, uses)
 			return false
+		case *ast.TypeSwitchStmt:
+			c.collectTypeSwitch(node, types, names, uses)
+			return false
 		case *ast.SelectorExpr:
 			c.recorder.recordSelector(node, types, names, uses)
 		case *ast.CompositeLit:
@@ -282,6 +285,36 @@ func (c *memberSelectionCollector) collectBody(body *ast.BlockStmt, types map[st
 		}
 		return true
 	})
+}
+
+func (c *memberSelectionCollector) collectTypeSwitch(stmt *ast.TypeSwitchStmt, types map[string]memberVarType, names map[string]bool, uses map[MemberKey]bool) {
+	if stmt.Body == nil {
+		return
+	}
+	varName := typeSwitchVarName(stmt.Assign)
+	for _, clause := range stmt.Body.List {
+		cc, ok := clause.(*ast.CaseClause)
+		if !ok {
+			continue
+		}
+		caseTypes := cloneMemberTypes(types)
+		if varName != "" && len(cc.List) == 1 {
+			caseTypes[varName] = memberVarTypeOf(cc.List[0])
+		}
+		c.collectBody(&ast.BlockStmt{List: cc.Body}, caseTypes, names, uses)
+	}
+}
+
+func typeSwitchVarName(assign ast.Stmt) string {
+	stmt, ok := assign.(*ast.AssignStmt)
+	if !ok {
+		return ""
+	}
+	id, ok := stmt.Lhs[0].(*ast.Ident)
+	if !ok {
+		return ""
+	}
+	return id.Name
 }
 
 func (c *memberScopeCollector) addFuncLiteralParameters(lit *ast.FuncLit, types map[string]memberVarType) {

@@ -7,6 +7,11 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 ## [Unreleased]
 
 ### Fixed
+- Fixed `UnusedPrivateField` and `UnusedPrivateMethod` false positives when a
+  member is used on a variable bound in a type switch case clause: type switch
+  statements now bind the switch variable to the case type in single-type clauses,
+  allowing field and method selections inside case clause bodies to resolve the
+  receiver type and record member uses (#141).
 - Fixed `UnusedLocalVariable` silently ignoring `allow-unused-foreach-variables`:
   unused range and for-loop iteration variables are now skipped when the
   property is set to `true` (#135).

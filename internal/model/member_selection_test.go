@@ -943,3 +943,74 @@ func Run(m map[Key]Val, workers []Val, ch chan Val, n int) {
 		t.Errorf("types[\"i\"] = %+v, want no binding for a slice index variable", got)
 	}
 }
+
+func TestSelectedMemberUsesInTypeSwitch(t *testing.T) {
+	src := `package sample
+
+type parser struct{}
+func (p *parser) parse() {}
+
+type config struct {
+	timeout int
+}
+
+type greeter struct{}
+func (g greeter) greet() {}
+
+type unused struct {
+	dead int
+}
+
+type outerOnly struct {
+	secret int
+}
+
+func inspect(val any, p parser, o outerOnly) {
+	v := o
+	_ = v
+	switch v := val.(type) {
+	case *parser:
+		v.parse()
+		f := func() {
+			v.parse()
+		}
+		f()
+	case config:
+		_ = v.timeout
+	case *unused, greeter:
+	default:
+	}
+
+	switch val.(type) {
+	case *unused:
+	}
+}
+`
+	f, err := ParseSource("typeswitch.go", []byte(src))
+	if err != nil {
+		t.Fatalf("ParseSource: %v", err)
+	}
+
+	want := map[MemberKey]bool{
+		{Type: "parser", Name: "parse"}:   true,
+		{Type: "config", Name: "timeout"}: true,
+	}
+	assertMemberUses(t, f, want)
+	if f.MemberSelectedForType("unused", "dead") {
+		t.Errorf("MemberSelectedForType(unused, dead) = true, want false")
+	}
+	if f.MemberSelectedForType("outerOnly", "secret") {
+		t.Errorf("MemberSelectedForType(outerOnly, secret) = true, want false: outer v was shadowed")
+	}
+
+	collector := newMemberSelectionCollector(f)
+	collector.collectTypeSwitch(&ast.TypeSwitchStmt{Body: nil}, nil, map[string]bool{}, map[MemberKey]bool{})
+	collector.collectTypeSwitch(&ast.TypeSwitchStmt{
+		Body: &ast.BlockStmt{
+			List: []ast.Stmt{&ast.EmptyStmt{}},
+		},
+	}, nil, map[string]bool{}, map[MemberKey]bool{})
+	if typeSwitchVarName(&ast.AssignStmt{Lhs: []ast.Expr{&ast.BadExpr{}}}) != "" {
+		t.Errorf("typeSwitchVarName with non-ident LHS returned non-empty")
+	}
+}

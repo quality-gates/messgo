@@ -527,3 +527,37 @@ func unusedVariableFile(tb testing.TB, variables int) *model.File {
 	}
 	return file
 }
+
+func TestUnusedPrivateMembersInTypeSwitchCases(t *testing.T) {
+	f, err := model.ParseSource("repro.go", []byte(`package p
+
+type parser struct{}
+
+func (p *parser) parse() {}
+
+type config struct {
+	timeout int
+}
+
+func run(val any) int {
+	switch v := val.(type) {
+	case *parser:
+		v.parse()
+		return 0
+	case *config:
+		return v.timeout
+	default:
+		return 0
+	}
+}
+`))
+	if err != nil {
+		t.Fatalf("ParseSource: %v", err)
+	}
+	fieldRule := &UnusedPrivateField{Base: rule.NewBase()}
+	methodRule := &UnusedPrivateMethod{Base: rule.NewBase()}
+	violations := rule.Analyze(f, []*rule.RuleSet{{Rules: []rule.Rule{fieldRule, methodRule}}})
+	if len(violations) != 0 {
+		t.Fatalf("violations = %+v, want none: parser.parse and config.timeout are used in type switch cases", violations)
+	}
+}

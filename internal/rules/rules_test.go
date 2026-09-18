@@ -347,6 +347,36 @@ func deepNest(a, b, c, d, e, f bool) {
 	mustNotHave(t, hits, "CyclomaticComplexity")
 }
 
+// Regression for quality-gates/messgo#144: showMethodsComplexity=false must
+// suppress per-method CyclomaticComplexity violations instead of being
+// silently ignored.
+func TestCyclomaticComplexityShowMethodsComplexityOverride(t *testing.T) {
+	src := `
+func complexFunc(x int) {
+	if x > 0 {
+		println(x)
+	}
+}
+`
+	for _, tc := range []struct {
+		showMethodsComplexity string
+		wantViolation         bool
+	}{
+		{showMethodsComplexity: "true", wantViolation: true},
+		{showMethodsComplexity: "false", wantViolation: false},
+	} {
+		t.Run("showMethodsComplexity="+tc.showMethodsComplexity, func(t *testing.T) {
+			hits := analyzeControversialRule(t, src, "codesize/CyclomaticComplexity", fmt.Sprintf(`
+      <property name="reportLevel" value="2"/>
+      <property name="showMethodsComplexity" value="%s"/>
+`, tc.showMethodsComplexity))
+			if got := has(hits, "CyclomaticComplexity"); got != tc.wantViolation {
+				t.Fatalf("CyclomaticComplexity violation = %t, want %t; hits = %v", got, tc.wantViolation, hits)
+			}
+		})
+	}
+}
+
 func TestCognitiveComplexityDoesNotFireOnSimpleFunc(t *testing.T) {
 	src := `
 func simple(a bool) {

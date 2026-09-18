@@ -73,6 +73,7 @@ func interfaceNodeMeasurement(iface *model.Interface, value int) rule.ThresholdM
 type CyclomaticComplexity struct {
 	*rule.Base
 	*rule.ThresholdRule
+	showMethodsComplexity bool
 }
 
 func newCyclomaticComplexity() rule.Rule {
@@ -87,7 +88,18 @@ func newCyclomaticComplexity() rule.Rule {
 	return r
 }
 
+func (r *CyclomaticComplexity) Configure(props rule.Properties) error {
+	if err := r.ThresholdRule.Configure(props); err != nil {
+		return err
+	}
+	r.showMethodsComplexity = props.Bool("showMethodsComplexity", true)
+	return nil
+}
+
 func (r *CyclomaticComplexity) measure(_ *rule.Context, fn *model.Function) (rule.ThresholdMeasurement, bool) {
+	if !r.showMethodsComplexity {
+		return rule.ThresholdMeasurement{}, false
+	}
 	return funcMeasurement(fn, metrics.CyclomaticComplexity(fn.Body)), true
 }
 

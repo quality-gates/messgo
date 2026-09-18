@@ -943,3 +943,36 @@ func Run(m map[Key]Val, workers []Val, ch chan Val, n int) {
 		t.Errorf("types[\"i\"] = %+v, want no binding for a slice index variable", got)
 	}
 }
+
+func TestSelectedMemberUsesBindTypeSwitchVariable(t *testing.T) {
+	f, err := ParseSource("typeswitch.go", []byte(`package sample
+
+type parser struct{ timeout int }
+
+func (p *parser) parse() {}
+
+type other struct{ timeout int }
+
+func run(val any) int {
+	switch v := val.(type) {
+	case *parser:
+		v.parse()
+		return v.timeout
+	case other, *other:
+		return v.timeout
+	}
+	return 0
+}
+`))
+	if err != nil {
+		t.Fatalf("ParseSource: %v", err)
+	}
+	for _, key := range []MemberKey{{Type: "parser", Name: "parse"}, {Type: "parser", Name: "timeout"}} {
+		if !f.MemberSelectedForType(key.Type, key.Name) {
+			t.Errorf("type switch use of %v not recorded", key)
+		}
+	}
+	if f.MemberSelectedForType("other", "timeout") {
+		t.Error("multi-type clause must not bind the switch variable")
+	}
+}

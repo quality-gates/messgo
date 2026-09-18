@@ -275,6 +275,9 @@ func (c *memberSelectionCollector) collectBody(body *ast.BlockStmt, types map[st
 			c.scope.collectLocalTypes(node.Body, nestedTypes)
 			c.collectBody(node.Body, nestedTypes, names, uses)
 			return false
+		case *ast.TypeSwitchStmt:
+			c.collectTypeSwitch(node, types, names, uses)
+			return false
 		case *ast.SelectorExpr:
 			c.recorder.recordSelector(node, types, names, uses)
 		case *ast.CompositeLit:
@@ -282,6 +285,48 @@ func (c *memberSelectionCollector) collectBody(body *ast.BlockStmt, types map[st
 		}
 		return true
 	})
+}
+
+// collectTypeSwitch binds the switch variable of `switch v := x.(type)` to the
+// case type inside each single-type clause; in any other clause v keeps the
+// type of x, which is unknown here, so it is unbound.
+func (c *memberSelectionCollector) collectTypeSwitch(stmt *ast.TypeSwitchStmt, types map[string]memberVarType, names map[string]bool, uses map[MemberKey]bool) {
+	header := &ast.BlockStmt{}
+	for _, part := range []ast.Stmt{stmt.Init, stmt.Assign} {
+		if part != nil {
+			header.List = append(header.List, part)
+		}
+	}
+	c.collectBody(header, types, names, uses)
+	bound := typeSwitchVar(stmt)
+	for _, clause := range stmt.Body.List {
+		cc, ok := clause.(*ast.CaseClause)
+		if !ok {
+			continue
+		}
+		clauseTypes := types
+		if bound != "" {
+			clauseTypes = cloneMemberTypes(types)
+			delete(clauseTypes, bound)
+			if len(cc.List) == 1 {
+				if caseType := memberVarTypeOf(cc.List[0]); !caseType.empty() {
+					clauseTypes[bound] = caseType
+				}
+			}
+		}
+		c.collectBody(&ast.BlockStmt{List: cc.Body}, clauseTypes, names, uses)
+	}
+}
+
+func typeSwitchVar(stmt *ast.TypeSwitchStmt) string {
+	assign, ok := stmt.Assign.(*ast.AssignStmt)
+	if !ok || len(assign.Lhs) != 1 {
+		return ""
+	}
+	if id, ok := assign.Lhs[0].(*ast.Ident); ok {
+		return id.Name
+	}
+	return ""
 }
 
 func (c *memberScopeCollector) addFuncLiteralParameters(lit *ast.FuncLit, types map[string]memberVarType) {

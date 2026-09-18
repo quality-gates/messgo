@@ -266,7 +266,7 @@ func bindRangeVar(target ast.Expr, varType memberVarType, types map[string]membe
 	types[id.Name] = varType
 }
 
-func (c *memberSelectionCollector) collectBody(body *ast.BlockStmt, types map[string]memberVarType, names map[string]bool, uses map[MemberKey]bool) {
+func (c *memberSelectionCollector) collectBody(body ast.Node, types map[string]memberVarType, names map[string]bool, uses map[MemberKey]bool) {
 	ast.Inspect(body, func(n ast.Node) bool {
 		switch node := n.(type) {
 		case *ast.FuncLit:
@@ -275,6 +275,9 @@ func (c *memberSelectionCollector) collectBody(body *ast.BlockStmt, types map[st
 			c.scope.collectLocalTypes(node.Body, nestedTypes)
 			c.collectBody(node.Body, nestedTypes, names, uses)
 			return false
+		case *ast.TypeSwitchStmt:
+			c.collectTypeSwitch(node, types, names, uses)
+			return false
 		case *ast.SelectorExpr:
 			c.recorder.recordSelector(node, types, names, uses)
 		case *ast.CompositeLit:
@@ -282,6 +285,37 @@ func (c *memberSelectionCollector) collectBody(body *ast.BlockStmt, types map[st
 		}
 		return true
 	})
+}
+
+// collectTypeSwitch binds the switch variable of `switch v := x.(type)` to the
+// case type inside each single-type clause; in any other clause v keeps the
+// type of x, which is unknown here, so it is unbound.
+func (c *memberSelectionCollector) collectTypeSwitch(stmt *ast.TypeSwitchStmt, types map[string]memberVarType, names map[string]bool, uses map[MemberKey]bool) {
+	if stmt.Init != nil {
+		c.collectBody(stmt.Init, types, names, uses)
+	}
+	c.collectBody(stmt.Assign, types, names, uses)
+	bound := typeSwitchVar(stmt)
+	for _, clause := range stmt.Body.List {
+		cc := clause.(*ast.CaseClause)
+		c.collectBody(cc, clauseTypes(types, bound, cc), names, uses)
+	}
+}
+
+func clauseTypes(types map[string]memberVarType, bound string, cc *ast.CaseClause) map[string]memberVarType {
+	scoped := cloneMemberTypes(types)
+	delete(scoped, bound)
+	if len(cc.List) == 1 {
+		scoped[bound] = memberVarTypeOf(cc.List[0])
+	}
+	return scoped
+}
+
+func typeSwitchVar(stmt *ast.TypeSwitchStmt) string {
+	if assign, ok := stmt.Assign.(*ast.AssignStmt); ok {
+		return assign.Lhs[0].(*ast.Ident).Name
+	}
+	return ""
 }
 
 func (c *memberScopeCollector) addFuncLiteralParameters(lit *ast.FuncLit, types map[string]memberVarType) {

@@ -943,3 +943,88 @@ func Run(m map[Key]Val, workers []Val, ch chan Val, n int) {
 		t.Errorf("types[\"i\"] = %+v, want no binding for a slice index variable", got)
 	}
 }
+
+func TestSelectedMemberUsesBindTypeSwitchVariable(t *testing.T) {
+	f, err := ParseSource("typeswitch.go", []byte(`package sample
+
+type parser struct{ timeout int }
+
+func (p *parser) parse() {}
+
+type other struct{ timeout int }
+
+func run(val any) int {
+	switch v := val.(type) {
+	case *parser:
+		v.parse()
+		return v.timeout
+	case other, *other:
+		return v.timeout
+	}
+	return 0
+}
+`))
+	if err != nil {
+		t.Fatalf("ParseSource: %v", err)
+	}
+	for _, key := range []MemberKey{{Type: "parser", Name: "parse"}, {Type: "parser", Name: "timeout"}} {
+		if !f.MemberSelectedForType(key.Type, key.Name) {
+			t.Errorf("type switch use of %v not recorded", key)
+		}
+	}
+	if f.MemberSelectedForType("other", "timeout") {
+		t.Error("multi-type clause must not bind the switch variable")
+	}
+}
+
+func TestSelectedMemberUsesTypeSwitchScoping(t *testing.T) {
+	f, err := ParseSource("typeswitch_scope.go", []byte(`package sample
+
+type a struct{ one int }
+type b struct{ two int }
+type c struct{ three int }
+type d struct{ four int }
+type e struct{ five int }
+type g struct{ six int }
+type h struct{ seven int }
+
+func run(val any, v a, p g, q h) {
+	switch val.(type) {
+	case b:
+		_ = v.one
+	}
+	switch w := val.(type) {
+	case b:
+		func() { _ = w.two }()
+	default:
+		_ = v.one
+	}
+	switch _ = (c{three: 1}); y := q.seven.(type) {
+	case d:
+		_ = y.four
+	}
+	switch v := val.(type) {
+	case nil:
+		_ = v.five
+	}
+	switch p := val.(type) {
+	default:
+		_ = p.six
+	}
+}
+`))
+	if err != nil {
+		t.Fatalf("ParseSource: %v", err)
+	}
+	for _, key := range []MemberKey{{"a", "one"}, {"b", "two"}, {"c", "three"}, {"d", "four"}, {"h", "seven"}} {
+		if !f.MemberSelectedForType(key.Type, key.Name) {
+			t.Errorf("use of %v not recorded", key)
+		}
+	}
+	if f.MemberSelectedForType("e", "five") {
+		t.Error("nil clause must not bind the switch variable")
+	}
+	if f.MemberSelectedForType("g", "six") {
+		t.Error("default clause must shadow the outer variable of the same name")
+	}
+}

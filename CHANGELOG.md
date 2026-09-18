@@ -7,6 +7,9 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 ## [Unreleased]
 
 ### Fixed
+- Fixed `CyclomaticComplexity` silently ignoring `showMethodsComplexity`:
+  setting the property to `false` now suppresses per-method violations
+  instead of reporting them regardless (#144).
 - Fixed `NPathComplexity` undercounting comma-separated case labels in `switch`
   statements: each expression after the first in `case expr1, expr2:` now adds
   a path, matching the equivalent `||` chain (#143).

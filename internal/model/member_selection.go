@@ -266,7 +266,7 @@ func bindRangeVar(target ast.Expr, varType memberVarType, types map[string]membe
 	types[id.Name] = varType
 }
 
-func (c *memberSelectionCollector) collectBody(body *ast.BlockStmt, types map[string]memberVarType, names map[string]bool, uses map[MemberKey]bool) {
+func (c *memberSelectionCollector) collectBody(body ast.Node, types map[string]memberVarType, names map[string]bool, uses map[MemberKey]bool) {
 	ast.Inspect(body, func(n ast.Node) bool {
 		switch node := n.(type) {
 		case *ast.FuncLit:
@@ -291,40 +291,29 @@ func (c *memberSelectionCollector) collectBody(body *ast.BlockStmt, types map[st
 // case type inside each single-type clause; in any other clause v keeps the
 // type of x, which is unknown here, so it is unbound.
 func (c *memberSelectionCollector) collectTypeSwitch(stmt *ast.TypeSwitchStmt, types map[string]memberVarType, names map[string]bool, uses map[MemberKey]bool) {
-	header := &ast.BlockStmt{}
-	for _, part := range []ast.Stmt{stmt.Init, stmt.Assign} {
-		if part != nil {
-			header.List = append(header.List, part)
-		}
+	if stmt.Init != nil {
+		c.collectBody(stmt.Init, types, names, uses)
 	}
-	c.collectBody(header, types, names, uses)
+	c.collectBody(stmt.Assign, types, names, uses)
 	bound := typeSwitchVar(stmt)
 	for _, clause := range stmt.Body.List {
-		cc, ok := clause.(*ast.CaseClause)
-		if !ok {
-			continue
-		}
-		clauseTypes := types
-		if bound != "" {
-			clauseTypes = cloneMemberTypes(types)
-			delete(clauseTypes, bound)
-			if len(cc.List) == 1 {
-				if caseType := memberVarTypeOf(cc.List[0]); !caseType.empty() {
-					clauseTypes[bound] = caseType
-				}
-			}
-		}
-		c.collectBody(&ast.BlockStmt{List: cc.Body}, clauseTypes, names, uses)
+		cc := clause.(*ast.CaseClause)
+		c.collectBody(cc, clauseTypes(types, bound, cc), names, uses)
 	}
 }
 
-func typeSwitchVar(stmt *ast.TypeSwitchStmt) string {
-	assign, ok := stmt.Assign.(*ast.AssignStmt)
-	if !ok || len(assign.Lhs) != 1 {
-		return ""
+func clauseTypes(types map[string]memberVarType, bound string, cc *ast.CaseClause) map[string]memberVarType {
+	scoped := cloneMemberTypes(types)
+	delete(scoped, bound)
+	if len(cc.List) == 1 {
+		scoped[bound] = memberVarTypeOf(cc.List[0])
 	}
-	if id, ok := assign.Lhs[0].(*ast.Ident); ok {
-		return id.Name
+	return scoped
+}
+
+func typeSwitchVar(stmt *ast.TypeSwitchStmt) string {
+	if assign, ok := stmt.Assign.(*ast.AssignStmt); ok {
+		return assign.Lhs[0].(*ast.Ident).Name
 	}
 	return ""
 }

@@ -355,7 +355,9 @@ func TestNPathCountsCaseLabelBooleanOperatorsAndFuncLiterals(t *testing.T) {
 		t.Errorf("NPathComplexity(func literal case label) = %d, want 3", got)
 	}
 
-	// Multiple expressions on one label each contribute their own operators.
+	// Multiple expressions on one label each contribute their own operators,
+	// plus one more path for the comma itself: the second expression is an
+	// alternative that reaches the same body, just like an || branch.
 	multiLabel := parseFuncBody(t, `func f(v int, a, b, c bool) int {
 	switch v {
 	case boolToInt(a && b), boolToInt(b || c):
@@ -363,8 +365,58 @@ func TestNPathCountsCaseLabelBooleanOperatorsAndFuncLiterals(t *testing.T) {
 	}
 	return 0
 }`)
-	if got := NPathComplexity(multiLabel); got != 3 {
-		t.Errorf("NPathComplexity(multi-expression case label) = %d, want 3", got)
+	if got := NPathComplexity(multiLabel); got != 4 {
+		t.Errorf("NPathComplexity(multi-expression case label) = %d, want 4", got)
+	}
+}
+
+// TestNPathCommaSeparatedCaseLabelsMatchEquivalentOrChain guards against
+// issue #143: comma-separated case labels (`case a, b:`) are semantically
+// equivalent to an || chain, so they must produce the same NPath.
+func TestNPathCommaSeparatedCaseLabelsMatchEquivalentOrChain(t *testing.T) {
+	switchComma := parseFuncBody(t, `func f(a, b bool) int {
+	switch {
+	case a, b:
+		return 1
+	default:
+		return 0
+	}
+}`)
+	switchOr := parseFuncBody(t, `func f(a, b bool) int {
+	switch {
+	case a || b:
+		return 1
+	default:
+		return 0
+	}
+}`)
+	if got, want := NPathComplexity(switchComma), NPathComplexity(switchOr); got != want {
+		t.Errorf("NPathComplexity(tagless comma labels) = %d, want %d (equivalent to || chain)", got, want)
+	}
+	if got := NPathComplexity(switchComma); got != 3 {
+		t.Errorf("NPathComplexity(tagless comma labels) = %d, want 3", got)
+	}
+
+	valueComma := parseFuncBody(t, `func f(v int) int {
+	switch v {
+	case 1, 2:
+		return 1
+	default:
+		return 0
+	}
+}`)
+	valueSeparate := parseFuncBody(t, `func f(v int) int {
+	switch v {
+	case 1:
+		return 1
+	case 2:
+		return 1
+	default:
+		return 0
+	}
+}`)
+	if got, want := NPathComplexity(valueComma), NPathComplexity(valueSeparate); got != want {
+		t.Errorf("NPathComplexity(value comma labels) = %d, want %d (equivalent to separate case labels)", got, want)
 	}
 }
 

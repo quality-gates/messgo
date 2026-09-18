@@ -7,6 +7,9 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 ## [Unreleased]
 
 ### Fixed
+- Fixed `BooleanArgumentFlag` silently ignoring `ignorepattern`: methods and
+  functions whose name matches the configured regex are no longer flagged for
+  boolean parameters (#142).
 - Fixed `UnusedLocalVariable` silently ignoring `allow-unused-foreach-variables`:
   unused range and for-loop iteration variables are now skipped when the
   property is set to `true` (#135).

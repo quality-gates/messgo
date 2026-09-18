@@ -1765,6 +1765,16 @@ func doOther()     {}
 	)
 }
 
+func TestBooleanArgumentFlagIgnorePattern(t *testing.T) {
+	src := `
+type S struct{}
+
+func (s *S) SetEnabled(flag bool) {}
+`
+	hits := analyzeControversialRule(t, src, "cleancode/BooleanArgumentFlag", `<property name="ignorepattern" value="^Set.*"/>`)
+	mustNotHave(t, hits, "BooleanArgumentFlag")
+}
+
 func TestControversial(t *testing.T) {
 	src := `
 type bad_name struct {

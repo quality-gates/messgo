@@ -5,6 +5,8 @@
 package cleancode
 
 import (
+	"regexp"
+
 	"github.com/quality-gates/messgo/internal/model"
 	"github.com/quality-gates/messgo/internal/rule"
 	"github.com/quality-gates/messgo/internal/util"
@@ -24,7 +26,8 @@ func init() {
 
 type BooleanArgumentFlag struct {
 	*rule.Base
-	exceptions []string
+	exceptions    []string
+	ignorePattern *regexp.Regexp
 }
 
 func newBooleanArgumentFlag() rule.Rule {
@@ -33,11 +36,19 @@ func newBooleanArgumentFlag() rule.Rule {
 
 func (r *BooleanArgumentFlag) Configure(props rule.Properties) error {
 	r.exceptions = util.SplitToList(props.String("exceptions", ""))
+	r.ignorePattern = rule.CompileRegex(props.String("ignorepattern", ""))
 	return nil
 }
 
-func (r *BooleanArgumentFlag) check(c *rule.Context, fn *model.Function) {
+func (r *BooleanArgumentFlag) skip(fn *model.Function) bool {
 	if fn.Receiver != "" && util.Contains(r.exceptions, fn.Receiver) {
+		return true
+	}
+	return r.ignorePattern != nil && r.ignorePattern.MatchString(fn.Name)
+}
+
+func (r *BooleanArgumentFlag) check(c *rule.Context, fn *model.Function) {
+	if r.skip(fn) {
 		return
 	}
 	image := fn.Name

@@ -11,6 +11,9 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
   and report-format journeys, with a replay script for findings #150–#154.
 
 ### Fixed
+- Fixed `--reportfile` failing when the report's parent directory does not
+  exist: missing parent directories are now created before writing the report
+  file, matching phpmd (#150).
 - Fixed ruleset XML and command-line specs rejecting phpmd's canonical
   `rulesets/<name>.xml` and `rulesets/<name>.xml/<Rule>` references: they now
   resolve to the matching built-in ruleset or rule when no file exists at that

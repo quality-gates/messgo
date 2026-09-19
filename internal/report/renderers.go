@@ -332,7 +332,7 @@ func gitlabSeverity(priority int) string {
 }
 
 func fingerprint(v *rule.Violation) string {
-	return fmt.Sprintf("%x", fmt.Appendf(nil, "%s:%d:%s", v.File, v.BeginLine, v.Rule.Name()))
+	return fmt.Sprintf("%x", fmt.Appendf(nil, "%s:%d:%s:%s", v.File, v.BeginLine, v.Rule.Name(), v.Description))
 }
 
 // ----- Checkstyle ---------------------------------------------------------

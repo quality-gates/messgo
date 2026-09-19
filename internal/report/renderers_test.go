@@ -388,3 +388,57 @@ func validXML10Char(r rune) bool {
 		(r >= 0xe000 && r <= 0xfffd) ||
 		(r >= 0x10000 && r <= 0x10ffff)
 }
+
+func TestGitLabRendererEmitsUniqueFingerprintsForSameRuleOnSameLine(t *testing.T) {
+	r := &rule.Base{
+		RuleName: "LongVariable",
+	}
+	rep := &Report{
+		Violations: []*rule.Violation{
+			{
+				Rule:        r,
+				File:        "pkg/a.go",
+				BeginLine:   5,
+				EndLine:     5,
+				Description: "Avoid excessively long variable names like firstExtremelyLongVariableNameForTestingPurposes.",
+			},
+			{
+				Rule:        r,
+				File:        "pkg/a.go",
+				BeginLine:   5,
+				EndLine:     5,
+				Description: "Avoid excessively long variable names like secondExtremelyLongVariableNameForTestingPurposes.",
+			},
+		},
+	}
+	output := renderReport(t, "gitlab", rep)
+	var issues []struct {
+		Fingerprint string `json:"fingerprint"`
+		Description string `json:"description"`
+	}
+	if err := json.Unmarshal([]byte(output), &issues); err != nil {
+		t.Fatalf("json.Unmarshal() error = %v", err)
+	}
+	if len(issues) != 2 {
+		t.Fatalf("got %d issues, want 2", len(issues))
+	}
+	if issues[0].Fingerprint == "" {
+		t.Fatal("expected non-empty fingerprint")
+	}
+	if issues[0].Fingerprint == issues[1].Fingerprint {
+		t.Fatalf("expected unique fingerprints, but got duplicate %q", issues[0].Fingerprint)
+	}
+
+	// Assert determinism across runs
+	output2 := renderReport(t, "gitlab", rep)
+	var issues2 []struct {
+		Fingerprint string `json:"fingerprint"`
+		Description string `json:"description"`
+	}
+	if err := json.Unmarshal([]byte(output2), &issues2); err != nil {
+		t.Fatalf("json.Unmarshal() error = %v", err)
+	}
+	if issues[0].Fingerprint != issues2[0].Fingerprint || issues[1].Fingerprint != issues2[1].Fingerprint {
+		t.Fatalf("fingerprints are not deterministic across runs: %v vs %v", issues, issues2)
+	}
+}

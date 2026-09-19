@@ -7,6 +7,9 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 ## [Unreleased]
 
 ### Fixed
+- Fixed recursive discovery scanning `testdata/` directories. Directory walks
+  now skip `testdata` the same way the Go toolchain does (`go help packages`);
+  an explicit file or directory path under `testdata/` is still analyzed (#154).
 - Fixed `UnusedPrivateField` and `UnusedPrivateMethod` falsely flagging members
   used through the variable of a type switch (`switch v := x.(type)`): the
   variable is now bound to the case type in single-type clauses (#141).

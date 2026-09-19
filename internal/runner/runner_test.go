@@ -209,6 +209,54 @@ func TestDirectoryDiscoverySkipsHiddenAndUnderscoreDirectories(t *testing.T) {
 	}
 }
 
+func TestDirectoryDiscoverySkipsTestdataDirectories(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(dir, "testdata"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(dir, "pkg"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "td.go"), []byte("package td\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "testdata", "fixture.go"), []byte("package fixture\nfunc F() { println(1) }\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "pkg", "code.go"), []byte("package pkg\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	files, err := discover(Options{Paths: []string{filepath.Join(dir, "...")}, Suffixes: []string{".go"}})
+	if err != nil {
+		t.Fatalf("discover failed: %v", err)
+	}
+	for _, f := range files {
+		if filepath.Base(filepath.Dir(f)) == "testdata" {
+			t.Fatalf("recursive discover included testdata file %s: %v", f, files)
+		}
+	}
+	if len(files) != 2 {
+		t.Fatalf("discover returned unexpected files: %v, want td.go and pkg/code.go", files)
+	}
+
+	explicitDir, err := discover(Options{Paths: []string{filepath.Join(dir, "testdata")}, Suffixes: []string{".go"}})
+	if err != nil {
+		t.Fatalf("explicit testdata dir discover failed: %v", err)
+	}
+	if len(explicitDir) != 1 || filepath.Base(explicitDir[0]) != "fixture.go" {
+		t.Fatalf("explicit testdata dir discover = %v, want fixture.go", explicitDir)
+	}
+
+	explicitFile, err := discover(Options{Paths: []string{filepath.Join(dir, "testdata", "fixture.go")}, Suffixes: []string{".go"}})
+	if err != nil {
+		t.Fatalf("explicit testdata file discover failed: %v", err)
+	}
+	if len(explicitFile) != 1 || filepath.Base(explicitFile[0]) != "fixture.go" {
+		t.Fatalf("explicit testdata file discover = %v, want fixture.go", explicitFile)
+	}
+}
+
 func TestDirectoryDiscoverySkipsHiddenAndUnderscoreFiles(t *testing.T) {
 	dir := t.TempDir()
 	src := "package fixture\ntype hidden struct {\n\tunused int\n}\n"
@@ -254,6 +302,7 @@ func TestShouldSkipDir(t *testing.T) {
 		{"_tools", true},
 		{"vendor", true},
 		{"node_modules", true},
+		{"testdata", true},
 		{"pkg", false},
 	}
 	for _, tt := range tests {

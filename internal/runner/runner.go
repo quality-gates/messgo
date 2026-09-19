@@ -267,7 +267,7 @@ func shouldSkipDir(name string) bool {
 		return true
 	}
 	switch name {
-	case "vendor", "node_modules":
+	case "vendor", "node_modules", "testdata":
 		return true
 	}
 	return false

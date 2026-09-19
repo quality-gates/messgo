@@ -40,6 +40,28 @@ var builtinNames = map[string]string{
 	"opinionated":   "builtin/opinionated.xml",
 }
 
+// builtinID maps a ruleset reference to its built-in identifier. It accepts
+// short names ("codesize") and phpmd's canonical "rulesets/codesize.xml"
+// form; the canonical form yields to a real file at that path, matching
+// phpmd's lookup order.
+func builtinID(part, fromDir string) (string, bool) {
+	if _, ok := builtinNames[part]; ok {
+		return part, true
+	}
+	name, ok := strings.CutPrefix(part, "rulesets/")
+	if !ok {
+		return "", false
+	}
+	name, ok = strings.CutSuffix(name, ".xml")
+	if _, builtin := builtinNames[name]; !ok || !builtin {
+		return "", false
+	}
+	if _, err := os.Stat(resolvePath(part, fromDir)); err == nil {
+		return "", false
+	}
+	return name, true
+}
+
 // BuiltinNames returns the sorted list of built-in ruleset identifiers.
 func BuiltinNames() []string {
 	return []string{"cleancode", "codesize", "controversial", "design", "go", "naming", "opinionated", "unusedcode"}
@@ -409,9 +431,9 @@ func sameProperties(left, right rule.Properties) bool {
 }
 
 func readRuleset(part, fromDir string) ([]byte, string, error) {
-	if file, ok := builtinNames[part]; ok {
-		data, err := builtinFS.ReadFile(file)
-		return data, part, err
+	if id, ok := builtinID(part, fromDir); ok {
+		data, err := builtinFS.ReadFile(builtinNames[id])
+		return data, id, err
 	}
 	path := resolvePath(part, fromDir)
 	data, err := os.ReadFile(path)

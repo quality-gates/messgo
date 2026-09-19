@@ -11,6 +11,10 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
   and report-format journeys, with a replay script for findings #150–#154.
 
 ### Fixed
+- Fixed ruleset XML and command-line specs rejecting phpmd's canonical
+  `rulesets/<name>.xml` and `rulesets/<name>.xml/<Rule>` references: they now
+  resolve to the matching built-in ruleset or rule when no file exists at that
+  path (#151).
 - Fixed `UnusedPrivateField` and `UnusedPrivateMethod` falsely flagging members
   used through the variable of a type switch (`switch v := x.(type)`): the
   variable is now bound to the case type in single-type clauses (#141).

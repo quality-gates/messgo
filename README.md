@@ -70,6 +70,10 @@ membership need to live in the repo:
 messgo ./... text path/to/team-policy.xml --ignore-tests
 ```
 
+Existing phpmd rulesets carry over: `rulesets/codesize.xml` and
+`rulesets/naming.xml/LongVariable` resolve to the built-in sets unless a real
+file exists at that path.
+
 ## Suppress one intentional exception
 
 messgo has no per-line disable comment yet. Drop a rule for the whole run with

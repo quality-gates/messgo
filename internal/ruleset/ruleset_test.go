@@ -1169,3 +1169,67 @@ func TestLoadCustomRulesetReferencingOpinionatedRule(t *testing.T) {
 		t.Fatalf("expected 1 rule UncheckedTypeAssertion, got %v", set.Rules)
 	}
 }
+
+func writeRulesetRefFile(t *testing.T, dir, ref string) string {
+	t.Helper()
+	path := filepath.Join(dir, "team.xml")
+	xml := fmt.Sprintf(`<ruleset name="team">
+  <rule ref=%q/>
+</ruleset>
+`, ref)
+	if err := os.WriteFile(path, []byte(xml), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	return path
+}
+
+func TestPhpmdCanonicalRulesetRefResolvesBuiltin(t *testing.T) {
+	t.Chdir(t.TempDir())
+	set := loadOne(t, writeRulesetRefFile(t, t.TempDir(), "rulesets/codesize.xml"))
+	want := loadOne(t, "codesize")
+	assertEquivalentRules(t, want, set)
+}
+
+func TestPhpmdCanonicalSingleRuleRefResolvesBuiltin(t *testing.T) {
+	t.Chdir(t.TempDir())
+	set := loadOne(t, writeRulesetRefFile(t, t.TempDir(), "rulesets/naming.xml/LongVariable"))
+	if len(set.Rules) != 1 || set.Rules[0].Name() != "LongVariable" {
+		t.Fatalf("expected only LongVariable, got %v", set.Rules)
+	}
+}
+
+func TestPhpmdCanonicalUnknownRuleRefErrors(t *testing.T) {
+	t.Chdir(t.TempDir())
+	_, err := (&Loader{}).Load(writeRulesetRefFile(t, t.TempDir(), "rulesets/naming.xml/NoSuchRule"))
+	if err == nil || !strings.Contains(err.Error(), `unknown rule "rulesets/naming.xml/NoSuchRule"`) {
+		t.Fatalf("err = %v, want unknown rule", err)
+	}
+}
+
+func TestPhpmdCanonicalRulesetSpecResolvesBuiltin(t *testing.T) {
+	t.Chdir(t.TempDir())
+	set := loadOne(t, "rulesets/naming.xml")
+	assertEquivalentRules(t, loadOne(t, "naming"), set)
+}
+
+func TestPhpmdCanonicalRulesetRefPrefersLocalFile(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.Mkdir(filepath.Join(dir, "rulesets"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	local := `<ruleset name="local">
+  <rule name="CyclomaticComplexity" class="PHPMD\Rule\CyclomaticComplexity"/>
+</ruleset>
+`
+	if err := os.WriteFile(filepath.Join(dir, "rulesets", "codesize.xml"), []byte(local), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	set := loadOne(t, writeRulesetRefFile(t, dir, "rulesets/codesize.xml"))
+	if len(set.Rules) != 1 || set.Rules[0].Name() != "CyclomaticComplexity" {
+		t.Fatalf("expected local file's single rule, got %v", set.Rules)
+	}
+	t.Chdir(dir)
+	if spec := loadOne(t, "rulesets/codesize.xml"); len(spec.Rules) != 1 {
+		t.Fatalf("CLI spec should prefer local file, got %v", spec.Rules)
+	}
+}

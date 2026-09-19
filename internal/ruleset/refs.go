@@ -231,7 +231,7 @@ func (s *loadSession) resolveRef(ref, fromDir string) (base, ruleName string) {
 }
 
 func resolvable(ident, fromDir string) bool {
-	if _, ok := builtinNames[ident]; ok {
+	if _, ok := builtinID(ident, fromDir); ok {
 		return true
 	}
 	_, err := os.Stat(resolvePath(ident, fromDir))

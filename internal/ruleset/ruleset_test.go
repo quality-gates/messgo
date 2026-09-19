@@ -1233,3 +1233,22 @@ func TestPhpmdCanonicalRulesetRefPrefersLocalFile(t *testing.T) {
 		t.Fatalf("CLI spec should prefer local file, got %v", spec.Rules)
 	}
 }
+
+func TestBuiltinIDRecognisesOnlyBuiltinForms(t *testing.T) {
+	dir := t.TempDir()
+	cases := map[string]string{
+		"codesize":                      "codesize",
+		"rulesets/codesize.xml":         "codesize",
+		"codesize.xml":                  "",
+		"rulesets/codesize":             "",
+		"rulesets/nosuch.xml":           "",
+		"other/codesize.xml":            "",
+		"rulesets/naming.xml/ShortName": "",
+	}
+	for ref, want := range cases {
+		got, ok := builtinID(ref, dir)
+		if got != want || ok != (want != "") {
+			t.Errorf("builtinID(%q) = %q, %v; want %q, %v", ref, got, ok, want, want != "")
+		}
+	}
+}

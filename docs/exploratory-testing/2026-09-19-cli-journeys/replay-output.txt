@@ -1,0 +1,19 @@
+== B1 --reportfile into missing directory (README example)
+error: open reports/messgo.sarif: no such file or directory
+exit=1
+ls: reports: No such file or directory
+== B2 phpmd-style rulesets/<name>.xml refs
+error: whole.xml: unknown ruleset or file "rulesets/codesize.xml": open <tmp>/rulesets/codesize.xml: no such file or directory
+exit=1
+error: single.xml: unknown ruleset or file "rulesets/naming.xml/LongVariable": open <tmp>/rulesets/naming.xml/LongVariable: no such file or directory
+exit=1
+== B3 <exclude-pattern> in ruleset XML
+gen/gen.go:3  DevelopmentCodeFragment  The function Generated() calls the typical debug function println() which is mostly only used during development.
+exit=2
+== B4 GitLab fingerprints collide
+{"total":2,"unique":1}
+== B5 ./... walks testdata/
+example.com/r/gen
+example.com/r/pkg
+testdata/fixture.go:3  DevelopmentCodeFragment  The function F() calls the typical debug function println() which is mostly only used during development.
+exit=2

@@ -6,6 +6,10 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 
 ## [Unreleased]
 
+### Added
+- Added an exploratory testing report for the CLI's gating, ruleset-tuning,
+  and report-format journeys, with a replay script for findings #150–#154.
+
 ### Fixed
 - Fixed `UnusedPrivateField` and `UnusedPrivateMethod` falsely flagging members
   used through the variable of a type switch (`switch v := x.(type)`): the

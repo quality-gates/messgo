@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 
@@ -223,6 +224,9 @@ func loadRuleSets(opt options, stderr io.Writer) ([]*rule.RuleSet, error) {
 func writeReport(rnd report.Renderer, opt options, rep *report.Report, stdout io.Writer) error {
 	out := stdout
 	if opt.reportFile != "" {
+		if err := os.MkdirAll(filepath.Dir(opt.reportFile), 0o755); err != nil {
+			return err
+		}
 		f, err := os.Create(opt.reportFile)
 		if err != nil {
 			return err

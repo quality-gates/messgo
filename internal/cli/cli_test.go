@@ -501,3 +501,59 @@ func TestSurplusPositional(t *testing.T) {
 		t.Errorf("expected empty stdout, got %q", out)
 	}
 }
+
+func TestReportFileMissingParentDir(t *testing.T) {
+	path := writeFixture(t, excessiveParamsSrc)
+	reportPath := filepath.Join(t.TempDir(), "reports", "sub", "messgo.txt")
+	code, out, errOut := runMain(t, path, "text", "codesize", "--reportfile", reportPath)
+	if code != ExitViolation {
+		t.Fatalf("exit = %d, want %d (out=%q err=%q)", code, ExitViolation, out, errOut)
+	}
+	if _, err := os.Stat(reportPath); err != nil {
+		t.Fatalf("report file was not created: %v", err)
+	}
+	parentInfo, err := os.Stat(filepath.Dir(reportPath))
+	if err != nil {
+		t.Fatalf("stat parent dir: %v", err)
+	}
+	if parentInfo.Mode().Perm() != 0o755 {
+		t.Errorf("parent dir permissions = %#o, want %#o", parentInfo.Mode().Perm(), 0o755)
+	}
+	content, err := os.ReadFile(reportPath)
+	if err != nil {
+		t.Fatalf("reading report file: %v", err)
+	}
+	if !strings.Contains(string(content), "ExcessiveParameterList") {
+		t.Errorf("report content does not contain expected violation: %q", string(content))
+	}
+}
+
+func TestReportFileExistingDir(t *testing.T) {
+	path := writeFixture(t, excessiveParamsSrc)
+	reportPath := filepath.Join(t.TempDir(), "messgo.txt")
+	code, out, errOut := runMain(t, path, "text", "codesize", "--reportfile", reportPath)
+	if code != ExitViolation {
+		t.Fatalf("exit = %d, want %d (out=%q err=%q)", code, ExitViolation, out, errOut)
+	}
+	if _, err := os.Stat(reportPath); err != nil {
+		t.Fatalf("report file was not created: %v", err)
+	}
+}
+
+func TestReportFileMkdirFailure(t *testing.T) {
+	path := writeFixture(t, excessiveParamsSrc)
+	tmp := t.TempDir()
+	filePath := filepath.Join(tmp, "file_blocking_dir")
+	if err := os.WriteFile(filePath, []byte("blocker"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	// filePath is a regular file, so creating filePath/sub/report.txt will fail in MkdirAll
+	reportPath := filepath.Join(filePath, "sub", "report.txt")
+	code, _, errOut := runMain(t, path, "text", "codesize", "--reportfile", reportPath)
+	if code != ExitError {
+		t.Fatalf("exit = %d, want %d (err=%q)", code, ExitError, errOut)
+	}
+	if !strings.Contains(errOut, "mkdir") {
+		t.Errorf("expected mkdir error on stderr, got %q", errOut)
+	}
+}

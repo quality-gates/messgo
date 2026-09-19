@@ -209,6 +209,62 @@ func TestDirectoryDiscoverySkipsHiddenAndUnderscoreDirectories(t *testing.T) {
 	}
 }
 
+func TestDirectoryDiscoverySkipsTestdataDirectory(t *testing.T) {
+	dir := t.TempDir()
+	for path, content := range map[string]string{
+		filepath.Join(dir, "testdata", "fixture.go"):    "package fixture\n",
+		filepath.Join(dir, "testdata", "sub", "sub.go"): "package sub\n",
+		filepath.Join(dir, "pkg", "code.go"):            "package pkg\n",
+	} {
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	t.Run("RecursiveSkipsTestdata", func(t *testing.T) {
+		files, err := discover(Options{Paths: []string{dir}, Suffixes: []string{".go"}})
+		if err != nil {
+			t.Fatalf("discover failed: %v", err)
+		}
+		if len(files) != 1 || filepath.Base(files[0]) != "code.go" || !strings.Contains(files[0], "pkg") {
+			t.Fatalf("discover returned unexpected files: %v, want only pkg/code.go", files)
+		}
+	})
+
+	t.Run("ExplicitFileAnalyzed", func(t *testing.T) {
+		explicitFile, err := discover(Options{Paths: []string{filepath.Join(dir, "testdata", "fixture.go")}, Suffixes: []string{".go"}})
+		if err != nil {
+			t.Fatalf("explicit discover file failed: %v", err)
+		}
+		if len(explicitFile) != 1 || filepath.Base(explicitFile[0]) != "fixture.go" {
+			t.Fatalf("explicit discover file failed: %v", explicitFile)
+		}
+	})
+
+	t.Run("ExplicitDirectoryAnalyzed", func(t *testing.T) {
+		explicitDir, err := discover(Options{Paths: []string{filepath.Join(dir, "testdata")}, Suffixes: []string{".go"}})
+		if err != nil {
+			t.Fatalf("explicit discover directory failed: %v", err)
+		}
+		if len(explicitDir) != 2 {
+			t.Fatalf("explicit discover directory failed: %v, want 2 files", explicitDir)
+		}
+	})
+
+	t.Run("WildcardPathAnalyzed", func(t *testing.T) {
+		wildcardDir, err := discover(Options{Paths: []string{filepath.Join(dir, "testdata", "...")}, Suffixes: []string{".go"}})
+		if err != nil {
+			t.Fatalf("wildcard discover failed: %v", err)
+		}
+		if len(wildcardDir) != 2 {
+			t.Fatalf("wildcard discover failed: %v, want 2 files", wildcardDir)
+		}
+	})
+}
+
 func TestDirectoryDiscoverySkipsHiddenAndUnderscoreFiles(t *testing.T) {
 	dir := t.TempDir()
 	src := "package fixture\ntype hidden struct {\n\tunused int\n}\n"
@@ -254,6 +310,7 @@ func TestShouldSkipDir(t *testing.T) {
 		{"_tools", true},
 		{"vendor", true},
 		{"node_modules", true},
+		{"testdata", true},
 		{"pkg", false},
 	}
 	for _, tt := range tests {

@@ -11,6 +11,10 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
   and report-format journeys, with a replay script for findings #150–#154.
 
 ### Fixed
+- Fixed recursive directory discovery scanning `testdata/` directories:
+  directory walking now skips directories named `testdata` by default matching
+  the Go toolchain convention, while explicitly targeted paths remain
+  analyzable (#154).
 - Fixed ruleset XML and command-line specs rejecting phpmd's canonical
   `rulesets/<name>.xml` and `rulesets/<name>.xml/<Rule>` references: they now
   resolve to the matching built-in ruleset or rule when no file exists at that

@@ -11,6 +11,10 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
   and report-format journeys, with a replay script for findings #150–#154.
 
 ### Fixed
+- Fixed GitLab Code Quality report emitting duplicate fingerprints for multiple
+  findings on the same line: fingerprints now incorporate the violation
+  description so that concurrent findings for the same rule have distinct
+  identifiers (#153).
 - Fixed `--reportfile` exiting 1 when the report's parent directory does not
   exist: missing parent directories are now created before the report is
   written, matching phpmd (#150).

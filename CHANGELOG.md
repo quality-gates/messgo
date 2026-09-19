@@ -11,6 +11,9 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
   and report-format journeys, with a replay script for findings #150–#154.
 
 ### Fixed
+- Fixed `--reportfile` exiting 1 when the report's parent directory does not
+  exist: missing parent directories are now created before the report is
+  written, matching phpmd (#150).
 - Fixed recursive directory discovery scanning `testdata/` directories:
   directory walking now skips directories named `testdata` by default matching
   the Go toolchain convention, while explicitly targeted paths remain

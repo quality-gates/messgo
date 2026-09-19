@@ -111,6 +111,7 @@ job with exit code `2`.
 
 Command reference: [docs/usage.md](docs/usage.md). Rulesets: [docs/rules.md](docs/rules.md).
 Homebrew release path: [docs/homebrew-release.md](docs/homebrew-release.md).
+Exploratory testing: [2026-09-19 CLI journeys](docs/exploratory-testing/2026-09-19-cli-journeys.md).
 
 Development checks:
 

@@ -501,3 +501,51 @@ func TestSurplusPositional(t *testing.T) {
 		t.Errorf("expected empty stdout, got %q", out)
 	}
 }
+
+func TestReportFileCreatesMissingParentDirs(t *testing.T) {
+	path := writeFixture(t, "package p\nfunc f(a, b, c, d, e, f2, g, h, i, j, k int) {}\n")
+	reportFile := filepath.Join(t.TempDir(), "reports", "nested", "messgo.txt")
+	code, out, errOut := runMain(t, path, "text", "codesize", "--reportfile", reportFile)
+	if code != ExitViolation {
+		t.Fatalf("exit = %d, want %d (stderr %q)", code, ExitViolation, errOut)
+	}
+	if out != "" {
+		t.Errorf("stdout = %q, want empty when --reportfile is set", out)
+	}
+	data, err := os.ReadFile(reportFile)
+	if err != nil {
+		t.Fatalf("report file not written: %v", err)
+	}
+	if !strings.Contains(string(data), "ExcessiveParameterList") {
+		t.Errorf("report file missing violation: %q", data)
+	}
+}
+
+func TestReportFileInExistingDir(t *testing.T) {
+	path := writeFixture(t, "package p\nfunc f(a int) int { return a }\n")
+	reportFile := filepath.Join(t.TempDir(), "messgo.txt")
+	code, _, errOut := runMain(t, path, "text", "codesize", "--reportfile", reportFile)
+	if code != ExitSuccess {
+		t.Fatalf("exit = %d, want %d (stderr %q)", code, ExitSuccess, errOut)
+	}
+	if _, err := os.Stat(reportFile); err != nil {
+		t.Errorf("report file not written: %v", err)
+	}
+}
+
+func TestReportFileParentIsFileExitsOne(t *testing.T) {
+	path := writeFixture(t, "package p\nfunc f(a int) int { return a }\n")
+	blocker := filepath.Join(t.TempDir(), "blocker")
+	if err := os.WriteFile(blocker, nil, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	reportFile := filepath.Join(blocker, "sub", "messgo.txt")
+	code, _, errOut := runMain(t, path, "text", "codesize", "--reportfile", reportFile)
+	if code != ExitError {
+		t.Fatalf("exit = %d, want %d", code, ExitError)
+	}
+	want := "mkdir " + blocker + ":"
+	if !strings.Contains(errOut, want) {
+		t.Errorf("stderr should report the failed directory creation %q: %q", want, errOut)
+	}
+}

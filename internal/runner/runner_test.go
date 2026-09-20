@@ -63,6 +63,12 @@ func TestShouldIncludeFileAppliesAllFileFilters(t *testing.T) {
 		{name: "ruleset glob keeps sibling", path: "proj/ok/o.go", opts: Options{Suffixes: []string{".go"}, RuleSets: excludePatternSets("*/gen/*")}, want: true},
 		{name: "ruleset globstar fixture", path: "pkg/fixture/x.go", opts: Options{Suffixes: []string{".go"}, RuleSets: excludePatternSets("*fixture*")}, want: false},
 		{name: "empty ruleset pattern does not match", path: "source.go", opts: Options{Suffixes: []string{".go"}, RuleSets: excludePatternSets("")}, want: true},
+		{name: "nil ruleset in list is skipped", path: "proj/ok/o.go", opts: Options{Suffixes: []string{".go"}, RuleSets: []*rule.RuleSet{nil, {ExcludePatterns: []string{"*/gen/*"}}}}, want: true},
+		{name: "nil ruleset does not stop later patterns", path: "proj/gen/g.go", opts: Options{Suffixes: []string{".go"}, RuleSets: []*rule.RuleSet{nil, {ExcludePatterns: []string{"*/gen/*"}}}}, want: false},
+		{name: "whitespace pattern still matches", path: "proj/gen/g.go", opts: Options{Suffixes: []string{".go"}, RuleSets: excludePatternSets("  */gen/*  ")}, want: false},
+		{name: "backslash path matches glob", path: `proj\gen\g.go`, opts: Options{Suffixes: []string{".go"}, RuleSets: excludePatternSets("*/gen/*")}, want: false},
+		{name: "suffix glob gen/*", path: "proj/gen/g.go", opts: Options{Suffixes: []string{".go"}, RuleSets: excludePatternSets("gen/*")}, want: false},
+		{name: "leading-slash glob on relative gen", path: "gen/g.go", opts: Options{Suffixes: []string{".go"}, RuleSets: excludePatternSets("*/gen/*")}, want: false},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -75,6 +81,69 @@ func TestShouldIncludeFileAppliesAllFileFilters(t *testing.T) {
 
 func excludePatternSets(patterns ...string) []*rule.RuleSet {
 	return []*rule.RuleSet{{ExcludePatterns: patterns}}
+}
+
+func TestMatchesIgnorePattern(t *testing.T) {
+	cases := []struct {
+		path, pattern string
+		want          bool
+	}{
+		{path: "proj/gen/g.go", pattern: "*/gen/*", want: true},
+		{path: "proj/ok/o.go", pattern: "*/gen/*", want: false},
+		{path: "proj/gen/g.go", pattern: "gen/*", want: true},
+		{path: "gen/g.go", pattern: "*/gen/*", want: true},
+		{path: "/proj/gen/g.go", pattern: "gen/*", want: true},
+		{path: "/proj/gen/g.go", pattern: "*/gen/*", want: true},
+		{path: `proj\gen\g.go`, pattern: "*/gen/*", want: true},
+		{path: "proj/gen/g.go", pattern: "  */gen/*  ", want: true},
+		{path: "proj/gen/g.go", pattern: "*/GEN/*", want: true},
+		{path: "pkg/fixture/x.go", pattern: "*fixture*", want: true},
+		{path: "source.go", pattern: "", want: false},
+		{path: "source.go", pattern: "   ", want: false},
+		{path: "foo/proj/gen/g.go", pattern: "proj/gen/*", want: true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.path+"~"+tc.pattern, func(t *testing.T) {
+			if got := matchesIgnorePattern(tc.path, tc.pattern); got != tc.want {
+				t.Fatalf("matchesIgnorePattern(%q, %q) = %v, want %v", tc.path, tc.pattern, got, tc.want)
+			}
+		})
+	}
+}
+
+func TestMatchesIgnorePatternViaAbsoluteDir(t *testing.T) {
+	dir := t.TempDir()
+	gen := filepath.Join(dir, "gen")
+	if err := os.Mkdir(gen, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	cwd, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chdir(gen); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chdir(cwd) })
+	if !matchesIgnorePattern("g.go", "*/gen/*") {
+		t.Fatal("basename in gen/ should match */gen/* via the absolute path")
+	}
+	if matchesIgnorePattern("g.go", "*/ok/*") {
+		t.Fatal("basename in gen/ should not match */ok/*")
+	}
+}
+
+func TestMatchIgnorePathLeadingSlashAlternative(t *testing.T) {
+	re := ignorePatternRegexp("*/gen/*")
+	if re == nil {
+		t.Fatal("pattern should compile")
+	}
+	if !matchIgnorePath(re, "gen/g.go") {
+		t.Fatal("*/gen/* should match gen/g.go via a leading-slash suffix")
+	}
+	if matchIgnorePath(re, "ok/o.go") {
+		t.Fatal("*/gen/* should not match ok/o.go")
+	}
 }
 
 func TestRunFiltersDiscoveredFiles(t *testing.T) {

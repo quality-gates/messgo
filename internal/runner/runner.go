@@ -282,14 +282,10 @@ func matchesIgnorePattern(path, pattern string) bool {
 	if re == nil {
 		return false
 	}
-	if matchIgnorePath(re, path) {
-		return true
+	if abs, err := filepath.Abs(path); err == nil {
+		path = abs
 	}
-	abs, err := filepath.Abs(path)
-	if err != nil || abs == path {
-		return false
-	}
-	return matchIgnorePath(re, abs)
+	return matchIgnorePath(re, path)
 }
 
 func ignorePatternRegexp(pattern string) *regexp.Regexp {
@@ -297,30 +293,27 @@ func ignorePatternRegexp(pattern string) *regexp.Regexp {
 	if pattern == "" {
 		return nil
 	}
-	quoted := regexp.QuoteMeta(filepath.ToSlash(pattern))
+	quoted := regexp.QuoteMeta(slashPath(pattern))
 	quoted = strings.ReplaceAll(quoted, `\*`, `.*`)
-	re, err := regexp.Compile("(?i)^(?:" + quoted + ")")
-	if err != nil {
-		return nil
-	}
-	return re
+	return regexp.MustCompile("(?i)^(?:" + quoted + ")")
 }
 
 func matchIgnorePath(re *regexp.Regexp, path string) bool {
-	path = filepath.ToSlash(path)
-	if re.MatchString(path) {
-		return true
-	}
+	path = slashPath(path)
 	for {
+		if re.MatchString(path) || re.MatchString("/"+path) {
+			return true
+		}
 		slash := strings.Index(path, "/")
 		if slash < 0 {
 			return false
 		}
 		path = path[slash+1:]
-		if re.MatchString(path) || re.MatchString("/"+path) {
-			return true
-		}
 	}
+}
+
+func slashPath(p string) string {
+	return strings.ReplaceAll(p, "\\", "/")
 }
 
 func shouldSkipDir(name string) bool {

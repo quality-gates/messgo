@@ -344,6 +344,7 @@ func TestNestedGoRefImportsRules(t *testing.T) {
 func TestLoadStoresExcludePatterns(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "excl.xml")
 	xml := `<ruleset name="r">
+  <description>skip generated files</description>
   <exclude-pattern>*/gen/*</exclude-pattern>
   <exclude-pattern>
     *fixture*
@@ -356,6 +357,12 @@ func TestLoadStoresExcludePatterns(t *testing.T) {
 		t.Fatal(err)
 	}
 	set := loadOne(t, path)
+	if set.Name != "r" {
+		t.Fatalf("Name = %q, want r", set.Name)
+	}
+	if set.Description != "skip generated files" {
+		t.Fatalf("Description = %q, want skip generated files", set.Description)
+	}
 	want := []string{"*/gen/*", "*fixture*"}
 	if !reflect.DeepEqual(set.ExcludePatterns, want) {
 		t.Fatalf("ExcludePatterns = %#v, want %#v", set.ExcludePatterns, want)

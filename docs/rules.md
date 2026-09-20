@@ -102,11 +102,13 @@ followed across files.
 ## Custom rulesets
 
 Ruleset XML supports phpmd's `<rule ref="...">` form, `<exclude name="..."/>`
-children, and single-rule property/priority overrides. Compose a tuned ruleset
-the same way phpmd does, then pass its path as the ruleset argument.
+children, `<exclude-pattern>` file globs, and single-rule property/priority
+overrides. Compose a tuned ruleset the same way phpmd does, then pass its path
+as the ruleset argument.
 
 ```xml
 <ruleset name="team policy">
+  <exclude-pattern>*/gen/*</exclude-pattern>
   <rule ref="go">
     <exclude name="DevelopmentCodeFragment" />
   </rule>

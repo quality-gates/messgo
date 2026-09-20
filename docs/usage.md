@@ -13,7 +13,8 @@ messgo <paths> <format> <ruleset[,ruleset...]> [options]
   `checkstyle`, or `sarif`.
 - **ruleset** — one or more built-in names or paths to phpmd-format ruleset XML.
   A property name a rule does not declare is ignored and writes a warning to
-  stderr, even without `--verbose`.
+  stderr, even without `--verbose`. `<exclude-pattern>` globs in a ruleset file
+  skip matching source paths, the same way phpmd does.
 
 `text` format prints one finding per line as `file:line  Rule  message`.
 

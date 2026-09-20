@@ -4,9 +4,10 @@ import "github.com/quality-gates/messgo/internal/model"
 
 // RuleSet is a named collection of rules (PHPMD\RuleSet).
 type RuleSet struct {
-	Name        string
-	Description string
-	Rules       []Rule
+	Name            string
+	Description     string
+	ExcludePatterns []string
+	Rules           []Rule
 }
 
 // Analyze runs all rules in all rule sets against a single parsed file and

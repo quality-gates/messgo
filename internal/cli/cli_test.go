@@ -549,3 +549,85 @@ func TestReportFileParentIsFileExitsOne(t *testing.T) {
 		t.Errorf("stderr should report the failed directory creation %q: %q", want, errOut)
 	}
 }
+
+func TestExcludePatternSkipsMatchingFiles(t *testing.T) {
+	dir := writeExcludePatternTree(t)
+	rules := writeRuleset(t, `<ruleset name="r">
+  <exclude-pattern>*/gen/*</exclude-pattern>
+  <rule ref="design/DevelopmentCodeFragment"/>
+</ruleset>`)
+	code, out, errOut := runMain(t, dir, "text", rules, "-v")
+	if strings.Contains(out, "Generated") {
+		t.Errorf("file matching exclude-pattern still reported: %q", out)
+	}
+	if !strings.Contains(out, "Fine") {
+		t.Errorf("non-matching file should still be analyzed: %q", out)
+	}
+	if code != ExitViolation {
+		t.Errorf("exit = %d, want %d (err=%q)", code, ExitViolation, errOut)
+	}
+}
+
+func TestExcludePatternAllFilesSkippedExitsZero(t *testing.T) {
+	dir := t.TempDir()
+	genDir := filepath.Join(dir, "gen")
+	if err := os.Mkdir(genDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(genDir, "gen.go"), []byte("package gen\n\nfunc Generated() { println(\"x\") }\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	rules := writeRuleset(t, `<ruleset name="r">
+  <exclude-pattern>*/gen/*</exclude-pattern>
+  <rule ref="design/DevelopmentCodeFragment"/>
+</ruleset>`)
+	code, out, errOut := runMain(t, filepath.Join(dir, "gen"), "text", rules)
+	if code != ExitSuccess {
+		t.Fatalf("exit = %d, want %d (out=%q err=%q)", code, ExitSuccess, out, errOut)
+	}
+	if out != "" {
+		t.Errorf("expected no violations, got %q", out)
+	}
+}
+
+func TestExcludePatternMultipleEntries(t *testing.T) {
+	dir := writeExcludePatternTree(t)
+	fixDir := filepath.Join(dir, "fixture")
+	if err := os.Mkdir(fixDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(fixDir, "fix.go"), []byte("package fixture\n\nfunc Fixture() { println(\"x\") }\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	rules := writeRuleset(t, `<ruleset name="r">
+  <exclude-pattern>*/gen/*</exclude-pattern>
+  <exclude-pattern>*fixture*</exclude-pattern>
+  <rule ref="design/DevelopmentCodeFragment"/>
+</ruleset>`)
+	code, out, errOut := runMain(t, dir, "text", rules)
+	if strings.Contains(out, "Generated") || strings.Contains(out, "Fixture") {
+		t.Errorf("excluded files still reported: %q", out)
+	}
+	if !strings.Contains(out, "Fine") {
+		t.Errorf("non-matching file should still be analyzed: %q", out)
+	}
+	if code != ExitViolation {
+		t.Errorf("exit = %d, want %d (err=%q)", code, ExitViolation, errOut)
+	}
+}
+
+func writeExcludePatternTree(t *testing.T) string {
+	t.Helper()
+	dir := t.TempDir()
+	genDir := filepath.Join(dir, "gen")
+	if err := os.Mkdir(genDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(genDir, "gen.go"), []byte("package gen\n\nfunc Generated() { println(\"x\") }\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "ok.go"), []byte("package p\n\nfunc Fine() { println(\"x\") }\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	return dir
+}

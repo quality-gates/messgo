@@ -70,10 +70,11 @@ func BuiltinNames() []string {
 // xml structures -----------------------------------------------------------
 
 type xmlRuleSet struct {
-	XMLName     xml.Name  `xml:"ruleset"`
-	Name        string    `xml:"name,attr"`
-	Description string    `xml:"description"`
-	Rules       []xmlRule `xml:"rule"`
+	XMLName         xml.Name  `xml:"ruleset"`
+	Name            string    `xml:"name,attr"`
+	Description     string    `xml:"description"`
+	ExcludePatterns []string  `xml:"exclude-pattern"`
+	Rules           []xmlRule `xml:"rule"`
 }
 
 type xmlRule struct {
@@ -449,8 +450,9 @@ func (s *loadSession) parse(data []byte, loc string) (*rule.RuleSet, error) {
 		return nil, err
 	}
 	set := &rule.RuleSet{
-		Name:        xrs.Name,
-		Description: strings.TrimSpace(xrs.Description),
+		Name:            xrs.Name,
+		Description:     strings.TrimSpace(xrs.Description),
+		ExcludePatterns: trimExcludePatterns(xrs.ExcludePatterns),
 	}
 	expander := newRefExpander(s, set)
 	if err := expander.enter(key); err != nil {
@@ -511,6 +513,17 @@ func excludeSet(excludes []xmlExclude) map[string]bool {
 		set[e.Name] = true
 	}
 	return set
+}
+
+func trimExcludePatterns(patterns []string) []string {
+	var out []string
+	for _, p := range patterns {
+		p = strings.TrimSpace(p)
+		if p != "" {
+			out = append(out, p)
+		}
+	}
+	return out
 }
 
 // mergeProps reads base properties then applies overrides on top.

@@ -6,6 +6,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strings"
 
@@ -256,7 +257,70 @@ func shouldIncludeFile(path string, opts Options) bool {
 	if opts.IgnoreTests && strings.HasSuffix(path, "_test.go") {
 		return false
 	}
-	return !isExcluded(path, opts.Exclude)
+	if isExcluded(path, opts.Exclude) {
+		return false
+	}
+	return !excludedByRuleset(path, opts.RuleSets)
+}
+
+func excludedByRuleset(path string, sets []*rule.RuleSet) bool {
+	for _, set := range sets {
+		if set == nil {
+			continue
+		}
+		for _, pattern := range set.ExcludePatterns {
+			if matchesIgnorePattern(path, pattern) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func matchesIgnorePattern(path, pattern string) bool {
+	re := ignorePatternRegexp(pattern)
+	if re == nil {
+		return false
+	}
+	if matchIgnorePath(re, path) {
+		return true
+	}
+	abs, err := filepath.Abs(path)
+	if err != nil || abs == path {
+		return false
+	}
+	return matchIgnorePath(re, abs)
+}
+
+func ignorePatternRegexp(pattern string) *regexp.Regexp {
+	pattern = strings.TrimSpace(pattern)
+	if pattern == "" {
+		return nil
+	}
+	quoted := regexp.QuoteMeta(filepath.ToSlash(pattern))
+	quoted = strings.ReplaceAll(quoted, `\*`, `.*`)
+	re, err := regexp.Compile("(?i)^(?:" + quoted + ")")
+	if err != nil {
+		return nil
+	}
+	return re
+}
+
+func matchIgnorePath(re *regexp.Regexp, path string) bool {
+	path = filepath.ToSlash(path)
+	if re.MatchString(path) {
+		return true
+	}
+	for {
+		slash := strings.Index(path, "/")
+		if slash < 0 {
+			return false
+		}
+		path = path[slash+1:]
+		if re.MatchString(path) || re.MatchString("/"+path) {
+			return true
+		}
+	}
 }
 
 func shouldSkipDir(name string) bool {

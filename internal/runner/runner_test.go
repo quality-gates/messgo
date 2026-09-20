@@ -59,6 +59,10 @@ func TestShouldIncludeFileAppliesAllFileFilters(t *testing.T) {
 		{name: "dot-prefix exclude misses sibling", path: "proj/ok/o.go", opts: Options{Suffixes: []string{".go"}, Exclude: []string{"./proj/gen"}}, want: true},
 		{name: "empty exclude does not match", path: "source.go", opts: Options{Suffixes: []string{".go"}, Exclude: []string{""}}, want: true},
 		{name: "unclean path still matches cleaned exclude", path: "proj/./gen/g.go", opts: Options{Suffixes: []string{".go"}, Exclude: []string{"proj/gen"}}, want: false},
+		{name: "ruleset glob excludes gen", path: "proj/gen/g.go", opts: Options{Suffixes: []string{".go"}, RuleSets: excludePatternSets("*/gen/*")}, want: false},
+		{name: "ruleset glob keeps sibling", path: "proj/ok/o.go", opts: Options{Suffixes: []string{".go"}, RuleSets: excludePatternSets("*/gen/*")}, want: true},
+		{name: "ruleset globstar fixture", path: "pkg/fixture/x.go", opts: Options{Suffixes: []string{".go"}, RuleSets: excludePatternSets("*fixture*")}, want: false},
+		{name: "empty ruleset pattern does not match", path: "source.go", opts: Options{Suffixes: []string{".go"}, RuleSets: excludePatternSets("")}, want: true},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -67,6 +71,10 @@ func TestShouldIncludeFileAppliesAllFileFilters(t *testing.T) {
 			}
 		})
 	}
+}
+
+func excludePatternSets(patterns ...string) []*rule.RuleSet {
+	return []*rule.RuleSet{{ExcludePatterns: patterns}}
 }
 
 func TestRunFiltersDiscoveredFiles(t *testing.T) {

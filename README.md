@@ -54,6 +54,7 @@ membership need to live in the repo:
 
 ```xml
 <ruleset name="team policy">
+  <exclude-pattern>*/gen/*</exclude-pattern>
   <rule ref="go">
     <exclude name="DevelopmentCodeFragment" />
   </rule>

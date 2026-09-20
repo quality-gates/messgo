@@ -11,6 +11,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
   and report-format journeys, with a replay script for findings #150–#154.
 
 ### Fixed
+- Fixed ruleset XML `<exclude-pattern>` being silently ignored: matching files
+  are now skipped during discovery, as in phpmd (#152).
 - Fixed GitLab Code Quality report emitting duplicate fingerprints for multiple
   findings on the same line: fingerprints now incorporate the violation
   description so that concurrent findings for the same rule have distinct

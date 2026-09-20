@@ -341,6 +341,30 @@ func TestNestedGoRefImportsRules(t *testing.T) {
 	}
 }
 
+func TestLoadStoresExcludePatterns(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "excl.xml")
+	xml := `<ruleset name="r">
+  <exclude-pattern>*/gen/*</exclude-pattern>
+  <exclude-pattern>
+    *fixture*
+  </exclude-pattern>
+  <exclude-pattern>  </exclude-pattern>
+  <rule ref="design/DevelopmentCodeFragment"/>
+</ruleset>
+`
+	if err := os.WriteFile(path, []byte(xml), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	set := loadOne(t, path)
+	want := []string{"*/gen/*", "*fixture*"}
+	if !reflect.DeepEqual(set.ExcludePatterns, want) {
+		t.Fatalf("ExcludePatterns = %#v, want %#v", set.ExcludePatterns, want)
+	}
+	if ruleByName(set, "DevelopmentCodeFragment") == nil {
+		t.Fatal("exclude-pattern must not drop rules")
+	}
+}
+
 func TestCustomRulesetSingleRuleOverrideAfterWholeRulesetRef(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "team.xml")
 	xml := `<ruleset name="team policy">

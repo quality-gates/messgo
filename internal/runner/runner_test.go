@@ -247,6 +247,55 @@ func TestMixedRelAbsPathsSharePackage(t *testing.T) {
 	}
 }
 
+func TestRunResolvesPromotedMembersAcrossPackageFiles(t *testing.T) {
+	dir := t.TempDir()
+	files := map[string]string{
+		"embedded.go": `package p
+
+type Embedded struct {
+	field int
+}
+
+func (e Embedded) Helper() int { return e.field }
+`,
+		"host.go": `package p
+
+type Host struct {
+	Embedded
+	other int
+}
+
+func (h Host) A() int { return h.other + 1 }
+func (h Host) B() int { return h.Helper() }
+func (h Host) C() int { return h.field * 2 }
+`,
+	}
+	for name, src := range files {
+		if err := os.WriteFile(filepath.Join(dir, name), []byte(src), 0o644); err != nil {
+			t.Fatalf("write %s: %v", name, err)
+		}
+	}
+
+	sets, err := (&ruleset.Loader{}).Load("design")
+	if err != nil {
+		t.Fatalf("load design ruleset: %v", err)
+	}
+	ruleset.FilterRules(sets, []string{"LackOfCohesionOfMethods"}, nil)
+	rep, err := Run(Options{Paths: []string{dir}, RuleSets: sets})
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	for _, v := range rep.Violations {
+		if v.Rule.Name() == "LackOfCohesionOfMethods" && v.Args[0].(string) == "Host" {
+			if got := v.Args[1].(int); got != 3 {
+				t.Fatalf("Host LCOM4 = %d, want 3", got)
+			}
+			return
+		}
+	}
+	t.Fatal("LackOfCohesionOfMethods did not report Host")
+}
+
 func TestDirectoryDiscoverySkipsHiddenAndUnderscoreDirectories(t *testing.T) {
 	dir := t.TempDir()
 	if err := os.MkdirAll(filepath.Join(dir, ".worktrees", "feature"), 0o755); err != nil {

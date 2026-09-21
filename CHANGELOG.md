@@ -11,6 +11,9 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
   and report-format journeys, with a replay script for findings #150–#154.
 
 ### Fixed
+- Fixed the pre-commit hook validating the working tree instead of the staged
+  tree: checks now run from a temporary export of the index and clean up that
+  export on exit (#173).
 - Fixed ruleset XML `<exclude-pattern>` being silently ignored: matching files
   are now skipped during discovery, as in phpmd (#152).
 - Fixed GitLab Code Quality report emitting duplicate fingerprints for multiple

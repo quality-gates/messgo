@@ -11,6 +11,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
   and report-format journeys, with a replay script for findings #150–#154.
 
 ### Fixed
+- Fixed `LackOfCohesionOfMethods` rebuilding the package type index for every
+  class: promoted-member analysis now builds the index once per package (#175).
 - Fixed exponential-time member and method lookup through diamond-embedded
   struct chains: each reachable type is now visited at most once per lookup
   (#174).

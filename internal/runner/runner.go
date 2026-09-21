@@ -98,9 +98,11 @@ func annotatePackageGroup(group []*model.File) {
 		pkgInterfaces = append(pkgInterfaces, f.Interfaces...)
 		pkgFunctions = append(pkgFunctions, f.Functions...)
 	}
+	pkgTypeIndex := model.NewPackageTypeIndex(pkgClasses, pkgInterfaces)
 	for _, f := range group {
 		f.PackageClasses = pkgClasses
 		f.PackageInterfaces = pkgInterfaces
+		f.PackageTypeIndex = pkgTypeIndex
 		f.PackageFunctions = pkgFunctions
 	}
 	attachPackageMethods(group, classByName, util.TypeAliasNames(asts))

@@ -2,6 +2,7 @@ package model
 
 import (
 	"strings"
+	"sync"
 )
 
 // PromotedMembers returns the names of all promoted fields and promoted methods
@@ -25,7 +26,7 @@ type promotedMemberCollector struct {
 }
 
 func newPromotedMemberCollector(c *Class) *promotedMemberCollector {
-	classByName, ifaceByName := c.packageTypeIndexes()
+	classByName, ifaceByName := c.File.packageTypeIndexes()
 	return &promotedMemberCollector{
 		classByName:     classByName,
 		ifaceByName:     ifaceByName,
@@ -123,24 +124,57 @@ func (c *promotedMemberCollector) processIfaceQueue(queue []*Interface) {
 	}
 }
 
-func (c *Class) packageTypeIndexes() (map[string]*Class, map[string]*Interface) {
-	classes := c.File.PackageClasses
-	if classes == nil {
-		classes = c.File.Classes
+// PackageTypeIndex is a lazily built index of named classes and interfaces.
+// A runner can share one index across all files in a package.
+type PackageTypeIndex struct {
+	once        sync.Once
+	classes     []*Class
+	interfaces  []*Interface
+	classByName map[string]*Class
+	ifaceByName map[string]*Interface
+}
+
+// NewPackageTypeIndex creates a package type index that builds its maps on
+// first use.
+func NewPackageTypeIndex(classes []*Class, interfaces []*Interface) *PackageTypeIndex {
+	return &PackageTypeIndex{classes: classes, interfaces: interfaces}
+}
+
+func (i *PackageTypeIndex) maps() (map[string]*Class, map[string]*Interface) {
+	i.once.Do(func() {
+		classByName := make(map[string]*Class, len(i.classes))
+		for _, cls := range i.classes {
+			classByName[cls.Name] = cls
+		}
+		ifaceByName := make(map[string]*Interface, len(i.interfaces))
+		for _, iface := range i.interfaces {
+			ifaceByName[iface.Name] = iface
+		}
+		i.classByName = classByName
+		i.ifaceByName = ifaceByName
+	})
+	return i.classByName, i.ifaceByName
+}
+
+func (f *File) packageTypeIndexes() (map[string]*Class, map[string]*Interface) {
+	if f == nil {
+		return map[string]*Class{}, map[string]*Interface{}
 	}
-	classByName := make(map[string]*Class, len(classes))
-	for _, cls := range classes {
-		classByName[cls.Name] = cls
+	if f.PackageTypeIndex != nil {
+		return f.PackageTypeIndex.maps()
 	}
-	ifaces := c.File.PackageInterfaces
-	if ifaces == nil {
-		ifaces = c.File.Interfaces
-	}
-	ifaceByName := make(map[string]*Interface, len(ifaces))
-	for _, iface := range ifaces {
-		ifaceByName[iface.Name] = iface
-	}
-	return classByName, ifaceByName
+	f.analysis.packageTypeIndexOnce.Do(func() {
+		classes := f.PackageClasses
+		if classes == nil {
+			classes = f.Classes
+		}
+		interfaces := f.PackageInterfaces
+		if interfaces == nil {
+			interfaces = f.Interfaces
+		}
+		f.analysis.packageTypeIndex = NewPackageTypeIndex(classes, interfaces)
+	})
+	return f.analysis.packageTypeIndex.maps()
 }
 
 func directFieldSet(fields []*Field) map[string]bool {

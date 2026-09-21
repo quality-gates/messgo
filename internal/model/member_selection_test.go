@@ -1,10 +1,12 @@
 package model
 
 import (
+	"fmt"
 	"go/ast"
 	"go/parser"
 	"go/token"
 	"slices"
+	"strings"
 	"testing"
 )
 
@@ -182,13 +184,65 @@ func (Root) child() Leaf { return Leaf{} }
 	if _, _, ok := resolver.lookupMember("Missing", "unknown", map[string]bool{}); ok {
 		t.Fatal("lookupMember(Missing, unknown) = true, want false")
 	}
-	visiting := map[string]bool{}
-	if _, _, ok := resolver.lookupMember("Root", "unknown", visiting); ok {
+	visited := map[string]bool{}
+	if _, _, ok := resolver.lookupMember("Root", "unknown", visited); ok {
 		t.Fatal("lookupMember(Root, unknown) = true, want false")
 	}
-	if len(visiting) != 0 {
-		t.Fatalf("lookupMember left visiting types = %v, want empty", visiting)
+	if len(visited) != 1 || !visited["Root"] {
+		t.Fatalf("lookupMember visited types = %v, want Root", visited)
 	}
+}
+
+func TestDiamondMemberAndMethodLookupVisitsEachTypeOnce(t *testing.T) {
+	const levels = 24
+
+	f, err := ParseSource("diamond.go", []byte(diamondLookupSource(levels)))
+	if err != nil {
+		t.Fatalf("ParseSource: %v", err)
+	}
+	collector := newMemberSelectionCollector(f)
+	root := fmt.Sprintf("F%d", levels)
+
+	memberVisited := map[string]bool{}
+	if _, path, ok := collector.types.lookupMember(root, "Missing", memberVisited); ok || path != nil {
+		t.Fatalf("lookupMember(%s, Missing) = (path %v, ok %v), want a failed lookup", root, path, ok)
+	}
+	if len(memberVisited) != levels+1 {
+		t.Fatalf("lookupMember visited %d types, want %d: %v", len(memberVisited), levels+1, memberVisited)
+	}
+
+	methodVisited := map[string]bool{}
+	if got := lookupMethod(collector.types.classes, collector.types.interfaces, root, "Missing", methodVisited); got != nil {
+		t.Fatalf("lookupMethod(%s, Missing) = %v, want nil", root, got)
+	}
+	if len(methodVisited) != levels+1 {
+		t.Fatalf("lookupMethod visited %d types, want %d: %v", len(methodVisited), levels+1, methodVisited)
+	}
+
+	_, path, ok := collector.types.lookupMember(root, "Z", map[string]bool{})
+	if !ok {
+		t.Fatal("lookupMember did not find promoted Z")
+	}
+	wantPath := make([]MemberKey, 0, levels+1)
+	for level := levels; level > 0; level-- {
+		wantPath = append(wantPath, MemberKey{
+			Type: fmt.Sprintf("F%d", level),
+			Name: fmt.Sprintf("F%d", level-1),
+		})
+	}
+	wantPath = append(wantPath, MemberKey{Type: "F0", Name: "Z"})
+	if !slices.Equal(path, wantPath) {
+		t.Fatalf("lookupMember(%s, Z) path = %v, want %v", root, path, wantPath)
+	}
+}
+
+func diamondLookupSource(levels int) string {
+	var source strings.Builder
+	source.WriteString("package sample\n\ntype F0 struct { Z int }\n")
+	for level := 1; level <= levels; level++ {
+		fmt.Fprintf(&source, "type F%d struct { F%d; F%d }\n", level, level-1, level-1)
+	}
+	return source.String()
 }
 
 func TestSelectedMemberUsesTrackPackageAndLocalScopes(t *testing.T) {
@@ -520,18 +574,18 @@ func makePair() (Leaf, Leaf) { return Leaf{}, Leaf{} }
 		})
 	}
 
-	visiting := map[string]bool{}
-	if got := lookupMethod(resolver.classes, resolver.interfaces, "Root", "Unknown", visiting); got != nil {
+	visited := map[string]bool{}
+	if got := lookupMethod(resolver.classes, resolver.interfaces, "Root", "Unknown", visited); got != nil {
 		t.Fatalf("lookupMethod(Unknown) = %v, want nil", got)
 	}
-	if len(visiting) != 0 {
-		t.Fatalf("visiting map was not cleared: %v", visiting)
+	if len(visited) != 1 || !visited["Root"] {
+		t.Fatalf("lookupMethod visited types = %v, want Root", visited)
 	}
-	if got := lookupMethod(resolver.classes, resolver.interfaces, "NonExistent", "Child", visiting); got != nil {
+	if got := lookupMethod(resolver.classes, resolver.interfaces, "NonExistent", "Child", visited); got != nil {
 		t.Fatalf("lookupMethod(NonExistent) = %v, want nil", got)
 	}
-	visitingCycle := map[string]bool{"Cycle": true}
-	if got := lookupMethod(resolver.classes, resolver.interfaces, "Cycle", "Child", visitingCycle); got != nil {
+	visitedCycle := map[string]bool{"Cycle": true}
+	if got := lookupMethod(resolver.classes, resolver.interfaces, "Cycle", "Child", visitedCycle); got != nil {
 		t.Fatalf("lookupMethod(visiting cycle) = %v, want nil", got)
 	}
 }

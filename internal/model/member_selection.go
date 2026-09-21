@@ -505,7 +505,6 @@ func lookupMethod(classes map[string]*Class, ifaces map[string]*Interface, typeN
 		return nil
 	}
 	visiting[typeName] = true
-	defer delete(visiting, typeName)
 
 	if class := classes[typeName]; class != nil {
 		if method := classMethod(classes, ifaces, class, methodName, visiting); method != nil {
@@ -574,7 +573,6 @@ func (c *memberTypeResolver) lookupMember(typeName, memberName string, visiting 
 		return memberVarType{}, nil, false
 	}
 	visiting[typeName] = true
-	defer delete(visiting, typeName)
 	if memberType, ok := directMemberType(class, memberName); ok {
 		return memberType, []MemberKey{{Type: typeName, Name: memberName}}, true
 	}

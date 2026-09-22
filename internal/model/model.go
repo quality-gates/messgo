@@ -70,6 +70,10 @@ type PackageScope struct {
 	// cross-file interface-satisfaction analysis. When nil (file analyzed in
 	// isolation), rules fall back to this file's own Interfaces.
 	PackageInterfaces []*Interface
+	// PackageTypeIndex is the lazily built type-name index shared by files in
+	// this package. It is populated by the runner after parsing. When nil, the
+	// file builds an isolated index from its own package scope.
+	PackageTypeIndex *PackageTypeIndex
 	// PackageFunctions holds all package-level free functions from every file
 	// in this file's package. It is populated by the runner after parsing,
 	// enabling cross-file call return-type resolution. When nil (file analyzed
@@ -87,14 +91,16 @@ type PackageScope struct {
 }
 
 type fileAnalysisCache struct {
-	selectedMembersOnce sync.Once
-	selectedMembers     map[string]bool
-	selectedMemberUses  map[MemberKey]bool
-	ifaceMethodsOnce    sync.Once
-	ifaceMethods        map[string]bool
-	ifaceMethodSigs     map[string][]*Function
-	effectiveLOCOnce    sync.Once
-	effectiveLOC        *metrics.EffectiveLOCIndex
+	selectedMembersOnce  sync.Once
+	selectedMembers      map[string]bool
+	selectedMemberUses   map[MemberKey]bool
+	packageTypeIndexOnce sync.Once
+	packageTypeIndex     *PackageTypeIndex
+	ifaceMethodsOnce     sync.Once
+	ifaceMethods         map[string]bool
+	ifaceMethodSigs      map[string][]*Function
+	effectiveLOCOnce     sync.Once
+	effectiveLOC         *metrics.EffectiveLOCIndex
 }
 
 // SelectedMemberNames returns a snapshot of field or method names selected or

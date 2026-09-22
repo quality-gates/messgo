@@ -6,6 +6,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 
 ## [Unreleased]
 
+## [0.4.6] - 2026-09-20
+
 ### Added
 - Added an exploratory testing report for the CLI's gating, ruleset-tuning,
   and report-format journeys, with a replay script for findings #150–#154.

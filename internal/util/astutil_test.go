@@ -100,6 +100,68 @@ func work(items []int) {
 	}
 }
 
+// TestMutatedGlobalNamesCallForms checks that delete, clear, copy and each
+// in-place sort change the package variable in their first argument, and that
+// calls which only read do not. A local variable with the name of an import is
+// not the package.
+func TestMutatedGlobalNamesCallForms(t *testing.T) {
+	f := parseFile(t, `
+package p
+
+import (
+	"slices"
+	s "sort"
+)
+
+var copied, sliced, sliceStable, sorted, stable, strs, ints, floats []int
+var slicesSorted, sortFunc, sortStableFunc, reversed []int
+var searched, sortedCopy, measured, shadowSorted []int
+var deleted, cleared = map[int]int{}, map[int]int{}
+
+type sorter struct{}
+
+func (sorter) Sort(xs []int) {}
+
+func shadow() {
+	slices := sorter{}
+	slices.Sort(shadowSorted)
+}
+
+func work(src []int, less func(i, j int) bool, cmp func(a, b int) int) {
+	delete(deleted, 1)
+	clear(cleared)
+	_ = len(measured)
+	copy(copied, src)
+	s.Slice(sliced, less)
+	s.SliceStable(sliceStable, less)
+	s.Sort(sorted)
+	s.Stable(stable)
+	s.Strings(strs)
+	s.Ints(ints)
+	s.Float64s(floats)
+	slices.Sort(slicesSorted)
+	slices.SortFunc(sortFunc, cmp)
+	slices.SortStableFunc(sortStableFunc, cmp)
+	slices.Reverse(reversed)
+	_ = s.SearchInts(searched, 1)
+	_ = slices.Sorted(slices.Values(sortedCopy))
+}
+`)
+
+	got := MutatedGlobalNames([]*ast.File{f})
+
+	for _, name := range []string{"deleted", "cleared", "copied", "sliced", "sliceStable", "sorted", "stable", "strs", "ints", "floats", "slicesSorted", "sortFunc", "sortStableFunc", "reversed"} {
+		if !got[name] {
+			t.Errorf("expected %q to be detected as mutated; got %v", name, got)
+		}
+	}
+	for _, name := range []string{"searched", "sortedCopy", "measured", "shadowSorted"} {
+		if got[name] {
+			t.Errorf("%q is only read; must not be detected as mutated; got %v", name, got)
+		}
+	}
+}
+
 func TestDefineIdentsSkipsRedeclaredIdentifiers(t *testing.T) {
 	file := parseFile(t, `
 package p
@@ -209,5 +271,46 @@ func TestResolveTypeAlias(t *testing.T) {
 		if got := ResolveTypeAlias(aliases, tt.in); got != tt.want {
 			t.Errorf("ResolveTypeAlias(%q) = %q, want %q", tt.in, got, tt.want)
 		}
+	}
+}
+
+func TestImportHelpers(t *testing.T) {
+	for _, tc := range []struct {
+		name        string
+		spec        *ast.ImportSpec
+		importPath  string
+		qualifier   string
+		wantMatches bool
+	}{
+		{name: "default name", spec: &ast.ImportSpec{}, importPath: "example.com/thing", qualifier: "thing", wantMatches: true},
+		{name: "explicit alias", spec: &ast.ImportSpec{Name: ast.NewIdent("o")}, importPath: "os", qualifier: "o", wantMatches: true},
+		{name: "mismatched name", spec: &ast.ImportSpec{}, importPath: "os", qualifier: "syscall"},
+		{name: "blank import", spec: &ast.ImportSpec{Name: ast.NewIdent("_")}, importPath: "os", qualifier: "_"},
+		{name: "dot import", spec: &ast.ImportSpec{Name: ast.NewIdent(".")}, importPath: "os", qualifier: "."},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := importMatchesQualifier(tc.spec, tc.importPath, tc.qualifier); got != tc.wantMatches {
+				t.Fatalf("importMatchesQualifier() = %t, want %t", got, tc.wantMatches)
+			}
+		})
+	}
+
+	for _, tc := range []struct {
+		name string
+		spec *ast.ImportSpec
+		want string
+		ok   bool
+	}{
+		{name: "nil spec"},
+		{name: "missing path", spec: &ast.ImportSpec{}},
+		{name: "invalid path literal", spec: &ast.ImportSpec{Path: &ast.BasicLit{Value: "os"}}},
+		{name: "quoted path", spec: &ast.ImportSpec{Path: &ast.BasicLit{Value: `"os"`}}, want: "os", ok: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got, ok := importPath(tc.spec)
+			if got != tc.want || ok != tc.ok {
+				t.Fatalf("importPath() = %q, %t; want %q, %t", got, ok, tc.want, tc.ok)
+			}
+		})
 	}
 }

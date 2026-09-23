@@ -1,0 +1,43 @@
+### Build 5b1d118 (before fix)
+== B1 (#179) copy / in-place sort: expect GlobalVariable for list and buf
+exit=0
+== B1 (#179) expect ImplicitInput for First (list) and Head (buf)
+b1/a.go:7   ImplicitOutput  The function Order() has an implicit output: package variable list. Return it instead.
+b1/a.go:13  ImplicitOutput  The function Fill() has an implicit output: package variable buf. Return it instead.
+exit=2
+== B2 (#180) <-ctx.Done(): expect ImplicitInput Wait and Control
+b2/a.go:7  ImplicitInput  The function Control() has an implicit input: receive from done. Pass it in as an argument.
+exit=2
+== B3 (#181) named map literal key: expect ImplicitInput Label and Control
+b3/a.go:5   ImplicitOutput  The function Bump() has an implicit output: package variable n. Return it instead.
+b3/a.go:11  ImplicitInput   The function Control() has an implicit input: package variable n. Pass it in as an argument.
+exit=2
+== O1 copy-on-write parameter (documented limit, still reported)
+o1/a.go:8  ImplicitOutput  The function Sorted() has an implicit output: write through parameter s. Return it instead.
+exit=2
+
+### Build 2e0d32e (after fix)
+== B1 (#179) copy / in-place sort: expect GlobalVariable for list and buf
+b1/a.go:5   GlobalVariable  Avoid using the mutable global variable list.
+b1/a.go:11  GlobalVariable  Avoid using the mutable global variable buf.
+exit=2
+== B1 (#179) expect ImplicitInput for First (list) and Head (buf)
+b1/a.go:7   ImplicitInput   The function Order() has an implicit input: package variable list. Pass it in as an argument.
+b1/a.go:7   ImplicitOutput  The function Order() has an implicit output: package variable list. Return it instead.
+b1/a.go:9   ImplicitInput   The function First() has an implicit input: package variable list. Pass it in as an argument.
+b1/a.go:13  ImplicitInput   The function Fill() has an implicit input: package variable buf. Pass it in as an argument.
+b1/a.go:13  ImplicitOutput  The function Fill() has an implicit output: package variable buf. Return it instead.
+b1/a.go:15  ImplicitInput   The function Head() has an implicit input: package variable buf. Pass it in as an argument.
+exit=2
+== B2 (#180) <-ctx.Done(): expect ImplicitInput Wait and Control
+b2/a.go:5  ImplicitInput  The function Wait() has an implicit input: receive from ctx. Pass it in as an argument.
+b2/a.go:7  ImplicitInput  The function Control() has an implicit input: receive from done. Pass it in as an argument.
+exit=2
+== B3 (#181) named map literal key: expect ImplicitInput Label and Control
+b3/a.go:5   ImplicitOutput  The function Bump() has an implicit output: package variable n. Return it instead.
+b3/a.go:9   ImplicitInput   The function Label() has an implicit input: package variable n. Pass it in as an argument.
+b3/a.go:11  ImplicitInput   The function Control() has an implicit input: package variable n. Pass it in as an argument.
+exit=2
+== O1 copy-on-write parameter (documented limit, still reported)
+o1/a.go:8  ImplicitOutput  The function Sorted() has an implicit output: write through parameter s. Return it instead.
+exit=2

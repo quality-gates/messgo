@@ -5,8 +5,6 @@ import (
 	"go/constant"
 	"go/token"
 	"maps"
-	"path"
-	"strconv"
 
 	"github.com/quality-gates/messgo/internal/util"
 )
@@ -81,7 +79,7 @@ func callDetails(file *File, ce *ast.CallExpr) Call {
 	call := Call{Name: calleeName(ce.Fun), Line: file.Fset.Position(ce.Pos()).Line}
 	if selector, ok := calledSelector(ce.Fun); ok {
 		call.Selector = selector.Sel.Name
-		call.PackagePath = importedPackagePath(file, packageQualifier(selector.X))
+		call.PackagePath = ImportedPackagePath(file, packageQualifier(selector.X))
 	}
 	return call
 }
@@ -112,44 +110,17 @@ func packageQualifier(expr ast.Expr) *ast.Ident {
 	}
 }
 
-func importedPackagePath(file *File, qualifier *ast.Ident) string {
+// ImportedPackagePath returns the import path that qualifier names in file, or
+// "" if qualifier is not an imported package name.
+func ImportedPackagePath(file *File, qualifier *ast.Ident) string {
 	if !resolvableImportQualifier(file, qualifier) {
 		return ""
 	}
-	for _, spec := range file.Syntax.Imports {
-		importPath, ok := importPath(spec)
-		if !ok {
-			continue
-		}
-		if !importMatchesQualifier(spec, importPath, qualifier.Name) {
-			continue
-		}
-		return importPath
-	}
-	return ""
+	return util.ImportedPath(file.Syntax, qualifier.Name)
 }
 
 func resolvableImportQualifier(file *File, qualifier *ast.Ident) bool {
 	return file != nil && file.Syntax != nil && qualifier != nil && qualifier.Obj == nil
-}
-
-func importMatchesQualifier(spec *ast.ImportSpec, importPath, qualifierName string) bool {
-	localName := path.Base(importPath)
-	if spec.Name != nil {
-		localName = spec.Name.Name
-	}
-	return localName != "_" && localName != "." && localName == qualifierName
-}
-
-func importPath(spec *ast.ImportSpec) (string, bool) {
-	if spec == nil || spec.Path == nil {
-		return "", false
-	}
-	value, err := strconv.Unquote(spec.Path.Value)
-	if err != nil {
-		return "", false
-	}
-	return value, true
 }
 
 // LoopConditionCalls returns calls to selected names found in for-loop

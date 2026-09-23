@@ -3,6 +3,8 @@ package util
 import (
 	"go/ast"
 	"go/token"
+	"path"
+	"strconv"
 )
 
 // LocalVar is a variable declared inside a function body.
@@ -144,7 +146,8 @@ func identOf(e ast.Expr) *ast.Ident {
 // mutated somewhere across the given files (the files of a single package).
 // A variable is "mutated" if it is reassigned (`=`, `+=`, ...), incremented or
 // decremented, has a field/element written through it (`g.f = x`, `g[k] = v`),
-// or has its address taken (`&g`). Short variable declarations (`:=`) introduce
+// is changed by delete, clear, copy or an in-place sort (`sort.Ints(g)`), or
+// has its address taken (`&g`). Short variable declarations (`:=`) introduce
 // locals and are ignored, as are the variables' own initializers (which are
 // declarations, not assignments). The result is intersected with the names
 // actually declared as package-level vars, so locals never appear.
@@ -168,7 +171,7 @@ func MutatedGlobalNames(files []*ast.File) map[string]bool {
 // anywhere in f.
 func collectMutations(f *ast.File, globals map[string]bool, topSpecs map[any]bool, mutated map[string]bool) {
 	mark := func(e ast.Expr) {
-		id := rootIdent(e)
+		id := RootIdent(e)
 		if id == nil || !globals[id.Name] {
 			return
 		}
@@ -178,16 +181,16 @@ func collectMutations(f *ast.File, globals map[string]bool, topSpecs map[any]boo
 		mutated[id.Name] = true
 	}
 	ast.Inspect(f, func(n ast.Node) bool {
-		markMutation(n, mark)
+		markMutation(f, n, mark)
 		return true
 	})
 }
 
 // markMutation calls mark on the lvalue(s) of any node that mutates a variable:
 // assignment (excluding ":=", which introduces locals), increment/decrement,
-// address-of, delete/clear of a map, and a range clause that assigns into
-// existing variables.
-func markMutation(n ast.Node, mark func(ast.Expr)) {
+// address-of, delete/clear of a map, copy into a slice, an in-place sort, and a
+// range clause that assigns into existing variables.
+func markMutation(f *ast.File, n ast.Node, mark func(ast.Expr)) {
 	switch s := n.(type) {
 	case *ast.AssignStmt:
 		if s.Tok == token.DEFINE {
@@ -205,7 +208,7 @@ func markMutation(n ast.Node, mark func(ast.Expr)) {
 	case *ast.RangeStmt:
 		markRangeAssign(s, mark)
 	case *ast.CallExpr:
-		markDeleteOrClear(s, mark)
+		markFirstArgChange(f, s, mark)
 	}
 }
 
@@ -217,15 +220,77 @@ func markRangeAssign(s *ast.RangeStmt, mark func(ast.Expr)) {
 	mark(s.Value)
 }
 
-func markDeleteOrClear(call *ast.CallExpr, mark func(ast.Expr)) {
-	id, ok := call.Fun.(*ast.Ident)
-	if !ok || (id.Name != "delete" && id.Name != "clear") {
-		return
-	}
+// InPlaceSorts are standard library functions that change the order of the
+// elements of their first argument.
+var InPlaceSorts = map[string]bool{
+	"sort.Slice": true, "sort.SliceStable": true, "sort.Sort": true,
+	"sort.Stable": true, "sort.Strings": true, "sort.Ints": true,
+	"sort.Float64s": true, "slices.Sort": true, "slices.SortFunc": true,
+	"slices.SortStableFunc": true, "slices.Reverse": true,
+}
+
+// markFirstArgChange calls mark on the first argument of a call that changes
+// the data of that argument: delete, clear, copy, or an in-place sort.
+func markFirstArgChange(f *ast.File, call *ast.CallExpr, mark func(ast.Expr)) {
 	if len(call.Args) == 0 {
 		return
 	}
-	mark(call.Args[0])
+	switch fun := call.Fun.(type) {
+	case *ast.Ident:
+		if fun.Name == "delete" || fun.Name == "clear" || fun.Name == "copy" {
+			mark(call.Args[0])
+		}
+	case *ast.SelectorExpr:
+		if InPlaceSorts[QualifiedName(f, fun)] {
+			mark(call.Args[0])
+		}
+	}
+}
+
+// QualifiedName returns the import path and name of a package member, for
+// example "net/http.Get", or "" if sel is not a member of a package that f
+// imports.
+func QualifiedName(f *ast.File, sel *ast.SelectorExpr) string {
+	qualifier, ok := sel.X.(*ast.Ident)
+	if !ok || qualifier.Obj != nil {
+		return ""
+	}
+	pkg := ImportedPath(f, qualifier.Name)
+	if pkg == "" {
+		return ""
+	}
+	return pkg + "." + sel.Sel.Name
+}
+
+// ImportedPath returns the path of the package that f imports as name, or ""
+// if f does not import a package with that name.
+func ImportedPath(f *ast.File, name string) string {
+	for _, spec := range f.Imports {
+		importPath, ok := importPath(spec)
+		if ok && importMatchesQualifier(spec, importPath, name) {
+			return importPath
+		}
+	}
+	return ""
+}
+
+func importMatchesQualifier(spec *ast.ImportSpec, importPath, qualifierName string) bool {
+	localName := path.Base(importPath)
+	if spec.Name != nil {
+		localName = spec.Name.Name
+	}
+	return localName != "_" && localName != "." && localName == qualifierName
+}
+
+func importPath(spec *ast.ImportSpec) (string, bool) {
+	if spec == nil || spec.Path == nil {
+		return "", false
+	}
+	value, err := strconv.Unquote(spec.Path.Value)
+	if err != nil {
+		return "", false
+	}
+	return value, true
 }
 
 // topLevelVarNames collects the names declared in package-level `var`
@@ -265,10 +330,10 @@ func collectValueSpecVars(spec ast.Spec, names map[string]bool, specs map[any]bo
 	}
 }
 
-// rootIdent peels selector, index, star and paren wrappers off an lvalue to its
+// RootIdent peels selector, index, star and paren wrappers off an lvalue to its
 // leading identifier: x, x.f, x[i], *x, (x) all reduce to x. Returns nil if the
 // expression is not rooted at an identifier.
-func rootIdent(e ast.Expr) *ast.Ident {
+func RootIdent(e ast.Expr) *ast.Ident {
 	for {
 		switch t := e.(type) {
 		case *ast.Ident:

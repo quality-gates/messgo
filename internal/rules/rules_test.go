@@ -1246,6 +1246,32 @@ func reset() { clear(cache) }
 	mustHave(t, hits, "GlobalVariable")
 }
 
+func TestGlobalVariableFlagsCopy(t *testing.T) {
+	hits := analyze(t, `
+var buf = make([]byte, 4)
+func fill(src []byte) { copy(buf, src) }
+`, "design")
+	mustHave(t, hits, "GlobalVariable")
+}
+
+func TestGlobalVariableFlagsInPlaceSort(t *testing.T) {
+	hits := analyze(t, `
+import s "sort"
+var list = []int{2, 1}
+func order() { s.Ints(list) }
+`, "design")
+	mustHave(t, hits, "GlobalVariable")
+}
+
+func TestGlobalVariableIgnoresSortOfCopy(t *testing.T) {
+	hits := analyze(t, `
+import "slices"
+var list = []int{2, 1}
+func sorted() []int { return slices.Sorted(slices.Values(list)) }
+`, "design")
+	mustNotHave(t, hits, "GlobalVariable")
+}
+
 func TestGlobalVariableIgnoresReadOnlyCall(t *testing.T) {
 	hits := analyze(t, `
 var cache = map[string]int{"x": 1}

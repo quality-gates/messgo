@@ -11,7 +11,7 @@ import (
 )
 
 var leafBuiltinRulesets = []string{
-	"cleancode", "codesize", "controversial", "design", "naming", "opinionated", "unusedcode",
+	"cleancode", "codesize", "controversial", "design", "explicitness", "naming", "opinionated", "unusedcode",
 }
 
 type refExpander struct {

@@ -15,6 +15,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
   `panic` and `recover`. The `explicitness-strict` ruleset also flags receiver
   reads, receiver method calls, writes through pointer receivers, and writes
   to elements or pointer targets of value receivers (`include-receiver=true`).
+- Added an exploratory testing report for the explicitness rulesets, with a
+  replay script for findings #179–#181.
 
 ### Fixed
 - Fixed `GlobalVariable` missing package variables that only `copy` or an

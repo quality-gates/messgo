@@ -14,9 +14,30 @@ fail() {
     exit 1
 }
 
+tree=
+tmp_dir=
+cleanup() {
+    if [ -n "$tree" ]; then
+        rm -rf "$tree"
+    fi
+    if [ -n "$tmp_dir" ]; then
+        rm -rf "$tmp_dir"
+    fi
+}
+trap cleanup EXIT
+trap 'exit 129' HUP
+trap 'exit 130' INT
+trap 'exit 143' TERM
+
 need() {
     command -v "$1" >/dev/null 2>&1 || fail "$1 not found. Install with: $2"
 }
+
+tree=$(mktemp -d "${TMPDIR:-/tmp}/messgo-pre-commit.XXXXXX") || fail "mktemp failed"
+git checkout-index --all --prefix="$tree/" || fail "failed to export staged tree"
+git_env=$(git rev-parse --local-env-vars) || fail "failed to read git environment"
+unset $git_env
+cd "$tree" || fail "failed to enter staged tree"
 
 echo "pre-commit: gofmt -s"
 fmt_out=$(gofmt -s -l .)
@@ -48,7 +69,6 @@ go test ./... || fail "go test failed"
 
 echo "pre-commit: messgo self-analysis"
 tmp_dir=$(mktemp -d) || fail "mktemp failed"
-trap 'rm -rf "$tmp_dir"' EXIT
 go build -o "$tmp_dir/messgo" ./cmd/messgo || fail "failed to build messgo for self-analysis"
 "$tmp_dir/messgo" ./internal text go,codesize --ignore-tests || fail "messgo self-analysis found violations"
 

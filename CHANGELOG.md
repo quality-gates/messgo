@@ -6,6 +6,16 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 
 ## [Unreleased]
 
+### Added
+- Added the opt-in `explicitness` ruleset with the `ImplicitInput` and
+  `ImplicitOutput` rules. They flag data that goes into a function from a
+  source that is not an argument, and data that comes out by a path that is
+  not a return value: mutable package variables, writes to data that a
+  parameter shares with the caller, channels, streams, standard library I/O,
+  `panic` and `recover`. The `explicitness-strict` ruleset also flags receiver
+  reads, receiver method calls, writes through pointer receivers, and writes
+  to elements or pointer targets of value receivers (`include-receiver=true`).
+
 ## [0.4.6] - 2026-09-20
 
 ### Added

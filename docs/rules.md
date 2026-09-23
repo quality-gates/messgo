@@ -13,6 +13,8 @@ phpmd-format ruleset XML file.
 | `design` | ExitExpression, GotoStatement, CountInLoopExpression, DevelopmentCodeFragment, EmptyCatchBlock, CouplingBetweenObjects, GlobalVariable, LackOfCohesionOfMethods |
 | `controversial` | CamelCaseClassName, CamelCaseMethodName, CamelCasePropertyName, CamelCaseParameterName, CamelCaseVariableName |
 | `opinionated` | **Opt-in, not part of idiomatic Go.** Bundles the rules the `go` ruleset deliberately drops because they fight Go conventions: `ElseExpression`, `BooleanArgumentFlag`, `IfStatementAssignment`, `UnusedFormalParameter`, and `GlobalVariable`. Also includes Go-specific opinionated rules: `UncheckedTypeAssertion`, `IdenticalBranches`, `StructEmbeddingDepth`. Run them if you want a stricter, more PHP-flavoured style. |
+| `explicitness` | **Opt-in.** `ImplicitInput` and `ImplicitOutput`: data that goes into a function from a source that is not an argument, or comes out by a path that is not a return value (see "Grokking Simplicity", chapter 3). The receiver of a method is exempt. |
+| `explicitness-strict` | **Opt-in.** The `explicitness` rules with `include-receiver=true`: reads of the receiver are implicit inputs, and writes through a pointer receiver are implicit outputs. |
 
 Rules with a direct Go analog reproduce phpmd's behavior and message templates;
 rules that are intrinsically PHP-specific are adapted to the nearest Go idiom
@@ -98,6 +100,35 @@ are textually identical, indicating copy-pasted logic.
 chain exceeds `maxdepth` (default 3). Cross-package embeddings are treated as
 depth-0 leaves (the AST alone cannot resolve them); within-package chains are
 followed across files.
+
+`ImplicitInput` and `ImplicitOutput` (explicitness) find the implicit inputs
+and outputs of a function. An argument is an explicit input, and a return value
+is an explicit output. The rules flag:
+
+| | Input | Output |
+| :--- | :--- | :--- |
+| Package variable | a read, if the package changes the variable | a write, or `&v` |
+| Parameter | — | a write through a pointer, slice, map or variadic parameter, including `delete`, `clear`, `copy` and in-place sorts; a write to an element or pointer target in any other parameter (`p.m[k] = v`, `*p.ptr = v`) |
+| Channel not declared in the function | a receive, or a range over a channel parameter | a send |
+| Stream | `fmt.Fscan*`, `io.ReadAll`, `io.ReadFull`, `io.ReadAtLeast`, `io.Copy*` | `fmt.Fprint*`, `io.WriteString`, `io.Copy*` |
+| Standard library environment | for example `os.Getenv`, `os.ReadFile`, `time.Now`, `time.After`, `math/rand`, `crypto/rand`, `flag.Args`, `os/exec.Command`, `net.Dial`, `net/http.Get` | for example `fmt.Println`, `log`, `log/slog`, `os.Stdout`, `os.WriteFile`, `os.Exit`, `os.Setenv`, `os/exec.Command`, `net.Dial`, `net/http.Get` |
+| Builtins | `recover()` | `panic()` |
+| Receiver (`include-receiver`) | a read of the receiver or a receiver field, or a call to a receiver method | a write through a pointer receiver; a write to an element or pointer target in a value receiver (`c.m[k] = v`) |
+
+Each different input or output is reported once per function, at its first
+line. The analysis uses only the syntax tree, thus it does not see:
+
+- effects inside called functions, and effects of methods on values (for
+  example `db.Query` or `w.Write`);
+- writes through an alias (`q := p; q.x = v`), or through a pointer field
+  without `*` (`p.ptr.x = v`);
+- a range over a channel that is not a parameter;
+- a function literal that initialises a package variable
+  (`var f = func() { ... }`);
+- an unaliased `math/rand/v2` import.
+
+For the same reason, a write to an array element in a copied struct
+(`p.arr[0] = v`) is reported as a write to shared data.
 
 ## Custom rulesets
 

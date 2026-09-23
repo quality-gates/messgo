@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+
+<ruleset name="Explicitness Strict Rules"
+         xmlns="http://pmd.sf.net/ruleset/1.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:noNamespaceSchemaLocation="http://pmd.sf.net/ruleset_xml_schema.xsd">
+
+    <description>
+The `explicitness` rules with include-receiver=true. A method that reads its
+receiver has an implicit input. A method that writes through a pointer
+receiver has an implicit output.
+
+Run with:  messgo &lt;paths&gt; &lt;format&gt; explicitness-strict
+    </description>
+
+    <rule ref="explicitness/ImplicitInput">
+        <properties>
+            <property name="include-receiver" value="true"/>
+        </properties>
+    </rule>
+    <rule ref="explicitness/ImplicitOutput">
+        <properties>
+            <property name="include-receiver" value="true"/>
+        </properties>
+    </rule>
+
+</ruleset>

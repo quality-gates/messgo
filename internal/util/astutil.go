@@ -168,7 +168,7 @@ func MutatedGlobalNames(files []*ast.File) map[string]bool {
 // anywhere in f.
 func collectMutations(f *ast.File, globals map[string]bool, topSpecs map[any]bool, mutated map[string]bool) {
 	mark := func(e ast.Expr) {
-		id := rootIdent(e)
+		id := RootIdent(e)
 		if id == nil || !globals[id.Name] {
 			return
 		}
@@ -265,10 +265,10 @@ func collectValueSpecVars(spec ast.Spec, names map[string]bool, specs map[any]bo
 	}
 }
 
-// rootIdent peels selector, index, star and paren wrappers off an lvalue to its
+// RootIdent peels selector, index, star and paren wrappers off an lvalue to its
 // leading identifier: x, x.f, x[i], *x, (x) all reduce to x. Returns nil if the
 // expression is not rooted at an identifier.
-func rootIdent(e ast.Expr) *ast.Ident {
+func RootIdent(e ast.Expr) *ast.Ident {
 	for {
 		switch t := e.(type) {
 		case *ast.Ident:

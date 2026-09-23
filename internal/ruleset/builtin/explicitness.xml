@@ -1,0 +1,117 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+
+<ruleset name="Explicitness Rules"
+         xmlns="http://pmd.sf.net/ruleset/1.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:noNamespaceSchemaLocation="http://pmd.sf.net/ruleset_xml_schema.xsd">
+
+    <description>
+Opt-in checks for implicit inputs and implicit outputs (see "Grokking
+Simplicity", chapter 3). The explicit inputs of a function are its arguments.
+The explicit output of a function is its return value. All other data that goes
+into or comes out of a function is implicit, and makes the function an action.
+
+These rules are not part of the default `go` ruleset. The methods of a type can
+use their receiver freely. Use `explicitness-strict` to also flag receiver
+reads and writes.
+
+Run with:  messgo &lt;paths&gt; &lt;format&gt; explicitness
+    </description>
+
+    <rule name="ImplicitInput"
+          since="0.5.0"
+          class="messgo\Rule\ImplicitInput"
+          message="The {0} {1}() has an implicit input: {2}. Pass it in as an argument.">
+        <description>
+            <![CDATA[
+A Go-specific rule (no PHPMD analog). Flags data that goes into a function from
+a source that is not an argument:
+
+- a read of a package variable that the package changes (a package variable
+  that no code changes is a constant, thus it is not flagged);
+- a receive from a channel that the function does not declare;
+- a read from a stream with fmt.Fscan*, io.ReadAll, io.ReadFull,
+  io.ReadAtLeast or io.Copy*;
+- a standard library call that reads the environment, for example os.Getenv,
+  os.ReadFile, time.Now, time.After, math/rand.Intn, flag.Args, os/exec.Command,
+  net.Dial or net/http.Get;
+- recover();
+- with include-receiver, a read of the receiver or of a receiver field, or a
+  call to a method of the receiver.
+
+The analysis uses only the syntax tree. It does not follow calls into other
+functions, it does not see effects of methods on values (for example
+db.Query), and it does not follow aliases (q := p).
+            ]]>
+        </description>
+        <priority>3</priority>
+        <properties>
+            <property name="include-receiver"
+                      description="Also report reads of the receiver of a method." />
+        </properties>
+        <example>
+            <![CDATA[
+var rate = 0.2
+
+func SetRate(r float64) { rate = r }
+
+// implicit input: package variable rate
+func Tax(amount float64) float64 { return amount * rate }
+
+// explicit: the rate is an argument
+func Tax(amount, rate float64) float64 { return amount * rate }
+            ]]>
+        </example>
+    </rule>
+
+    <rule name="ImplicitOutput"
+          since="0.5.0"
+          class="messgo\Rule\ImplicitOutput"
+          message="The {0} {1}() has an implicit output: {2}. Return it instead.">
+        <description>
+            <![CDATA[
+A Go-specific rule (no PHPMD analog). Flags data that comes out of a function by
+a path that is not a return value:
+
+- a write to a package variable, or &v of a package variable;
+- a write through a pointer, slice, map or variadic parameter (*p = v,
+  p.f = v, s[i] = v, delete(m, k), copy(s, v), sort.Ints(s));
+- a write to an element or a pointer target in any other parameter
+  (p.m[k] = v, *p.ptr = v);
+- a send on a channel that the function does not declare;
+- a write to a stream with fmt.Fprint* or io.WriteString, io.Copy*;
+- a standard library call that changes the environment, for example
+  fmt.Println, log.Printf, os.Stdout, os.WriteFile, os.Exit, os.Setenv,
+  os/exec.Command or net.Dial;
+- panic();
+- with include-receiver, a write through a pointer receiver, or a write to an
+  element or a pointer target in a value receiver (c.m[k] = v). A write to a
+  field of a value receiver changes only a copy, thus it is not flagged.
+
+A new value for a parameter (p = v) changes only the local copy, thus it is
+not flagged. The analysis uses only the syntax tree. It does not follow calls
+into other functions, it does not see effects of methods on values (for
+example w.Write), and it does not follow aliases (q := p). It cannot see if an
+index is into an array, thus it also flags a write to an array element in a
+copied struct.
+            ]]>
+        </description>
+        <priority>3</priority>
+        <properties>
+            <property name="include-receiver"
+                      description="Also report writes through the receiver of a method." />
+        </properties>
+        <example>
+            <![CDATA[
+var total int
+
+// implicit output: package variable total
+func Add(n int) { total += n }
+
+// explicit: the new total is the return value
+func Add(total, n int) int { return total + n }
+            ]]>
+        </example>
+    </rule>
+
+</ruleset>

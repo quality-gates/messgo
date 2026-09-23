@@ -81,7 +81,7 @@ func callDetails(file *File, ce *ast.CallExpr) Call {
 	call := Call{Name: calleeName(ce.Fun), Line: file.Fset.Position(ce.Pos()).Line}
 	if selector, ok := calledSelector(ce.Fun); ok {
 		call.Selector = selector.Sel.Name
-		call.PackagePath = importedPackagePath(file, packageQualifier(selector.X))
+		call.PackagePath = ImportedPackagePath(file, packageQualifier(selector.X))
 	}
 	return call
 }
@@ -112,7 +112,9 @@ func packageQualifier(expr ast.Expr) *ast.Ident {
 	}
 }
 
-func importedPackagePath(file *File, qualifier *ast.Ident) string {
+// ImportedPackagePath returns the import path that qualifier names in file, or
+// "" if qualifier is not an imported package name.
+func ImportedPackagePath(file *File, qualifier *ast.Ident) string {
 	if !resolvableImportQualifier(file, qualifier) {
 		return ""
 	}

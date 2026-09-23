@@ -49,8 +49,9 @@ Homebrew: `brew install quality-gates/tap/messgo`.
 ## Tune the gate
 
 Start with `go`. Add `opinionated` when you want the stricter checks the
-recommended set leaves out. Point at a custom XML ruleset when thresholds or
-membership need to live in the repo:
+recommended set leaves out. Add `explicitness` (or `explicitness-strict`) to
+find functions with implicit inputs and outputs. Point at a custom XML ruleset
+when thresholds or membership need to live in the repo:
 
 ```xml
 <ruleset name="team policy">

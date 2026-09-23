@@ -139,6 +139,46 @@ func TestOpinionatedRulesNotInDefaultGo(t *testing.T) {
 	}
 }
 
+func TestExplicitnessRulesetsAreOptIn(t *testing.T) {
+	names := []string{"ImplicitInput", "ImplicitOutput"}
+	goSet := loadOne(t, "go")
+	for _, name := range names {
+		if ruleByName(goSet, name) != nil {
+			t.Errorf("go ruleset should not include %s", name)
+		}
+	}
+	for spec, wantReceiver := range map[string]bool{"explicitness": false, "explicitness-strict": true} {
+		set := loadOne(t, spec)
+		if len(set.Rules) != len(names) {
+			t.Errorf("%s has %d rules, want %d", spec, len(set.Rules), len(names))
+		}
+		for _, name := range names {
+			r := ruleByName(set, name)
+			if r == nil {
+				t.Errorf("%s should include %s", spec, name)
+				continue
+			}
+			if got := rule.BaseOf(r).RuleProps.Bool("include-receiver", false); got != wantReceiver {
+				t.Errorf("%s %s include-receiver = %v, want %v", spec, name, got, wantReceiver)
+			}
+		}
+	}
+}
+
+func TestBareExplicitnessRuleNameResolves(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "team.xml")
+	xml := `<ruleset name="team">
+  <rule ref="ImplicitOutput"/>
+</ruleset>
+`
+	if err := os.WriteFile(path, []byte(xml), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if ruleByName(loadOne(t, path), "ImplicitOutput") == nil {
+		t.Fatal(`<rule ref="ImplicitOutput"> imported nothing`)
+	}
+}
+
 func ruleNames(sets []*rule.RuleSet) map[string]bool {
 	names := map[string]bool{}
 	for _, set := range sets {

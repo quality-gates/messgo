@@ -19,6 +19,7 @@ import (
 	_ "github.com/quality-gates/messgo/internal/rules/codesize"
 	_ "github.com/quality-gates/messgo/internal/rules/controversial"
 	_ "github.com/quality-gates/messgo/internal/rules/design"
+	_ "github.com/quality-gates/messgo/internal/rules/explicitness"
 	_ "github.com/quality-gates/messgo/internal/rules/naming"
 	_ "github.com/quality-gates/messgo/internal/rules/opinionated"
 	_ "github.com/quality-gates/messgo/internal/rules/unusedcode"
@@ -30,14 +31,16 @@ var builtinFS embed.FS
 // builtinNames maps the short ruleset identifiers accepted on the command line
 // to the embedded XML file.
 var builtinNames = map[string]string{
-	"cleancode":     "builtin/cleancode.xml",
-	"codesize":      "builtin/codesize.xml",
-	"controversial": "builtin/controversial.xml",
-	"design":        "builtin/design.xml",
-	"naming":        "builtin/naming.xml",
-	"unusedcode":    "builtin/unusedcode.xml",
-	"go":            "builtin/go.xml",
-	"opinionated":   "builtin/opinionated.xml",
+	"cleancode":           "builtin/cleancode.xml",
+	"codesize":            "builtin/codesize.xml",
+	"controversial":       "builtin/controversial.xml",
+	"design":              "builtin/design.xml",
+	"naming":              "builtin/naming.xml",
+	"unusedcode":          "builtin/unusedcode.xml",
+	"go":                  "builtin/go.xml",
+	"opinionated":         "builtin/opinionated.xml",
+	"explicitness":        "builtin/explicitness.xml",
+	"explicitness-strict": "builtin/explicitness-strict.xml",
 }
 
 // builtinID maps a ruleset reference to its built-in identifier. It accepts
@@ -64,7 +67,7 @@ func builtinID(part, fromDir string) (string, bool) {
 
 // BuiltinNames returns the sorted list of built-in ruleset identifiers.
 func BuiltinNames() []string {
-	return []string{"cleancode", "codesize", "controversial", "design", "go", "naming", "opinionated", "unusedcode"}
+	return []string{"cleancode", "codesize", "controversial", "design", "explicitness", "explicitness-strict", "go", "naming", "opinionated", "unusedcode"}
 }
 
 // xml structures -----------------------------------------------------------

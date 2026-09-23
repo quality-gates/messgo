@@ -6,6 +6,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-09-23
+
 ### Added
 - Added the opt-in `explicitness` ruleset with the `ImplicitInput` and
   `ImplicitOutput` rules. They flag data that goes into a function from a

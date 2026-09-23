@@ -78,11 +78,3 @@ var streamReaders = map[string]int{
 // argument refers to. The value is true if the builtin does not also read that
 // data.
 var builtinWrites = map[string]bool{"delete": true, "clear": true, "copy": false}
-
-// inPlaceSorts are standard library functions that change the order of the
-// elements of their first argument.
-var inPlaceSorts = setOf(
-	"sort.Slice", "sort.SliceStable", "sort.Sort", "sort.Stable", "sort.Strings",
-	"sort.Ints", "sort.Float64s",
-	"slices.Sort", "slices.SortFunc", "slices.SortStableFunc", "slices.Reverse",
-)

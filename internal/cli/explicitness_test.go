@@ -367,6 +367,75 @@ func Fields(n int) pair { return pair{counter: n, n: n} }
 	)
 }
 
+func TestExplicitnessReadsKeysOfNamedMapLiteral(t *testing.T) {
+	_, got := runExplicitness(t, "explicitness", map[string]string{
+		"a.go": `package p
+
+var n int
+
+func Bump() { n = 1 }
+
+type names map[int]string
+
+func Label() names { return names{n: "x"} }
+`,
+	})
+	assertFindings(t, got,
+		"a.go:5 ImplicitOutput Bump: package variable n",
+		"a.go:9 ImplicitInput Label: package variable n",
+	)
+}
+
+func TestExplicitnessReadsPackageVariableThatASortChanges(t *testing.T) {
+	_, got := runExplicitness(t, "explicitness", map[string]string{
+		"a.go": `package p
+
+import "sort"
+
+var list = []int{2, 1}
+
+func Order() { sort.Ints(list) }
+
+func First() int { return list[0] }
+`,
+	})
+	assertFindings(t, got,
+		"a.go:7 ImplicitInput Order: package variable list",
+		"a.go:7 ImplicitOutput Order: package variable list",
+		"a.go:9 ImplicitInput First: package variable list",
+	)
+}
+
+func TestExplicitnessReadsPackageVariableThatACopyChanges(t *testing.T) {
+	_, got := runExplicitness(t, "explicitness", map[string]string{
+		"a.go": `package p
+
+var buf = make([]byte, 4)
+
+func Fill(src []byte) { copy(buf, src) }
+
+func Head() byte { return buf[0] }
+`,
+	})
+	assertFindings(t, got,
+		"a.go:5 ImplicitInput Fill: package variable buf",
+		"a.go:5 ImplicitOutput Fill: package variable buf",
+		"a.go:7 ImplicitInput Head: package variable buf",
+	)
+}
+
+func TestExplicitnessReportsReceiveFromChannelThatACallReturns(t *testing.T) {
+	_, got := runExplicitness(t, "explicitness", map[string]string{
+		"a.go": `package p
+
+import "context"
+
+func Wait(ctx context.Context) { <-ctx.Done() }
+`,
+	})
+	assertFindings(t, got, "a.go:5 ImplicitInput Wait: receive from ctx")
+}
+
 func TestExplicitnessReportsProcessNetworkAndTimerEffects(t *testing.T) {
 	_, got := runExplicitness(t, "explicitness", map[string]string{
 		"a.go": `package p

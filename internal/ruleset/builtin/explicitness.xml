@@ -29,7 +29,8 @@ a source that is not an argument:
 
 - a read of a package variable that the package changes (a package variable
   that no code changes is a constant, thus it is not flagged);
-- a receive from a channel that the function does not declare;
+- a receive from a channel that the function does not declare (<-ch,
+  <-ctx.Done());
 - a read from a stream with fmt.Fscan*, io.ReadAll, io.ReadFull,
   io.ReadAtLeast or io.Copy*;
 - a standard library call that reads the environment, for example os.Getenv,
@@ -41,7 +42,8 @@ a source that is not an argument:
 
 The analysis uses only the syntax tree. It does not follow calls into other
 functions, it does not see effects of methods on values (for example
-db.Query), and it does not follow aliases (q := p).
+db.Query), and it does not follow aliases (q := p). It does not see the keys
+of a map literal if a different file or package declares the named map type.
             ]]>
         </description>
         <priority>3</priority>
@@ -93,7 +95,8 @@ not flagged. The analysis uses only the syntax tree. It does not follow calls
 into other functions, it does not see effects of methods on values (for
 example w.Write), and it does not follow aliases (q := p). It cannot see if an
 index is into an array, thus it also flags a write to an array element in a
-copied struct.
+copied struct. It also flags a parameter that the function first replaces with
+a copy (s = slices.Clone(s); slices.Sort(s)).
             ]]>
         </description>
         <priority>3</priority>

@@ -68,7 +68,7 @@ func (w *writeVisitor) visitCall(call *ast.CallExpr) {
 			w.write(call.Args[0], only, true)
 		}
 	case *ast.SelectorExpr:
-		if inPlaceSorts[w.qualified(fun)] {
+		if util.InPlaceSorts[w.qualified(fun)] {
 			w.write(call.Args[0], false, true)
 		}
 	}
@@ -188,7 +188,7 @@ func (r *readVisitor) visit(n ast.Node) bool {
 // not variables. The keys of a map literal are expressions, thus they can be
 // reads.
 func (r *readVisitor) visitComposite(lit *ast.CompositeLit) {
-	_, isMap := lit.Type.(*ast.MapType)
+	isMap := isMapType(lit.Type)
 	if lit.Type != nil {
 		ast.Inspect(lit.Type, r.visit)
 	}
@@ -198,6 +198,19 @@ func (r *readVisitor) visitComposite(lit *ast.CompositeLit) {
 		}
 		ast.Inspect(elt, r.visit)
 	}
+}
+
+// isMapType reports whether t is a map type, or the name of a map type that
+// the same file declares. The parser does not resolve a type that a different
+// file declares.
+func isMapType(t ast.Expr) bool {
+	if id, ok := t.(*ast.Ident); ok && id.Obj != nil {
+		if spec, ok := id.Obj.Decl.(*ast.TypeSpec); ok {
+			t = spec.Type
+		}
+	}
+	_, ok := t.(*ast.MapType)
+	return ok
 }
 
 func isIdent(e ast.Expr) bool {
@@ -288,8 +301,12 @@ func (f *flowVisitor) visitSelector(sel *ast.SelectorExpr) {
 }
 
 // flow records data that goes through the channel or stream at the root of e,
-// if that variable is not a local variable of the function.
+// if that variable is not a local variable of the function. If e is a call,
+// the root of the called function is used, as for <-ctx.Done().
 func (f *flowVisitor) flow(list *[]effect, e ast.Expr, prefix string) {
+	if call, ok := e.(*ast.CallExpr); ok {
+		e = call.Fun
+	}
 	id := util.RootIdent(e)
 	if id != nil && f.external(id) {
 		*list = append(*list, f.effect(e, prefix+id.Name))

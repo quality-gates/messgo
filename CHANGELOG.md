@@ -16,6 +16,10 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
   reads, receiver method calls, writes through pointer receivers, and writes
   to elements or pointer targets of value receivers (`include-receiver=true`).
 
+### Fixed
+- Fixed `GlobalVariable` missing package variables that only `copy` or an
+  in-place sort (`sort.Ints`, `slices.Sort`, ...) changes (#179).
+
 ## [0.4.6] - 2026-09-20
 
 ### Added

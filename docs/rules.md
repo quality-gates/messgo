@@ -29,7 +29,8 @@ clean run reflects idiomatic Go.
 
 `GlobalVariable` is **mutation-aware**: by default it reports only package-level
 variables that are actually mutated somewhere in the package (reassigned,
-incremented, written through, deleted/cleared, or address-taken), analysed across all files of
+incremented, written through, deleted/cleared, copied into, sorted in place, or
+address-taken), analysed across all files of
 the package. Effectively-constant globals — sentinel errors, compiled regexps,
 lookup tables — stay silent. Set `report-immutable=true` to also surface
 read-only globals.
@@ -109,7 +110,7 @@ is an explicit output. The rules flag:
 | :--- | :--- | :--- |
 | Package variable | a read, if the package changes the variable | a write, or `&v` |
 | Parameter | — | a write through a pointer, slice, map or variadic parameter, including `delete`, `clear`, `copy` and in-place sorts; a write to an element or pointer target in any other parameter (`p.m[k] = v`, `*p.ptr = v`) |
-| Channel not declared in the function | a receive, or a range over a channel parameter | a send |
+| Channel not declared in the function | a receive (`<-ch`, `<-ctx.Done()`), or a range over a channel parameter | a send |
 | Stream | `fmt.Fscan*`, `io.ReadAll`, `io.ReadFull`, `io.ReadAtLeast`, `io.Copy*` | `fmt.Fprint*`, `io.WriteString`, `io.Copy*` |
 | Standard library environment | for example `os.Getenv`, `os.ReadFile`, `time.Now`, `time.After`, `math/rand`, `crypto/rand`, `flag.Args`, `os/exec.Command`, `net.Dial`, `net/http.Get` | for example `fmt.Println`, `log`, `log/slog`, `os.Stdout`, `os.WriteFile`, `os.Exit`, `os.Setenv`, `os/exec.Command`, `net.Dial`, `net/http.Get` |
 | Builtins | `recover()` | `panic()` |
@@ -125,10 +126,14 @@ line. The analysis uses only the syntax tree, thus it does not see:
 - a range over a channel that is not a parameter;
 - a function literal that initialises a package variable
   (`var f = func() { ... }`);
-- an unaliased `math/rand/v2` import.
+- an unaliased `math/rand/v2` import;
+- a read of a package variable in a key of a map literal whose named map type
+  another file or package declares (`names{n: "x"}`).
 
 For the same reason, a write to an array element in a copied struct
-(`p.arr[0] = v`) is reported as a write to shared data.
+(`p.arr[0] = v`) is reported as a write to shared data. A parameter that the
+function first replaces with a copy is also still reported
+(`s = slices.Clone(s); slices.Sort(s)`).
 
 ## Custom rulesets
 

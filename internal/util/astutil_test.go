@@ -211,3 +211,44 @@ func TestResolveTypeAlias(t *testing.T) {
 		}
 	}
 }
+
+func TestImportHelpers(t *testing.T) {
+	for _, tc := range []struct {
+		name        string
+		spec        *ast.ImportSpec
+		importPath  string
+		qualifier   string
+		wantMatches bool
+	}{
+		{name: "default name", spec: &ast.ImportSpec{}, importPath: "example.com/thing", qualifier: "thing", wantMatches: true},
+		{name: "explicit alias", spec: &ast.ImportSpec{Name: ast.NewIdent("o")}, importPath: "os", qualifier: "o", wantMatches: true},
+		{name: "mismatched name", spec: &ast.ImportSpec{}, importPath: "os", qualifier: "syscall"},
+		{name: "blank import", spec: &ast.ImportSpec{Name: ast.NewIdent("_")}, importPath: "os", qualifier: "_"},
+		{name: "dot import", spec: &ast.ImportSpec{Name: ast.NewIdent(".")}, importPath: "os", qualifier: "."},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := importMatchesQualifier(tc.spec, tc.importPath, tc.qualifier); got != tc.wantMatches {
+				t.Fatalf("importMatchesQualifier() = %t, want %t", got, tc.wantMatches)
+			}
+		})
+	}
+
+	for _, tc := range []struct {
+		name string
+		spec *ast.ImportSpec
+		want string
+		ok   bool
+	}{
+		{name: "nil spec"},
+		{name: "missing path", spec: &ast.ImportSpec{}},
+		{name: "invalid path literal", spec: &ast.ImportSpec{Path: &ast.BasicLit{Value: "os"}}},
+		{name: "quoted path", spec: &ast.ImportSpec{Path: &ast.BasicLit{Value: `"os"`}}, want: "os", ok: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got, ok := importPath(tc.spec)
+			if got != tc.want || ok != tc.ok {
+				t.Fatalf("importPath() = %q, %t; want %q, %t", got, ok, tc.want, tc.ok)
+			}
+		})
+	}
+}

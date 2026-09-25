@@ -6,6 +6,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 
 ## [Unreleased]
 
+## [0.5.1] - 2026-09-25
+
 ### Changed
 - Rules that inspect local variables and parameters now use model queries
   (`Locals`, `LocalRead`, `UnreadParameters`) instead of walking `go/ast`

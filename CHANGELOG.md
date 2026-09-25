@@ -7,6 +7,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 ## [Unreleased]
 
 ### Fixed
+- Fixed `ImplicitInput` missing mutable package variable reads used as keys in
+  map literals of named map types declared in another file (#186).
 - Fixed `UnusedPrivateField` false positive for struct fields initialized in
   composite literals (slices, arrays, and maps) with omitted element or
   key/value types (#185).

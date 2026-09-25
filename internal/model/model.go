@@ -74,6 +74,10 @@ type PackageScope struct {
 	// this package. It is populated by the runner after parsing. When nil, the
 	// file builds an isolated index from its own package scope.
 	PackageTypeIndex *PackageTypeIndex
+	// PackageMapTypes holds names of map types declared across this file's
+	// package. The runner populates it after parsing so rules can recognize
+	// named map literals whose declarations are in another file.
+	PackageMapTypes map[string]bool
 	// PackageFunctions holds all package-level free functions from every file
 	// in this file's package. It is populated by the runner after parsing,
 	// enabling cross-file call return-type resolution. When nil (file analyzed

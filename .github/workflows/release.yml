@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: Existing stable release tag to retry Homebrew publication for
+        description: Existing stable release tag to retry tap publication for
         required: true
         type: string
 

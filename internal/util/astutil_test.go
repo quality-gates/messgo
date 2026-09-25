@@ -65,8 +65,11 @@ var elemWritten = map[string]int{}
 var fieldWritten = struct{ X int }{}
 var addressed int
 var rangedInto int
+var sentTo = make(chan int, 1)
+var closed = make(chan struct{})
 
 var readOnly int
+var negated int
 var shadowed int
 
 const Konst = 1
@@ -80,7 +83,10 @@ func work(items []int) {
 	_ = p
 	for rangedInto = range items {
 	}
+	sentTo <- 1
+	close(closed)
 	_ = readOnly
+	_ = -negated // a unary operator other than & only reads
 	shadowed := 5 // local shadow via :=; must NOT count
 	_ = shadowed
 }
@@ -88,12 +94,12 @@ func work(items []int) {
 
 	got := MutatedGlobalNames([]*ast.File{f})
 
-	for _, name := range []string{"reassigned", "incremented", "elemWritten", "fieldWritten", "addressed", "rangedInto"} {
+	for _, name := range []string{"reassigned", "incremented", "elemWritten", "fieldWritten", "addressed", "rangedInto", "sentTo", "closed"} {
 		if !got[name] {
 			t.Errorf("expected %q to be detected as mutated; got %v", name, got)
 		}
 	}
-	for _, name := range []string{"readOnly", "shadowed", "Konst"} {
+	for _, name := range []string{"readOnly", "negated", "shadowed", "Konst"} {
 		if got[name] {
 			t.Errorf("%q must not be detected as mutated; got %v", name, got)
 		}

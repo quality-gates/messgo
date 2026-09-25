@@ -146,8 +146,8 @@ func identOf(e ast.Expr) *ast.Ident {
 // mutated somewhere across the given files (the files of a single package).
 // A variable is "mutated" if it is reassigned (`=`, `+=`, ...), incremented or
 // decremented, has a field/element written through it (`g.f = x`, `g[k] = v`),
-// is changed by delete, clear, copy or an in-place sort (`sort.Ints(g)`), or
-// has its address taken (`&g`). Short variable declarations (`:=`) introduce
+// is changed by delete, clear, copy, close or an in-place sort (`sort.Ints(g)`),
+// is sent to (`g <- x`), or has its address taken (`&g`). Short variable declarations (`:=`) introduce
 // locals and are ignored, as are the variables' own initializers (which are
 // declarations, not assignments). The result is intersected with the names
 // actually declared as package-level vars, so locals never appear.
@@ -188,8 +188,9 @@ func collectMutations(f *ast.File, globals map[string]bool, topSpecs map[any]boo
 
 // markMutation calls mark on the lvalue(s) of any node that mutates a variable:
 // assignment (excluding ":=", which introduces locals), increment/decrement,
-// address-of, delete/clear of a map, copy into a slice, an in-place sort, and a
-// range clause that assigns into existing variables.
+// address-of, delete/clear of a map, copy into a slice, an in-place sort, a
+// send on or close of a channel, and a range clause that assigns into existing
+// variables.
 func markMutation(f *ast.File, n ast.Node, mark func(ast.Expr)) {
 	switch s := n.(type) {
 	case *ast.AssignStmt:
@@ -201,14 +202,20 @@ func markMutation(f *ast.File, n ast.Node, mark func(ast.Expr)) {
 		}
 	case *ast.IncDecStmt:
 		mark(s.X)
+	case *ast.SendStmt:
+		mark(s.Chan)
 	case *ast.UnaryExpr:
-		if s.Op == token.AND {
-			mark(s.X)
-		}
+		markAddressOf(s, mark)
 	case *ast.RangeStmt:
 		markRangeAssign(s, mark)
 	case *ast.CallExpr:
 		markFirstArgChange(f, s, mark)
+	}
+}
+
+func markAddressOf(s *ast.UnaryExpr, mark func(ast.Expr)) {
+	if s.Op == token.AND {
+		mark(s.X)
 	}
 }
 
@@ -229,15 +236,20 @@ var InPlaceSorts = map[string]bool{
 	"slices.SortStableFunc": true, "slices.Reverse": true,
 }
 
+// changingBuiltins are the builtin functions that change their first argument.
+var changingBuiltins = map[string]bool{
+	"delete": true, "clear": true, "copy": true, "close": true,
+}
+
 // markFirstArgChange calls mark on the first argument of a call that changes
-// the data of that argument: delete, clear, copy, or an in-place sort.
+// the data of that argument: delete, clear, copy, close, or an in-place sort.
 func markFirstArgChange(f *ast.File, call *ast.CallExpr, mark func(ast.Expr)) {
 	if len(call.Args) == 0 {
 		return
 	}
 	switch fun := call.Fun.(type) {
 	case *ast.Ident:
-		if fun.Name == "delete" || fun.Name == "clear" || fun.Name == "copy" {
+		if changingBuiltins[fun.Name] {
 			mark(call.Args[0])
 		}
 	case *ast.SelectorExpr:

@@ -7,6 +7,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 ## [Unreleased]
 
 ### Fixed
+- Fixed `GlobalVariable` missing package-level channels that are mutated only
+  by sends (`ch <- x`) or `close(ch)` (#187).
 - Fixed `ImplicitInput` missing mutable package variable reads used as keys in
   map literals of named map types declared in another file (#186).
 - Fixed `UnusedPrivateField` false positive for struct fields initialized in

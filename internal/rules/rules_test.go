@@ -2869,3 +2869,149 @@ func Run(workers []*worker) {
 		}
 	})
 }
+
+func TestUnusedPrivateFieldOmittedCompositeLiteralElementType(t *testing.T) {
+	t.Run("slice literal with omitted type", func(t *testing.T) {
+		src := `
+type person struct {
+	name string
+	age  int
+}
+
+func GetPeople() []person {
+	return []person{
+		{name: "Alice", age: 30},
+	}
+}
+`
+		hits := analyze(t, src, "unusedcode")
+		mustNotHave(t, hits, "UnusedPrivateField")
+	})
+
+	t.Run("slice literal with unkeyed omitted elements", func(t *testing.T) {
+		src := `
+type person struct {
+	name string
+	age  int
+}
+
+var _ = []person{
+	{"Alice", 30},
+}
+`
+		hits := analyze(t, src, "unusedcode")
+		mustNotHave(t, hits, "UnusedPrivateField")
+	})
+
+	t.Run("slice of pointers with omitted elements", func(t *testing.T) {
+		src := `
+type person struct {
+	name string
+	age  int
+}
+
+var _ = []*person{
+	{name: "Alice", age: 30},
+}
+`
+		hits := analyze(t, src, "unusedcode")
+		mustNotHave(t, hits, "UnusedPrivateField")
+	})
+
+	t.Run("map with omitted value literal type", func(t *testing.T) {
+		src := `
+type person struct {
+	name string
+	age  int
+}
+
+var _ = map[string]person{
+	"p1": {name: "Alice", age: 30},
+}
+`
+		hits := analyze(t, src, "unusedcode")
+		mustNotHave(t, hits, "UnusedPrivateField")
+	})
+
+	t.Run("map with omitted key literal type", func(t *testing.T) {
+		src := `
+type person struct {
+	name string
+	age  int
+}
+
+var _ = map[person]string{
+	{name: "Alice", age: 30}: "p1",
+}
+`
+		hits := analyze(t, src, "unusedcode")
+		mustNotHave(t, hits, "UnusedPrivateField")
+	})
+
+	t.Run("nested slice with omitted element types", func(t *testing.T) {
+		src := `
+type person struct {
+	name string
+	age  int
+}
+
+var _ = [][]person{
+	{{name: "Alice", age: 30}},
+}
+`
+		hits := analyze(t, src, "unusedcode")
+		mustNotHave(t, hits, "UnusedPrivateField")
+	})
+
+	t.Run("defined slice type with omitted elements", func(t *testing.T) {
+		src := `
+type person struct {
+	name string
+	age  int
+}
+
+type people []person
+
+var _ = people{
+	{name: "Alice", age: 30},
+}
+`
+		hits := analyze(t, src, "unusedcode")
+		mustNotHave(t, hits, "UnusedPrivateField")
+	})
+
+	t.Run("array with index and omitted elements", func(t *testing.T) {
+		src := `
+type person struct {
+	name string
+	age  int
+}
+
+var _ = [2]person{
+	1: {name: "Alice", age: 30},
+}
+`
+		hits := analyze(t, src, "unusedcode")
+		mustNotHave(t, hits, "UnusedPrivateField")
+	})
+
+	t.Run("still reports genuinely unused private field in slice literal", func(t *testing.T) {
+		src := `
+type person struct {
+	name   string
+	unused int
+}
+
+var _ = []person{
+	{name: "Alice"},
+}
+`
+		hits := analyze(t, src, "unusedcode")
+		mustHave(t, hits, "UnusedPrivateField")
+		for _, h := range hits {
+			if h.rule == "UnusedPrivateField" && h.line != 4 {
+				t.Fatalf("unexpected UnusedPrivateField on line %d; hits = %v", h.line, hits)
+			}
+		}
+	})
+}

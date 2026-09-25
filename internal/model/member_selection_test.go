@@ -323,6 +323,14 @@ type Leaf struct {
 	value int
 	other int
 }
+
+type Other struct {
+	otherVal int
+}
+
+type Leaves []Leaf
+type LeafMap map[string]Leaf
+type Chained Leaves
 `))
 	if err != nil {
 		t.Fatalf("ParseSource: %v", err)
@@ -343,8 +351,25 @@ type Leaf struct {
 		{expr: "Leaf{}", want: map[MemberKey]bool{}},
 		{expr: "unknown{1}", want: map[MemberKey]bool{}},
 		{expr: "external.Type{value: 1}", want: map[MemberKey]bool{{Type: "external.Type", Name: "value"}: true}},
-		{expr: "Leaf{1, value: 2}", want: map[MemberKey]bool{{Type: "Leaf", Name: "value"}: true}},
 		{expr: "Leaf{1: 2}", want: map[MemberKey]bool{}},
+		{expr: "[]Leaf{{value: 1}}", want: map[MemberKey]bool{{Type: "Leaf", Name: "value"}: true}},
+		{expr: "[]Leaf{Other{otherVal: 1}}", want: map[MemberKey]bool{}},
+		{expr: "[]Leaf{{1, 2}}", want: map[MemberKey]bool{
+			{Type: "Leaf", Name: "value"}: true,
+			{Type: "Leaf", Name: "other"}: true,
+		}},
+		{expr: "[]*Leaf{{value: 1}}", want: map[MemberKey]bool{{Type: "Leaf", Name: "value"}: true}},
+		{expr: "map[string]Leaf{\"k\": {value: 1}}", want: map[MemberKey]bool{{Type: "Leaf", Name: "value"}: true}},
+		{expr: "map[Leaf]string{{value: 1}: \"v\"}", want: map[MemberKey]bool{{Type: "Leaf", Name: "value"}: true}},
+		{expr: "map[string]*Leaf{\"k\": {value: 1}}", want: map[MemberKey]bool{{Type: "Leaf", Name: "value"}: true}},
+		{expr: "map[*Leaf]string{{value: 1}: \"v\"}", want: map[MemberKey]bool{{Type: "Leaf", Name: "value"}: true}},
+		{expr: "[][]Leaf{{{value: 1}}}", want: map[MemberKey]bool{{Type: "Leaf", Name: "value"}: true}},
+		{expr: "[2]Leaf{{value: 1}}", want: map[MemberKey]bool{{Type: "Leaf", Name: "value"}: true}},
+		{expr: "[2]Leaf{1: {value: 1}}", want: map[MemberKey]bool{{Type: "Leaf", Name: "value"}: true}},
+		{expr: "[]Leaf{{}}", want: map[MemberKey]bool{}},
+		{expr: "Leaves{{value: 1}}", want: map[MemberKey]bool{{Type: "Leaf", Name: "value"}: true}},
+		{expr: "LeafMap{\"k\": {value: 1}}", want: map[MemberKey]bool{{Type: "Leaf", Name: "value"}: true}},
+		{expr: "Chained{{value: 1}}", want: map[MemberKey]bool{{Type: "Leaf", Name: "value"}: true}},
 	}
 	for _, tc := range tests {
 		t.Run(tc.expr, func(t *testing.T) {
@@ -368,6 +393,84 @@ type Leaf struct {
 				}
 			}
 		})
+	}
+}
+
+func TestCollectPackageTypeDefsHandlesEdgeCases(t *testing.T) {
+	emptyFile := &File{}
+	defs := collectPackageTypeDefs(emptyFile, nil)
+	if len(defs) != 0 {
+		t.Fatalf("expected empty defs, got %v", defs)
+	}
+
+	dummyClass := &Class{Name: "Dummy"}
+	defs = collectPackageTypeDefs(emptyFile, []*Class{dummyClass, {File: nil}})
+	if len(defs) != 0 {
+		t.Fatalf("expected empty defs, got %v", defs)
+	}
+
+	f, err := ParseSource("sample.go", []byte(`package sample
+const ConstVal = 123
+type A struct{}
+type B struct{}
+type S []int
+`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Test collectFromFile(f.Syntax) when classes is nil
+	defsSingle := collectPackageTypeDefs(f, nil)
+	if defsSingle["S"] == nil {
+		t.Fatal("expected type S to be defined from f directly")
+	}
+
+	// Test collectFromFile(class.File.Syntax) when f has no S but other class file does
+	emptyF, err := ParseSource("empty.go", []byte(`package sample`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	classes := []*Class{
+		{File: f},
+	}
+	defsFromClass := collectPackageTypeDefs(emptyF, classes)
+	if defsFromClass["S"] == nil {
+		t.Fatal("expected type S to be defined from class file")
+	}
+
+	// Test collectFromFile handles nil syntax
+	collectFromFile(nil, defs)
+
+	// Test collectFromFile ignores nil TypeSpec.Type
+	nilTypeDefs := make(map[string]ast.Expr)
+	collectFromFile(&ast.File{
+		Decls: []ast.Decl{
+			&ast.GenDecl{
+				Tok: token.TYPE,
+				Specs: []ast.Spec{
+					&ast.TypeSpec{Name: ast.NewIdent("NilType"), Type: nil},
+				},
+			},
+		},
+	}, nilTypeDefs)
+	if nilTypeDefs["NilType"] != nil {
+		t.Fatal("expected NilType with nil Type not to be recorded")
+	}
+}
+
+func TestUnderlyingTypeEdgeCases(t *testing.T) {
+	loopIdent := ast.NewIdent("Loop")
+	recorder := &memberUseRecorder{
+		resolver: &memberTypeResolver{
+			typeDefs: map[string]ast.Expr{
+				"Loop": loopIdent,
+			},
+		},
+	}
+	if got := recorder.underlyingType(nil); got != nil {
+		t.Fatalf("underlyingType(nil) = %v, want nil", got)
+	}
+	if got := recorder.underlyingType(loopIdent); got != loopIdent {
+		t.Fatalf("underlyingType(Loop) = %v, want self", got)
 	}
 }
 

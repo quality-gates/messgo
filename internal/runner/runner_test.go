@@ -47,6 +47,8 @@ func TestImplicitInputReadsCrossFileNamedMapLiteralKey(t *testing.T) {
 	files := map[string]string{
 		"types.go": `package p
 
+var unrelated int
+
 type names map[int]string
 type record struct{ n int }
 `,

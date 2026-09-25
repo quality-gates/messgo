@@ -3,6 +3,7 @@ package model
 import (
 	"go/ast"
 	"go/token"
+	"slices"
 	"testing"
 )
 
@@ -43,18 +44,6 @@ func unreadParameterNames(fn *Function) []string {
 		names = append(names, p.Name)
 	}
 	return names
-}
-
-func sameNames(got, want []string) bool {
-	if len(got) != len(want) {
-		return false
-	}
-	for i := range got {
-		if got[i] != want[i] {
-			return false
-		}
-	}
-	return true
 }
 
 func TestLocalsReportsDeclarationsAndReads(t *testing.T) {
@@ -126,7 +115,7 @@ func f() (n int) {
 }
 `)
 	fn = fn.File.Functions[1]
-	if got, want := localNames(fn), []string{"err", "unused", "item"}; !sameNames(got, want) {
+	if got, want := localNames(fn), []string{"err", "unused", "item"}; !slices.Equal(got, want) {
 		t.Fatalf("Locals() names = %v, want %v", got, want)
 	}
 }
@@ -154,10 +143,10 @@ func outer(x int) {
 	_ = closure
 }
 `)
-	if got, want := localNames(fn), []string{"closure"}; !sameNames(got, want) {
+	if got, want := localNames(fn), []string{"closure"}; !slices.Equal(got, want) {
 		t.Fatalf("Locals() names = %v, want %v", got, want)
 	}
-	if got, want := unreadParameterNames(fn), []string{"x"}; !sameNames(got, want) {
+	if got, want := unreadParameterNames(fn), []string{"x"}; !slices.Equal(got, want) {
 		t.Fatalf("UnreadParameters() = %v, want %v: the closure's shadowed x is not a read of the outer parameter", got, want)
 	}
 }
@@ -188,7 +177,7 @@ func TestReadQueriesFallBackToNamesForUnresolvedIdentifiers(t *testing.T) {
 			&ast.AssignStmt{Lhs: []ast.Expr{&ast.Ident{Name: "writeOnly"}}, Tok: token.ASSIGN, Rhs: []ast.Expr{&ast.BasicLit{Kind: token.INT, Value: "1"}}},
 		}},
 	}
-	if got, want := unreadParameterNames(fn), []string{"writeOnly"}; !sameNames(got, want) {
+	if got, want := unreadParameterNames(fn), []string{"writeOnly"}; !slices.Equal(got, want) {
 		t.Fatalf("UnreadParameters() = %v, want %v", got, want)
 	}
 	if !LocalRead(fn, LocalVariable{Name: "external", ident: &ast.Ident{Name: "external"}}) {
@@ -228,7 +217,7 @@ func external(x int)
 			t.Errorf("UnreadParameters(%s) = %v, want none", fn.Name, got)
 		}
 	}
-	if got, want := unreadParameterNames(f.Functions[2]), []string{"a"}; !sameNames(got, want) {
+	if got, want := unreadParameterNames(f.Functions[2]), []string{"a"}; !slices.Equal(got, want) {
 		t.Errorf("UnreadParameters(unread) = %v, want %v", got, want)
 	}
 	if got := UnreadParameters(f.Functions[3]); got != nil {
@@ -282,10 +271,10 @@ func outer(captured, ignored int) (named int) {
 	return named
 }
 `)
-	if got, want := localNames(fn), []string{"outerLocal", "index", "closure"}; !sameNames(got, want) {
+	if got, want := localNames(fn), []string{"outerLocal", "index", "closure"}; !slices.Equal(got, want) {
 		t.Fatalf("Locals() names = %v, want %v", got, want)
 	}
-	if got, want := unreadParameterNames(fn), []string{"ignored"}; !sameNames(got, want) {
+	if got, want := unreadParameterNames(fn), []string{"ignored"}; !slices.Equal(got, want) {
 		t.Errorf("UnreadParameters() = %v, want %v: captured is read, ignored is only shadowed", got, want)
 	}
 	if !LocalRead(fn, localNamed(t, fn, "outerLocal")) || !LocalRead(fn, localNamed(t, fn, "closure")) {

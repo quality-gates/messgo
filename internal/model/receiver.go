@@ -5,16 +5,16 @@ import (
 	"go/token"
 )
 
-// Receiver queries answer how one method touches its own receiver: which
-// fields it selects and which sibling methods it calls through the receiver
-// variable. LackOfCohesionOfMethods (LCOM4) is defined on exactly that
-// per-method, receiver-shaped graph, so these queries match the receiver
-// identifier by name and do not resolve types.
+// Receiver queries tell how one method uses its own receiver. They find the
+// fields that the method selects and the sibling methods that it calls through
+// the receiver variable. LackOfCohesionOfMethods (LCOM4) uses this graph for
+// each method. Thus these queries match the receiver identifier by name and do
+// not resolve types.
 //
-// They deliberately differ from the typed member-use index in
-// member_selection.go (File.MemberSelectedForType), which answers a file-wide
-// question for unused-member rules: is this member selected on any value of
-// the type, through any variable, promotion path, or composite literal.
+// File.MemberSelectedForType answers a different question for the unused-member
+// rules. It finds each selection of a member on a value of the type, through
+// any variable, promotion path, or composite literal in the file. Do not merge
+// the two queries.
 
 // AccessorField returns the field wrapped by a trivial getter or setter.
 func AccessorField(f *Function, fields map[string]bool) string {

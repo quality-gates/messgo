@@ -188,7 +188,11 @@ func (r *readVisitor) visit(n ast.Node) bool {
 // not variables. The keys of a map literal are expressions, thus they can be
 // reads.
 func (r *readVisitor) visitComposite(lit *ast.CompositeLit) {
-	isMap := isMapType(lit.Type)
+	var packageMapTypes map[string]bool
+	if r.fn.File != nil {
+		packageMapTypes = r.fn.File.PackageMapTypes
+	}
+	isMap := isMapType(lit.Type, packageMapTypes)
 	if lit.Type != nil {
 		ast.Inspect(lit.Type, r.visit)
 	}
@@ -200,13 +204,17 @@ func (r *readVisitor) visitComposite(lit *ast.CompositeLit) {
 	}
 }
 
-// isMapType reports whether t is a map type, or the name of a map type that
-// the same file declares. The parser does not resolve a type that a different
-// file declares.
-func isMapType(t ast.Expr) bool {
-	if id, ok := t.(*ast.Ident); ok && id.Obj != nil {
-		if spec, ok := id.Obj.Decl.(*ast.TypeSpec); ok {
-			t = spec.Type
+// isMapType reports whether t is a map type or the name of one. The parser
+// resolves same-file type objects; the package index covers unresolved names
+// declared in other files.
+func isMapType(t ast.Expr, packageMapTypes map[string]bool) bool {
+	if id, ok := t.(*ast.Ident); ok {
+		if id.Obj != nil {
+			if spec, ok := id.Obj.Decl.(*ast.TypeSpec); ok {
+				t = spec.Type
+			}
+		} else if packageMapTypes[id.Name] {
+			return true
 		}
 	}
 	_, ok := t.(*ast.MapType)

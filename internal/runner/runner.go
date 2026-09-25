@@ -3,6 +3,7 @@ package runner
 
 import (
 	"go/ast"
+	"go/token"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -99,10 +100,12 @@ func annotatePackageGroup(group []*model.File) {
 		pkgFunctions = append(pkgFunctions, f.Functions...)
 	}
 	pkgTypeIndex := model.NewPackageTypeIndex(pkgClasses, pkgInterfaces)
+	packageMapTypes := collectPackageMapTypes(group)
 	for _, f := range group {
 		f.PackageClasses = pkgClasses
 		f.PackageInterfaces = pkgInterfaces
 		f.PackageTypeIndex = pkgTypeIndex
+		f.PackageMapTypes = packageMapTypes
 		f.PackageFunctions = pkgFunctions
 	}
 	attachPackageMethods(group, classByName, util.TypeAliasNames(asts))
@@ -113,6 +116,28 @@ func annotatePackageGroup(group []*model.File) {
 		f.PackageMembers = pkgMembers
 		f.PackageMemberSelections = pkgMemberSelections
 	}
+}
+
+func collectPackageMapTypes(group []*model.File) map[string]bool {
+	mapTypes := map[string]bool{}
+	for _, f := range group {
+		for _, decl := range f.Syntax.Decls {
+			gen, ok := decl.(*ast.GenDecl)
+			if !ok || gen.Tok != token.TYPE {
+				continue
+			}
+			for _, spec := range gen.Specs {
+				typeSpec, ok := spec.(*ast.TypeSpec)
+				if !ok {
+					continue
+				}
+				if _, ok := typeSpec.Type.(*ast.MapType); ok {
+					mapTypes[typeSpec.Name.Name] = true
+				}
+			}
+		}
+	}
+	return mapTypes
 }
 
 func attachPackageMethods(group []*model.File, classByName map[string]*model.Class, aliases map[string]string) {

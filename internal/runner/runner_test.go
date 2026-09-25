@@ -42,6 +42,62 @@ func tooMany(a, b, c, d, e, f, g, h, i, j, k int) {}
 	}
 }
 
+func TestImplicitInputReadsCrossFileNamedMapLiteralKey(t *testing.T) {
+	dir := t.TempDir()
+	files := map[string]string{
+		"types.go": `package p
+
+type names map[int]string
+type record struct{ n int }
+`,
+		"worker.go": `package p
+
+var n int
+
+func Bump() { n = 1 }
+
+func Label() names { return names{n: "x"} }
+
+func MakeRecord() record { return record{n: 1} }
+`,
+	}
+	for name, src := range files {
+		if err := os.WriteFile(filepath.Join(dir, name), []byte(src), 0o644); err != nil {
+			t.Fatalf("write %s: %v", name, err)
+		}
+	}
+
+	sets, err := (&ruleset.Loader{}).Load("explicitness")
+	if err != nil {
+		t.Fatalf("load explicitness ruleset: %v", err)
+	}
+	rep, err := Run(Options{Paths: []string{dir}, RuleSets: sets})
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	var labelInputs int
+	for _, violation := range rep.Violations {
+		if violation.Rule.Name() != "ImplicitInput" {
+			continue
+		}
+		switch violation.Function {
+		case "Label":
+			if !strings.Contains(violation.Description, "package variable n") {
+				t.Fatalf("Label input described unexpected data: %+v", violation)
+			}
+			if filepath.Base(violation.File) != "worker.go" || violation.BeginLine != 7 {
+				t.Fatalf("Label input location = %s:%d, want worker.go:7", violation.File, violation.BeginLine)
+			}
+			labelInputs++
+		case "MakeRecord":
+			t.Fatalf("struct field key was reported as an implicit input: %+v", violation)
+		}
+	}
+	if labelInputs != 1 {
+		t.Fatalf("got %d Label implicit inputs, want exactly one for package variable n", labelInputs)
+	}
+}
+
 func TestShouldIncludeFileAppliesAllFileFilters(t *testing.T) {
 	cases := []struct {
 		name string

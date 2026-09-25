@@ -56,16 +56,8 @@ func (r *UnusedPrivateMethod) ApplyClass(c *rule.Context, class *model.Class) {
 type UnusedFormalParameter struct{ *rule.Base }
 
 func (r *UnusedFormalParameter) check(c *rule.Context, fn *model.Function) {
-	if fn.Body == nil {
-		return
-	}
-	for _, p := range fn.Params {
-		if p.Name == "" || p.Name == "_" {
-			continue
-		}
-		if !model.IdentifierRead(fn, p.Ident) {
-			c.Report(p.Line, p.Line, p.Name)
-		}
+	for _, p := range model.UnreadParameters(fn) {
+		c.Report(p.Line, p.Line, p.Name)
 	}
 }
 func (r *UnusedFormalParameter) ApplyFunc(c *rule.Context, fn *model.Function) { r.check(c, fn) }
@@ -89,10 +81,9 @@ func (r *UnusedLocalVariable) Configure(props rule.Properties) error {
 }
 
 func (r *UnusedLocalVariable) check(c *rule.Context, fn *model.Function) {
-	locals := model.LocalVariables(fn)
 	reported := map[string]bool{}
-	for _, v := range locals {
-		if model.IdentifierRead(fn, v.Ident) || reported[v.Name] || util.Contains(r.exceptions, v.Name) {
+	for _, v := range model.Locals(fn) {
+		if model.LocalRead(fn, v) || reported[v.Name] || util.Contains(r.exceptions, v.Name) {
 			continue
 		}
 		if r.allowUnusedForeach && v.IsLoop {

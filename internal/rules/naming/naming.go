@@ -128,13 +128,11 @@ func (r *ShortVariable) checkFunc(c *rule.Context, fn *model.Function) {
 			r.checkName(c, p.Name, p.Line)
 		}
 	}
-	if fn.Body != nil {
-		for _, v := range util.LocalVariables(fn.Body, fn.File.Fset) {
-			if v.IsLoop { // PHPMD allows short loop counters (for-init context)
-				continue
-			}
-			r.checkName(c, v.Name, v.Line)
+	for _, v := range model.Locals(fn) {
+		if v.IsLoop { // PHPMD allows short loop counters (for-init context)
+			continue
 		}
+		r.checkName(c, v.Name, v.Line)
 	}
 }
 func (r *ShortVariable) ApplyFunc(c *rule.Context, fn *model.Function) { r.checkFunc(c, fn) }
@@ -177,10 +175,8 @@ func (r *LongVariable) checkFunc(c *rule.Context, fn *model.Function) {
 			r.checkName(c, p.Name, p.Line)
 		}
 	}
-	if fn.Body != nil {
-		for _, v := range util.LocalVariables(fn.Body, fn.File.Fset) {
-			r.checkName(c, v.Name, v.Line)
-		}
+	for _, v := range model.Locals(fn) {
+		r.checkName(c, v.Name, v.Line)
 	}
 }
 func (r *LongVariable) ApplyFunc(c *rule.Context, fn *model.Function) { r.checkFunc(c, fn) }

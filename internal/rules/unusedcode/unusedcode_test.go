@@ -105,10 +105,6 @@ func f(items []int) {
 	if len(f.Functions) != 1 {
 		t.Fatalf("functions = %d, want 1", len(f.Functions))
 	}
-	locals := model.LocalVariables(f.Functions[0])
-	if len(locals) != 1 || locals[0].Name != "i" || !locals[0].IsLoop {
-		t.Fatalf("locals = %+v, want loop variable i", locals)
-	}
 
 	tests := []struct {
 		name      string

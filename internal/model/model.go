@@ -293,21 +293,16 @@ type Function struct {
 func (f *Function) IsMethod() bool { return f.Receiver != "" }
 
 type identifierReadCache struct {
-	once       sync.Once
-	names      map[string]bool
-	objects    map[*ast.Object]bool
-	unresolved map[string]bool
+	once  sync.Once
+	facts identifierReadFacts
 }
 
-func functionIdentifierReadFacts(f *Function) *identifierReadCache {
+func functionIdentifierReadFacts(f *Function) identifierReadFacts {
 	cache := &f.identifierReads
 	cache.once.Do(func() {
-		facts := scanIdentifierReads(f.Body)
-		cache.names = facts.names
-		cache.objects = facts.objects
-		cache.unresolved = facts.unresolved
+		cache.facts = scanIdentifierReads(f.Body)
 	})
-	return cache
+	return cache.facts
 }
 
 func (f *Function) NodeType() NodeType {

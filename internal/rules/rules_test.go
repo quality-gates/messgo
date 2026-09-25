@@ -1254,6 +1254,22 @@ func fill(src []byte) { copy(buf, src) }
 	mustHave(t, hits, "GlobalVariable")
 }
 
+func TestGlobalVariableFlagsChannelSend(t *testing.T) {
+	hits := analyze(t, `
+var work = make(chan int, 10)
+func produce() { work <- 1 }
+`, "design")
+	mustHave(t, hits, "GlobalVariable")
+}
+
+func TestGlobalVariableFlagsChannelClose(t *testing.T) {
+	hits := analyze(t, `
+var done = make(chan struct{})
+func finish() { close(done) }
+`, "design")
+	mustHave(t, hits, "GlobalVariable")
+}
+
 func TestGlobalVariableFlagsInPlaceSort(t *testing.T) {
 	hits := analyze(t, `
 import s "sort"

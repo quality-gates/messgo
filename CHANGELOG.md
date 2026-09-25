@@ -6,6 +6,13 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 
 ## [Unreleased]
 
+### Changed
+- Rules that inspect local variables and parameters now use model queries
+  (`Locals`, `LocalRead`, `UnreadParameters`) instead of walking `go/ast`
+  themselves. The raw-AST local-variable helpers in `internal/util` have moved
+  behind the `model` package, and the LCOM4 receiver queries now live in
+  `internal/model/receiver.go` (#170).
+
 ### Fixed
 - Fixed `GlobalVariable` missing package-level channels that are mutated only
   by sends (`ch <- x`) or `close(ch)` (#187).

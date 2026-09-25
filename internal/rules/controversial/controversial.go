@@ -8,7 +8,6 @@ import (
 
 	"github.com/quality-gates/messgo/internal/model"
 	"github.com/quality-gates/messgo/internal/rule"
-	"github.com/quality-gates/messgo/internal/util"
 )
 
 func init() {
@@ -137,11 +136,8 @@ func (r *CamelCaseVariableName) Configure(props rule.Properties) error {
 }
 
 func (r *CamelCaseVariableName) check(c *rule.Context, fn *model.Function) {
-	if fn.Body == nil {
-		return
-	}
 	seen := map[string]bool{}
-	for _, v := range util.LocalVariables(fn.Body, fn.File.Fset) {
+	for _, v := range model.Locals(fn) {
 		if v.Name == "_" || isCamelCaseWithOptions(v.Name, r.allowUnderscore, false) || seen[v.Name] {
 			continue
 		}

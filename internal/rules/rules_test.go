@@ -2463,6 +2463,18 @@ func f() {
 	mustHave(t, hits, "DuplicatedArrayKey")
 }
 
+func TestDuplicatedArrayKeyPackageQualifiedKeys(t *testing.T) {
+	src := `import "net/http"
+
+var statuses = map[int]string{
+	http.StatusOK: "OK",
+	http.StatusOK: "Duplicate OK",
+}
+`
+	hits := analyze(t, src, "cleancode")
+	mustHaveCount(t, hits, "DuplicatedArrayKey", 1)
+}
+
 func TestExitExpressionResolvesImportedPackages(t *testing.T) {
 	tests := []struct {
 		name      string

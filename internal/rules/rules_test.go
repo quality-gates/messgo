@@ -1254,6 +1254,23 @@ func fill(src []byte) { copy(buf, src) }
 	mustHave(t, hits, "GlobalVariable")
 }
 
+func TestGlobalVariableFlagsCopyIntoArraySlice(t *testing.T) {
+	hits := analyze(t, `
+var arr [4]byte
+func fill(src []byte) { copy(arr[:], src) }
+`, "design")
+	mustHave(t, hits, "GlobalVariable")
+}
+
+func TestGlobalVariableFlagsInPlaceSortOfSubslice(t *testing.T) {
+	hits := analyze(t, `
+import "sort"
+var list = []int{3, 2, 1}
+func order() { sort.Ints(list[1:]) }
+`, "design")
+	mustHave(t, hits, "GlobalVariable")
+}
+
 func TestGlobalVariableFlagsChannelSend(t *testing.T) {
 	hits := analyze(t, `
 var work = make(chan int, 10)

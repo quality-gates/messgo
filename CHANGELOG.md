@@ -6,6 +6,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 
 ## [Unreleased]
 
+## [0.5.3] - 2026-09-26
+
 ### Fixed
 - Fixed `DuplicatedArrayKey` missing duplicate composite-literal keys that are
   package-qualified identifiers, such as `http.StatusOK` or `time.Second`.

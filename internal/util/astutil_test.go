@@ -168,6 +168,40 @@ func work(src []int, less func(i, j int) bool, cmp func(a, b int) int) {
 	}
 }
 
+// TestMutatedGlobalNamesThroughSliceExpr checks that a write through a slice
+// expression of a global (x[:], x[i:], x[i:j:k]) is a mutation of that global.
+func TestMutatedGlobalNamesThroughSliceExpr(t *testing.T) {
+	f := parseFile(t, `
+package p
+
+import "sort"
+
+var arr [4]byte
+var tail, full, cleared, indexed []int
+var viewed []int
+
+func work(src []byte) {
+	copy(arr[:], src)
+	sort.Ints(tail[1:])
+	copy(full[0:2:2], nil)
+	clear(cleared[:])
+	indexed[1:][0] = 1
+	_ = viewed[1:]
+}
+`)
+
+	got := MutatedGlobalNames([]*ast.File{f})
+
+	for _, name := range []string{"arr", "tail", "full", "cleared", "indexed"} {
+		if !got[name] {
+			t.Errorf("expected %q to be detected as mutated; got %v", name, got)
+		}
+	}
+	if got["viewed"] {
+		t.Errorf("viewed is only sliced; must not be detected as mutated; got %v", got)
+	}
+}
+
 func TestTypeAliasNames(t *testing.T) {
 	src := `package p
 type original struct{}

@@ -424,6 +424,33 @@ func Head() byte { return buf[0] }
 	)
 }
 
+func TestExplicitnessReportsWritesThroughSliceExpressions(t *testing.T) {
+	src := `package p
+
+import "sort"
+
+var arr [4]byte
+
+type queue struct{ items []int }
+
+func Fill(src []byte) { copy(arr[:], src) }
+
+func Tail(s []int) { sort.Ints(s[1:]) }
+
+func (q queue) Load(src []int) { copy(q.items[:], src) }
+`
+	_, got := runExplicitness(t, "explicitness", map[string]string{"a.go": src})
+	assertFindings(t, got,
+		"a.go:9 ImplicitInput Fill: package variable arr",
+		"a.go:9 ImplicitOutput Fill: package variable arr",
+		"a.go:11 ImplicitOutput Tail: write through parameter s",
+	)
+	_, got = runExplicitness(t, "explicitness-strict", map[string]string{"a.go": src})
+	if !slices.Contains(got, "a.go:13 ImplicitOutput queue.Load: receiver field items") {
+		t.Fatalf("strict findings missing receiver write: %q", got)
+	}
+}
+
 func TestExplicitnessReportsReceiveFromChannelThatACallReturns(t *testing.T) {
 	_, got := runExplicitness(t, "explicitness", map[string]string{
 		"a.go": `package p

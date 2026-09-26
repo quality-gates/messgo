@@ -207,9 +207,11 @@ func collectValueSpecVars(spec ast.Spec, names map[string]bool, specs map[any]bo
 	}
 }
 
-// RootIdent peels selector, index, star and paren wrappers off an lvalue to its
-// leading identifier: x, x.f, x[i], *x, (x) all reduce to x. Returns nil if the
-// expression is not rooted at an identifier.
+// RootIdent peels selector, index, slice, star and paren wrappers off an lvalue
+// to its leading identifier: x, x.f, x[i], x[i:j], *x, (x) all reduce to x. A
+// slice expression shares the storage of its operand, so a write through
+// x[i:j] changes x. Returns nil if the expression is not rooted at an
+// identifier.
 func RootIdent(e ast.Expr) *ast.Ident {
 	for {
 		switch t := e.(type) {
@@ -220,6 +222,8 @@ func RootIdent(e ast.Expr) *ast.Ident {
 		case *ast.IndexExpr:
 			e = t.X
 		case *ast.IndexListExpr:
+			e = t.X
+		case *ast.SliceExpr:
 			e = t.X
 		case *ast.StarExpr:
 			e = t.X

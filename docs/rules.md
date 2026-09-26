@@ -94,8 +94,9 @@ reported.
 comma-ok form (`v, ok := x.(T)`), which panic on failure. Type switches are
 safe and not flagged.
 
-`IdenticalBranches` (opinionated) flags if/else and switch cases whose bodies
-are textually identical, indicating copy-pasted logic.
+`IdenticalBranches` (opinionated) flags if/else-if/else chains, switch cases,
+and type switch cases whose bodies are textually identical, indicating
+copy-pasted logic.
 
 `StructEmbeddingDepth` (opinionated) flags structs whose transitive embedding
 chain exceeds `maxdepth` (default 3). Cross-package embeddings are treated as

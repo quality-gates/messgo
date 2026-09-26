@@ -2381,6 +2381,75 @@ func fEmptyElse(x int) {
 	mustNotHave(t, hits, "IdenticalBranches")
 }
 
+func identicalBranchesLines(hits []hit) []int {
+	var lines []int
+	for _, h := range hits {
+		if h.rule == "IdenticalBranches" {
+			lines = append(lines, h.line)
+		}
+	}
+	return lines
+}
+
+func TestIdenticalBranchesFiresOnElseIfChain(t *testing.T) {
+	src := `
+func f(a, b, c bool) {
+	if a {
+		println("same")
+	} else if b {
+		println("other")
+	} else if c {
+		println("same")
+	} else {
+		println("other")
+	}
+}
+`
+	hits := analyze(t, src, "opinionated")
+	got := identicalBranchesLines(hits)
+	want := []int{7, 9}
+	if !slices.Equal(got, want) {
+		t.Fatalf("IdenticalBranches lines = %v, want %v", got, want)
+	}
+}
+
+func TestIdenticalBranchesDoesNotFireOnDistinctElseIfChain(t *testing.T) {
+	src := `
+func f(a, b bool) {
+	if a {
+		println("a")
+	} else if b {
+		println("b")
+	} else {
+		println("c")
+	}
+}
+`
+	hits := analyze(t, src, "opinionated")
+	mustNotHave(t, hits, "IdenticalBranches")
+}
+
+func TestIdenticalBranchesFiresOnTypeSwitchCases(t *testing.T) {
+	src := `
+func f(v any) {
+	switch v.(type) {
+	case int:
+		println("same")
+	case string:
+		println("same")
+	case bool:
+		println("different")
+	}
+}
+`
+	hits := analyze(t, src, "opinionated")
+	got := identicalBranchesLines(hits)
+	want := []int{6}
+	if !slices.Equal(got, want) {
+		t.Fatalf("IdenticalBranches lines = %v, want %v", got, want)
+	}
+}
+
 func TestDuplicatedArrayKeyNegativeKeys(t *testing.T) {
 	src := `
 func f() {

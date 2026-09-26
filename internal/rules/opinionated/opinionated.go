@@ -99,8 +99,8 @@ func unwrapParen(e ast.Expr) ast.Expr {
 
 // ----- IdenticalBranches --------------------------------------------------
 
-// IdenticalBranches flags if/else and switch cases whose bodies are textually
-// identical, which usually indicates copy-pasted logic that belongs in a single
+// IdenticalBranches flags if/else-if/else chains and (type) switch cases whose
+// bodies are textually identical, which usually indicates copy-pasted logic that belongs in a single
 // path. Go-specific (no PHPMD analog); mirrors revive's identical-branches and
 // dupSquash. See docs/adr/0001-go-mess-sign-backlog.md rank 7.
 type IdenticalBranches struct {
@@ -116,61 +116,78 @@ func (r *IdenticalBranches) ApplyFunc(c *rule.Context, fn *model.Function) {
 		return
 	}
 	fset := c.File.Fset
+	elseIfs := map[*ast.IfStmt]bool{}
 	ast.Inspect(fn.Body, func(n ast.Node) bool {
 		switch n := n.(type) {
 		case *ast.IfStmt:
-			r.checkIfElse(c, fn, n, fset)
+			// An else-if was already compared as part of its chain's head.
+			if !elseIfs[n] {
+				r.checkBranches(c, fn, ifChainBranches(n, elseIfs), fset)
+			}
 		case *ast.SwitchStmt:
-			r.checkSwitchCases(c, fn, n, fset)
+			r.checkBranches(c, fn, caseBranches(n.Body), fset)
+		case *ast.TypeSwitchStmt:
+			r.checkBranches(c, fn, caseBranches(n.Body), fset)
 		}
 		return true
 	})
 }
 
-func (r *IdenticalBranches) checkIfElse(c *rule.Context, fn *model.Function, n *ast.IfStmt, fset *token.FileSet) {
-	elseBlock, ok := n.Else.(*ast.BlockStmt)
-	if !ok {
-		return
-	}
-	if len(n.Body.List) == 0 {
-		return
-	}
-	if !stmtsEqual(n.Body.List, elseBlock.List, fset) {
-		return
-	}
-	line := fset.Position(elseBlock.Pos()).Line
-	c.ReportFuncAt(fn, line, line, string(fn.NodeType()), fn.Name)
+// branch is one arm of an if/else-if/else chain or a switch: the position to
+// report at and the statements it runs.
+type branch struct {
+	pos  token.Pos
+	body []ast.Stmt
 }
 
-func (r *IdenticalBranches) checkSwitchCases(c *rule.Context, fn *model.Function, n *ast.SwitchStmt, fset *token.FileSet) {
-	cases := switchCases(n.Body)
+// checkBranches reports every branch whose body repeats an earlier non-empty
+// branch, once per duplicate.
+func (r *IdenticalBranches) checkBranches(c *rule.Context, fn *model.Function, branches []branch, fset *token.FileSet) {
 	reported := map[int]bool{}
-	for i := range cases {
-		if len(cases[i].Body) == 0 {
+	for i := range branches {
+		if len(branches[i].body) == 0 {
 			continue
 		}
-		for j := i + 1; j < len(cases); j++ {
-			if len(cases[j].Body) == 0 || reported[j] {
+		for j := i + 1; j < len(branches); j++ {
+			if len(branches[j].body) == 0 || reported[j] {
 				continue
 			}
-			if !stmtsEqual(cases[i].Body, cases[j].Body, fset) {
+			if !stmtsEqual(branches[i].body, branches[j].body, fset) {
 				continue
 			}
 			reported[j] = true
-			line := fset.Position(cases[j].Pos()).Line
+			line := fset.Position(branches[j].pos).Line
 			c.ReportFuncAt(fn, line, line, string(fn.NodeType()), fn.Name)
 		}
 	}
 }
 
-func switchCases(body *ast.BlockStmt) []*ast.CaseClause {
-	var cases []*ast.CaseClause
+// ifChainBranches flattens an if/else-if/else chain into its branches and
+// records each nested else-if in seen so it is not checked again on its own.
+func ifChainBranches(n *ast.IfStmt, seen map[*ast.IfStmt]bool) []branch {
+	var branches []branch
+	for cur := n; cur != nil; {
+		branches = append(branches, branch{pos: cur.Body.Pos(), body: cur.Body.List})
+		next, _ := cur.Else.(*ast.IfStmt)
+		if block, ok := cur.Else.(*ast.BlockStmt); ok {
+			branches = append(branches, branch{pos: block.Pos(), body: block.List})
+		}
+		if next != nil {
+			seen[next] = true
+		}
+		cur = next
+	}
+	return branches
+}
+
+func caseBranches(body *ast.BlockStmt) []branch {
+	var branches []branch
 	for _, s := range body.List {
 		if cc, ok := s.(*ast.CaseClause); ok {
-			cases = append(cases, cc)
+			branches = append(branches, branch{pos: cc.Pos(), body: cc.Body})
 		}
 	}
-	return cases
+	return branches
 }
 
 // stmtsEqual reports whether two statement lists produce identical formatted

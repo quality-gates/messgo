@@ -80,8 +80,9 @@ if !ok {
           message="The {0} {1}() has identical branches. Combine or extract to avoid copy-pasted logic.">
         <description>
             <![CDATA[
-A Go-specific rule (no PHPMD analog). Flags if/else and switch cases whose
-bodies are textually identical, which usually indicates copy-pasted logic that
+A Go-specific rule (no PHPMD analog). Flags if/else-if/else chains, switch
+cases, and type switch cases whose bodies are textually identical, which
+usually indicates copy-pasted logic that
 belongs in a single path. Two branches are "identical" when their statements
 produce the same formatted output.
 

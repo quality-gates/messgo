@@ -6,6 +6,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 
 ## [Unreleased]
 
+## [0.5.2] - 2026-09-26
+
 ### Added
 - Added an exploratory testing report for rules and metrics (opinionated ruleset, slice mutation tracking in GlobalVariable/ImplicitOutput, DuplicatedArrayKey on qualified identifiers, and CognitiveComplexity in methods), with a replay script for findings #194–#197.
 

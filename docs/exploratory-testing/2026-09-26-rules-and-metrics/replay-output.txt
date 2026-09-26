@@ -1,0 +1,11 @@
+== B1 (#194) slice expression mutations on globals: expect GlobalVariable for Arr and Slice
+exit=0
+== B1 (#194) slice expression mutation on param: expect ImplicitOutput for MutateParam
+exit=0
+== B2 (#195) identical branches in else if and type switch: expect IdenticalBranches for CheckIf and CheckType
+exit=0
+== B3 (#196) duplicate package-qualified map keys: expect DuplicatedArrayKey for http.StatusOK
+exit=0
+== B4 (#197) method recursion in CognitiveComplexity: expect CognitiveComplexity for Walk() and WalkFunc()
+b4/a.go:9  CognitiveComplexity  The function WalkFunc() has a cognitive complexity of 1. The configured cognitive complexity threshold is 1.
+exit=2

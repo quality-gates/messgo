@@ -149,10 +149,8 @@ func (r *IdenticalBranches) checkBranches(c *rule.Context, fn *model.Function, b
 			continue
 		}
 		for j := i + 1; j < len(branches); j++ {
-			if len(branches[j].body) == 0 || reported[j] {
-				continue
-			}
-			if !stmtsEqual(branches[i].body, branches[j].body, fset) {
+			// An empty branch j never matches the non-empty branch i.
+			if reported[j] || !stmtsEqual(branches[i].body, branches[j].body, fset) {
 				continue
 			}
 			reported[j] = true

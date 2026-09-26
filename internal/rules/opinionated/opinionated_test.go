@@ -1,6 +1,7 @@
 package opinionated
 
 import (
+	"slices"
 	"testing"
 
 	"github.com/quality-gates/messgo/internal/model"
@@ -98,6 +99,118 @@ func f(x int) {
 	if len(violations) != 0 {
 		t.Fatalf("expected 0 violations for empty switch cases, got %d", len(violations))
 	}
+}
+
+func violationLines(vs []*rule.Violation) []int {
+	var lines []int
+	for _, v := range vs {
+		lines = append(lines, v.BeginLine)
+	}
+	return lines
+}
+
+func assertIdenticalBranchesLines(t *testing.T, src string, want ...int) {
+	t.Helper()
+	got := violationLines(analyzeSource(t, newIdenticalBranches(), src))
+	if !slices.Equal(got, want) {
+		t.Fatalf("IdenticalBranches lines = %v, want %v", got, want)
+	}
+}
+
+func TestIdenticalBranchesElseIfChainWithElse(t *testing.T) {
+	assertIdenticalBranchesLines(t, `package sample
+
+func f(a, b, c bool) {
+	if a {
+		println("same")
+	} else if b {
+		println("other")
+	} else if c {
+		println("same")
+	} else {
+		println("other")
+	}
+}
+`, 8, 10)
+}
+
+func TestIdenticalBranchesElseIfChainReportsEachDuplicateOnce(t *testing.T) {
+	assertIdenticalBranchesLines(t, `package sample
+
+func f(a, b bool) {
+	if a {
+		println("same")
+	} else if b {
+		println("same")
+	} else {
+		println("same")
+	}
+}
+`, 6, 8)
+}
+
+func TestIdenticalBranchesElseIfChainSkipsEmptyBranches(t *testing.T) {
+	assertIdenticalBranchesLines(t, `package sample
+
+func f(a, b, c bool) {
+	if a {
+	} else if b {
+	} else if c {
+		println("same")
+	} else if a == b {
+		println("same")
+	}
+}
+`, 8)
+}
+
+func TestIdenticalBranchesNestedIfInsideBranch(t *testing.T) {
+	assertIdenticalBranchesLines(t, `package sample
+
+func f(a, b bool) {
+	if a {
+		if b {
+			println("inner")
+		} else {
+			println("inner")
+		}
+	} else {
+		println("outer")
+	}
+}
+`, 7)
+}
+
+func TestIdenticalBranchesSwitchReportsEachDuplicateOnce(t *testing.T) {
+	assertIdenticalBranchesLines(t, `package sample
+
+func f(x int) {
+	switch x {
+	case 1:
+		println("same")
+	case 2:
+		println("same")
+	case 3:
+		println("same")
+	}
+}
+`, 7, 9)
+}
+
+func TestIdenticalBranchesTypeSwitch(t *testing.T) {
+	assertIdenticalBranchesLines(t, `package sample
+
+func f(v any) {
+	switch v.(type) {
+	case int:
+		println("same")
+	case string:
+		println("other")
+	default:
+		println("same")
+	}
+}
+`, 9)
 }
 
 func TestUncheckedTypeAssertionParenthesizedCommaOK(t *testing.T) {

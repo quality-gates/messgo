@@ -342,12 +342,15 @@ func (v *cognitiveVisitor) visitCall(n *ast.CallExpr) {
 	if v.name == nil {
 		return
 	}
-	id, ok := n.Fun.(*ast.Ident)
-	if !ok {
-		return
-	}
-	if id.Obj == v.name.Obj && id.Name == v.name.Name {
-		v.inc() // direct recursion
+	switch call := n.Fun.(type) {
+	case *ast.Ident:
+		if call.Obj == v.name.Obj && call.Name == v.name.Name {
+			v.inc() // direct recursion
+		}
+	case *ast.SelectorExpr:
+		if call.Sel.Name == v.name.Name {
+			v.inc() // direct method recursion
+		}
 	}
 }
 

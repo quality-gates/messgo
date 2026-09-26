@@ -329,6 +329,22 @@ func literalKey(e ast.Expr) (string, bool) {
 		return basicLitKey(k.Value, k.Kind)
 	case *ast.Ident:
 		return "ident:" + k.Name, true
+	case *ast.SelectorExpr:
+		name, ok := qualifiedName(k)
+		return "ident:" + name, ok
+	}
+	return "", false
+}
+
+// qualifiedName renders a selector chain rooted at an identifier, such as
+// http.StatusOK, and reports false for any other selector base.
+func qualifiedName(e ast.Expr) (string, bool) {
+	switch k := e.(type) {
+	case *ast.Ident:
+		return k.Name, true
+	case *ast.SelectorExpr:
+		x, ok := qualifiedName(k.X)
+		return x + "." + k.Sel.Name, ok
 	}
 	return "", false
 }
@@ -364,6 +380,9 @@ func displayKey(e ast.Expr) string {
 		return k.Value
 	case *ast.Ident:
 		return k.Name
+	case *ast.SelectorExpr:
+		name, _ := qualifiedName(k)
+		return name
 	}
 	return ""
 }

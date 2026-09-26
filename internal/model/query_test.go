@@ -2,6 +2,7 @@ package model
 
 import (
 	"go/ast"
+	"slices"
 	"testing"
 )
 
@@ -347,6 +348,42 @@ func TestDuplicateLiteralKeysUseConstantValue(t *testing.T) {
 	}
 	if got := DuplicateLiteralKeys(f.Functions[0]); len(got) < 2 {
 		t.Fatalf("DuplicateLiteralKeys() = %#v, want 1/01 and a/`a`", got)
+	}
+}
+
+func TestDuplicateLiteralKeysComparePackageQualifiedKeys(t *testing.T) {
+	f, err := ParseSource("query.go", []byte(`package sample
+import (
+	"net/http"
+	"time"
+)
+var statuses = map[int]string{
+	http.StatusOK:       "OK",
+	http.StatusNotFound: "Not Found",
+	http.StatusOK:       "Duplicate OK",
+}
+var durations = map[time.Duration]string{
+	time.Second: "s",
+	time.Minute: "m",
+}
+var calls = map[int]string{
+	pair().A: "a",
+	pair().A: "b",
+}
+var nested = map[int]string{
+	cfg.Limits.Max: "a",
+	cfg.Limits.Max: "b",
+}
+`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []DuplicateLiteralKey{
+		{Display: "http.StatusOK", FirstLine: 7, Line: 9},
+		{Display: "cfg.Limits.Max", FirstLine: 20, Line: 21},
+	}
+	if got := f.PackageDuplicateLiteralKeys(); !slices.Equal(got, want) {
+		t.Fatalf("PackageDuplicateLiteralKeys() = %+v, want %+v", got, want)
 	}
 }
 

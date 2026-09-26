@@ -6,6 +6,12 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 
 ## [Unreleased]
 
+### Fixed
+- Fixed `DuplicatedArrayKey` missing duplicate composite-literal keys that are
+  package-qualified identifiers, such as `http.StatusOK` or `time.Second`.
+  Selector chains rooted at an identifier are now compared and reported by
+  their qualified name (#196).
+
 ## [0.5.2] - 2026-09-26
 
 ### Added

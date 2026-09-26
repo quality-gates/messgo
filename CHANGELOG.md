@@ -13,6 +13,9 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 - Fixed `GlobalVariable` and `ImplicitOutput` missing mutations made through a
   slice expression, such as `copy(arr[:], src)`, `sort.Ints(s[1:])`, or
   `copy(r.items[:], src)` on a receiver field (#194).
+- Fixed `IdenticalBranches` missing duplicate bodies in `else if` chains and in
+  type switches (`switch x.(type)`). Every branch of an if/else-if/else chain
+  is now compared, like switch cases (#195).
 
 ## [0.5.1] - 2026-09-25
 

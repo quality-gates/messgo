@@ -1057,6 +1057,13 @@ func otherGOOS() string {
 	return "windows"
 }
 
+func otherGOARCH() string {
+	if runtime.GOARCH == "amd64" {
+		return "arm64"
+	}
+	return "amd64"
+}
+
 func writeSources(t *testing.T, dir string, files map[string]string) {
 	t.Helper()
 	for name, src := range files {
@@ -1087,13 +1094,16 @@ func violationFiles(rep *report.Report) []string {
 func TestDirectoryDiscoverySkipsFilesExcludedByBuildConstraints(t *testing.T) {
 	dir := t.TempDir()
 	other := otherGOOS()
+	otherArch := otherGOARCH()
 	unused := "package p\n\ntype t struct{}\n\nfunc (t) unusedPriv() {}\n"
 	writeSources(t, dir, map[string]string{
-		"a.go":                    "package p\n\nfunc Used() {}\n",
-		"ignored.go":              "//go:build ignore\n\n" + unused,
-		"tagged.go":               "//go:build " + other + "\n\n" + unused,
-		"negated.go":              "//go:build !" + runtime.GOOS + "\n\n" + unused,
-		"suffix_" + other + ".go": unused,
+		"a.go":                        "package p\n\nfunc Used() {}\n",
+		"ignored.go":                  "//go:build ignore\n\n" + unused,
+		"tagged.go":                   "//go:build " + other + "\n\n" + unused,
+		"tagged_arch.go":              "//go:build " + otherArch + "\n\n" + unused,
+		"negated.go":                  "//go:build !" + runtime.GOOS + "\n\n" + unused,
+		"suffix_" + other + ".go":     unused,
+		"suffix_" + otherArch + ".go": unused,
 	})
 
 	rep, err := Run(Options{Paths: []string{dir}, RuleSets: unusedMethodSets(t)})
@@ -1112,6 +1122,24 @@ func TestDirectoryDiscoveryKeepsFilesMatchingBuildContext(t *testing.T) {
 	writeSources(t, dir, map[string]string{
 		"a.go": "package p\n\nfunc Used() {}\n",
 		name:   "//go:build " + runtime.GOOS + "\n\n" + unused,
+	})
+
+	rep, err := Run(Options{Paths: []string{dir}, RuleSets: unusedMethodSets(t)})
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if got := violationFiles(rep); len(got) != 1 || got[0] != name {
+		t.Fatalf("violations = %v, want one finding in %s", got, name)
+	}
+}
+
+func TestDirectoryDiscoveryKeepsFilesMatchingGOARCHContext(t *testing.T) {
+	dir := t.TempDir()
+	unused := "package p\n\ntype t struct{}\n\nfunc (t) unusedPriv() {}\n"
+	name := "active_" + runtime.GOARCH + ".go"
+	writeSources(t, dir, map[string]string{
+		"a.go": "package p\n\nfunc Used() {}\n",
+		name:   "//go:build " + runtime.GOARCH + "\n\n" + unused,
 	})
 
 	rep, err := Run(Options{Paths: []string{dir}, RuleSets: unusedMethodSets(t)})

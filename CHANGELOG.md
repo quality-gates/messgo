@@ -6,6 +6,13 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 
 ## [Unreleased]
 
+### Fixed
+- Fixed directory inputs analyzing Go files that the current build excludes.
+  Files ruled out by `//go:build` constraints or by `_GOOS`/`_GOARCH` filename
+  suffixes for another platform no longer produce violations or feed
+  cross-file package analysis. A file named explicitly on the command line is
+  still analyzed whatever its constraints say (#205).
+
 ## [0.5.3] - 2026-09-26
 
 ### Fixed

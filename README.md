@@ -27,6 +27,10 @@ messgo ./... sarif go --ignore-tests --reportfile reports/messgo.sarif
 messgo ./... github go --ignore-tests
 ```
 
+Directory inputs analyze only the files that build for the host platform,
+honouring `//go:build` lines and `_GOOS`/`_GOARCH` filename suffixes. A file
+named explicitly is always analyzed.
+
 Full command syntax, options, and discovery: [docs/usage.md](docs/usage.md).
 What each ruleset and rule checks: [docs/rules.md](docs/rules.md).
 

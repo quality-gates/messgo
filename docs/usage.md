@@ -9,6 +9,14 @@ messgo <paths> <format> <ruleset[,ruleset...]> [options]
 - **paths** — comma-separated files or directories. Directories are walked;
   `vendor/`, `node_modules/`, `testdata/`, and `.git/` are skipped. A path ending in `...`
   (Go's recursive wildcard, e.g. `./...`) is walked from that directory.
+  `.go` files found in a directory are kept only if they build in the default
+  Go build context: the host `GOOS`/`GOARCH`, the default cgo setting, and no
+  extra tags. Files excluded by a `//go:build` line or by an OS/architecture
+  filename suffix such as `_windows.go` are skipped and play no part in
+  cross-file package analysis. A file named explicitly on the command line is
+  always analyzed, whatever its build constraints say, like `go run file.go`.
+  The suffix, `--ignore-tests`, `--exclude`, and ruleset `<exclude-pattern>`
+  filters apply to both kinds of input.
 - **format** — `text`, `xml`, `json`, `html`, `ansi`, `github`, `gitlab`,
   `checkstyle`, or `sarif`.
 - **ruleset** — one or more built-in names or paths to phpmd-format ruleset XML.

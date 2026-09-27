@@ -3,6 +3,7 @@ package runner
 
 import (
 	"go/ast"
+	"go/build"
 	"go/token"
 	"io/fs"
 	"os"
@@ -212,12 +213,24 @@ func walkDirFunc(root string, opts Options, add func(string)) fs.WalkDirFunc {
 		if shouldSkipFile(d.Name()) {
 			return nil
 		}
-		if !shouldIncludeFile(path, opts) {
+		if !inBuildContext(path) || !shouldIncludeFile(path, opts) {
 			return nil
 		}
 		add(path)
 		return nil
 	}
+}
+
+// inBuildContext reports whether a Go file found by a directory walk belongs to
+// the default build context, honouring //go:build lines and GOOS/GOARCH
+// filename suffixes. Non-Go files and files whose header cannot be read are
+// kept so that suffix filters and parse error reporting still apply to them.
+func inBuildContext(path string) bool {
+	if filepath.Ext(path) != ".go" {
+		return true
+	}
+	match, err := build.Default.MatchFile(filepath.Dir(path), filepath.Base(path))
+	return match || err != nil
 }
 
 func discover(opts Options) ([]string, error) {

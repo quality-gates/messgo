@@ -3,10 +3,12 @@ package runner
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
 	"github.com/quality-gates/messgo/internal/model"
+	"github.com/quality-gates/messgo/internal/report"
 	"github.com/quality-gates/messgo/internal/rule"
 	"github.com/quality-gates/messgo/internal/ruleset"
 )
@@ -1045,5 +1047,149 @@ func TestAttachPackageMethodsResolvesCrossFileTypeAlias(t *testing.T) {
 	}
 	if c.Methods[0].Class != c {
 		t.Fatalf("m.Class = %v, want original", c.Methods[0].Class)
+	}
+}
+
+func otherGOOS() string {
+	if runtime.GOOS == "windows" {
+		return "linux"
+	}
+	return "windows"
+}
+
+func writeSources(t *testing.T, dir string, files map[string]string) {
+	t.Helper()
+	for name, src := range files {
+		if err := os.WriteFile(filepath.Join(dir, name), []byte(src), 0o644); err != nil {
+			t.Fatalf("write %s: %v", name, err)
+		}
+	}
+}
+
+func unusedMethodSets(t *testing.T) []*rule.RuleSet {
+	t.Helper()
+	sets, err := (&ruleset.Loader{}).Load("unusedcode")
+	if err != nil {
+		t.Fatalf("load ruleset: %v", err)
+	}
+	ruleset.FilterRules(sets, []string{"UnusedPrivateMethod"}, nil)
+	return sets
+}
+
+func violationFiles(rep *report.Report) []string {
+	var names []string
+	for _, v := range rep.Violations {
+		names = append(names, filepath.Base(v.File))
+	}
+	return names
+}
+
+func TestDirectoryDiscoverySkipsFilesExcludedByBuildConstraints(t *testing.T) {
+	dir := t.TempDir()
+	other := otherGOOS()
+	unused := "package p\n\ntype t struct{}\n\nfunc (t) unusedPriv() {}\n"
+	writeSources(t, dir, map[string]string{
+		"a.go":                    "package p\n\nfunc Used() {}\n",
+		"ignored.go":              "//go:build ignore\n\n" + unused,
+		"tagged.go":               "//go:build " + other + "\n\n" + unused,
+		"negated.go":              "//go:build !" + runtime.GOOS + "\n\n" + unused,
+		"suffix_" + other + ".go": unused,
+	})
+
+	rep, err := Run(Options{Paths: []string{dir}, RuleSets: unusedMethodSets(t)})
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if len(rep.Violations) != 0 || len(rep.Errors) != 0 {
+		t.Fatalf("violations = %v, errors = %+v, want none from inactive files", violationFiles(rep), rep.Errors)
+	}
+}
+
+func TestDirectoryDiscoveryKeepsFilesMatchingBuildContext(t *testing.T) {
+	dir := t.TempDir()
+	unused := "package p\n\ntype t struct{}\n\nfunc (t) unusedPriv() {}\n"
+	name := "active_" + runtime.GOOS + ".go"
+	writeSources(t, dir, map[string]string{
+		"a.go": "package p\n\nfunc Used() {}\n",
+		name:   "//go:build " + runtime.GOOS + "\n\n" + unused,
+	})
+
+	rep, err := Run(Options{Paths: []string{dir}, RuleSets: unusedMethodSets(t)})
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if got := violationFiles(rep); len(got) != 1 || got[0] != name {
+		t.Fatalf("violations = %v, want one finding in %s", got, name)
+	}
+}
+
+func TestInactiveFileDoesNotHideUnusedMemberInActiveFile(t *testing.T) {
+	dir := t.TempDir()
+	writeSources(t, dir, map[string]string{
+		"model.go": "package p\n\ntype T struct{}\n\nfunc (T) helper() {}\n",
+		"use.go":   "//go:build ignore\n\npackage p\n\nfunc Use(t T) { t.helper() }\n",
+	})
+
+	rep, err := Run(Options{Paths: []string{dir}, RuleSets: unusedMethodSets(t)})
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if got := violationFiles(rep); len(got) != 1 || got[0] != "model.go" {
+		t.Fatalf("violations = %v, want helper reported in model.go", got)
+	}
+}
+
+func TestExplicitFileInputIgnoresBuildConstraints(t *testing.T) {
+	dir := t.TempDir()
+	unused := "package p\n\ntype t struct{}\n\nfunc (t) unusedPriv() {}\n"
+	names := []string{"ignored.go", "suffix_" + otherGOOS() + ".go"}
+	writeSources(t, dir, map[string]string{
+		names[0]: "//go:build ignore\n\n" + unused,
+		names[1]: unused,
+	})
+
+	for _, name := range names {
+		rep, err := Run(Options{Paths: []string{filepath.Join(dir, name)}, RuleSets: unusedMethodSets(t)})
+		if err != nil {
+			t.Fatalf("Run %s: %v", name, err)
+		}
+		if got := violationFiles(rep); len(got) != 1 || got[0] != name {
+			t.Fatalf("explicit %s violations = %v, want one finding", name, got)
+		}
+	}
+}
+
+func TestDirectoryDiscoveryAppliesBuildContextOnlyToGoFiles(t *testing.T) {
+	dir := t.TempDir()
+	name := "fixture_" + otherGOOS() + ".tpl"
+	writeSources(t, dir, map[string]string{
+		name: "package p\n\ntype t struct{}\n\nfunc (t) unusedPriv() {}\n",
+	})
+
+	rep, err := Run(Options{Paths: []string{dir}, RuleSets: unusedMethodSets(t), Suffixes: []string{".tpl"}})
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if got := violationFiles(rep); len(got) != 1 || got[0] != name {
+		t.Fatalf("violations = %v, want %s analyzed under a non-Go suffix", got, name)
+	}
+}
+
+func TestDirectoryDiscoveryReportsUnreadableGoFile(t *testing.T) {
+	if runtime.GOOS == "windows" || os.Geteuid() == 0 {
+		t.Skip("file permissions cannot make the file unreadable")
+	}
+	dir := t.TempDir()
+	path := filepath.Join(dir, "locked.go")
+	if err := os.WriteFile(path, []byte("package p\n"), 0o000); err != nil {
+		t.Fatalf("write locked.go: %v", err)
+	}
+
+	rep, err := Run(Options{Paths: []string{dir}})
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if len(rep.Errors) != 1 || filepath.Base(rep.Errors[0].File) != "locked.go" {
+		t.Fatalf("Run errors = %+v, want locked.go read error", rep.Errors)
 	}
 }

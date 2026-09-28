@@ -72,17 +72,16 @@ func interfaceNodeMeasurement(iface *model.Interface, value int) rule.ThresholdM
 
 type CyclomaticComplexity struct {
 	*rule.Base
-	*rule.ThresholdRule
+	*rule.FuncThresholdRule
 	showMethodsComplexity bool
 }
 
 func newCyclomaticComplexity() rule.Rule {
 	r := &CyclomaticComplexity{Base: rule.NewBase("showClassesComplexity", "showMethodsComplexity")}
-	r.ThresholdRule = rule.NewThresholdRule(rule.ThresholdDeclaration{
+	r.FuncThresholdRule = rule.NewFuncThresholdRule(rule.ThresholdDeclaration{
 		Property:   "reportLevel",
 		Default:    10,
 		Boundary:   rule.AtOrAbove,
-		NodeKind:   rule.ThresholdFunction,
 		FuncMetric: r.measure,
 	})
 	return r
@@ -112,16 +111,15 @@ func (r *CyclomaticComplexity) measure(_ *rule.Context, fn *model.Function) (rul
 // analog); mirrors gocognit's convention. See docs/adr/0001-go-mess-sign-backlog.md.
 type CognitiveComplexity struct {
 	*rule.Base
-	*rule.ThresholdRule
+	*rule.FuncThresholdRule
 }
 
 func newCognitiveComplexity() rule.Rule {
 	r := &CognitiveComplexity{Base: rule.NewBase()}
-	r.ThresholdRule = rule.NewThresholdRule(rule.ThresholdDeclaration{
+	r.FuncThresholdRule = rule.NewFuncThresholdRule(rule.ThresholdDeclaration{
 		Property:   "reportLevel",
 		Default:    20,
 		Boundary:   rule.AtOrAbove,
-		NodeKind:   rule.ThresholdFunction,
 		FuncMetric: r.measure,
 	})
 	return r
@@ -139,16 +137,15 @@ func (r *CognitiveComplexity) measure(_ *rule.Context, fn *model.Function) (rule
 // not capture. See docs/adr/0001-go-mess-sign-backlog.md.
 type NestingDepth struct {
 	*rule.Base
-	*rule.ThresholdRule
+	*rule.FuncThresholdRule
 }
 
 func newNestingDepth() rule.Rule {
 	r := &NestingDepth{Base: rule.NewBase()}
-	r.ThresholdRule = rule.NewThresholdRule(rule.ThresholdDeclaration{
+	r.FuncThresholdRule = rule.NewFuncThresholdRule(rule.ThresholdDeclaration{
 		Property:   "maxdepth",
 		Default:    5,
 		Boundary:   rule.Above,
-		NodeKind:   rule.ThresholdFunction,
 		FuncMetric: r.measure,
 	})
 	return r
@@ -166,16 +163,15 @@ func (r *NestingDepth) measure(_ *rule.Context, fn *model.Function) (rule.Thresh
 // revive's function-result-limit. See docs/adr/0001-go-mess-sign-backlog.md.
 type ExcessiveReturnCount struct {
 	*rule.Base
-	*rule.ThresholdRule
+	*rule.FuncThresholdRule
 }
 
 func newExcessiveReturnCount() rule.Rule {
 	r := &ExcessiveReturnCount{Base: rule.NewBase()}
-	r.ThresholdRule = rule.NewThresholdRule(rule.ThresholdDeclaration{
+	r.FuncThresholdRule = rule.NewFuncThresholdRule(rule.ThresholdDeclaration{
 		Property:   "maxresults",
 		Default:    3,
 		Boundary:   rule.Above,
-		NodeKind:   rule.ThresholdFunction,
 		FuncMetric: r.measure,
 	})
 	return r
@@ -261,16 +257,15 @@ func hasNakedReturn(fn *model.Function) bool {
 
 type NPathComplexity struct {
 	*rule.Base
-	*rule.ThresholdRule
+	*rule.FuncThresholdRule
 }
 
 func newNPathComplexity() rule.Rule {
 	r := &NPathComplexity{Base: rule.NewBase()}
-	r.ThresholdRule = rule.NewThresholdRule(rule.ThresholdDeclaration{
+	r.FuncThresholdRule = rule.NewFuncThresholdRule(rule.ThresholdDeclaration{
 		Property:   "minimum",
 		Default:    200,
 		Boundary:   rule.AtOrAbove,
-		NodeKind:   rule.ThresholdFunction,
 		FuncMetric: r.measure,
 	})
 	return r
@@ -284,17 +279,16 @@ func (r *NPathComplexity) measure(_ *rule.Context, fn *model.Function) (rule.Thr
 
 type LongMethod struct {
 	*rule.Base
-	*rule.ThresholdRule
+	*rule.FuncThresholdRule
 	ignoreWhitespace ignoreWhitespaceOption
 }
 
 func newLongMethod() rule.Rule {
 	r := &LongMethod{Base: rule.NewBase("ignore-whitespace")}
-	r.ThresholdRule = rule.NewThresholdRule(rule.ThresholdDeclaration{
+	r.FuncThresholdRule = rule.NewFuncThresholdRule(rule.ThresholdDeclaration{
 		Property:   "minimum",
 		Default:    100,
 		Boundary:   rule.AtOrAbove,
-		NodeKind:   rule.ThresholdFunction,
 		FuncMetric: r.measure,
 	})
 	return r
@@ -316,17 +310,16 @@ func (r *LongMethod) measure(_ *rule.Context, fn *model.Function) (rule.Threshol
 
 type LongClass struct {
 	*rule.Base
-	*rule.ThresholdRule
+	*rule.ClassThresholdRule
 	ignoreWhitespace ignoreWhitespaceOption
 }
 
 func newLongClass() rule.Rule {
 	r := &LongClass{Base: rule.NewBase("ignore-whitespace")}
-	r.ThresholdRule = rule.NewThresholdRule(rule.ThresholdDeclaration{
+	r.ClassThresholdRule = rule.NewClassThresholdRule(rule.ThresholdDeclaration{
 		Property:    "minimum",
 		Default:     1000,
 		Boundary:    rule.AtOrAbove,
-		NodeKind:    rule.ThresholdClass,
 		ClassMetric: r.measure,
 	})
 	return r
@@ -348,16 +341,15 @@ func (r *LongClass) measure(_ *rule.Context, class *model.Class) (rule.Threshold
 
 type LongParameterList struct {
 	*rule.Base
-	*rule.ThresholdRule
+	*rule.FuncThresholdRule
 }
 
 func newLongParameterList() rule.Rule {
 	r := &LongParameterList{Base: rule.NewBase()}
-	r.ThresholdRule = rule.NewThresholdRule(rule.ThresholdDeclaration{
+	r.FuncThresholdRule = rule.NewFuncThresholdRule(rule.ThresholdDeclaration{
 		Property:   "minimum",
 		Default:    10,
 		Boundary:   rule.AtOrAbove,
-		NodeKind:   rule.ThresholdFunction,
 		FuncMetric: r.measure,
 	})
 	return r
@@ -371,16 +363,15 @@ func (r *LongParameterList) measure(_ *rule.Context, fn *model.Function) (rule.T
 
 type ExcessivePublicCount struct {
 	*rule.Base
-	*rule.ThresholdRule
+	*rule.ClassThresholdRule
 }
 
 func newExcessivePublicCount() rule.Rule {
 	r := &ExcessivePublicCount{Base: rule.NewBase()}
-	r.ThresholdRule = rule.NewThresholdRule(rule.ThresholdDeclaration{
+	r.ClassThresholdRule = rule.NewClassThresholdRule(rule.ThresholdDeclaration{
 		Property:    "minimum",
 		Default:     45,
 		Boundary:    rule.AtOrAbove,
-		NodeKind:    rule.ThresholdClass,
 		ClassMetric: r.measure,
 	})
 	return r
@@ -405,16 +396,15 @@ func (r *ExcessivePublicCount) measure(_ *rule.Context, class *model.Class) (rul
 
 type TooManyFields struct {
 	*rule.Base
-	*rule.ThresholdRule
+	*rule.ClassThresholdRule
 }
 
 func newTooManyFields() rule.Rule {
 	r := &TooManyFields{Base: rule.NewBase()}
-	r.ThresholdRule = rule.NewThresholdRule(rule.ThresholdDeclaration{
+	r.ClassThresholdRule = rule.NewClassThresholdRule(rule.ThresholdDeclaration{
 		Property:    "maxfields",
 		Default:     15,
 		Boundary:    rule.Above,
-		NodeKind:    rule.ThresholdClass,
 		ClassMetric: r.measure,
 	})
 	return r
@@ -428,17 +418,16 @@ func (r *TooManyFields) measure(_ *rule.Context, class *model.Class) (rule.Thres
 
 type TooManyMethods struct {
 	*rule.Base
-	*rule.ThresholdRule
+	*rule.ClassInterfaceThresholdRule
 	ignorePattern *regexp.Regexp
 }
 
 func newTooManyMethods() rule.Rule {
 	r := &TooManyMethods{Base: rule.NewBase("ignorepattern")}
-	r.ThresholdRule = rule.NewThresholdRule(rule.ThresholdDeclaration{
+	r.ClassInterfaceThresholdRule = rule.NewClassInterfaceThresholdRule(rule.ThresholdDeclaration{
 		Property:          "maxmethods",
 		Default:           25,
 		Boundary:          rule.Above,
-		NodeKind:          rule.ThresholdClass,
 		ClassMetric:       r.measure,
 		InterfaceMetric:   r.measureInterface,
 		InterfaceProperty: "maxifacemethods",
@@ -481,17 +470,16 @@ func (r *TooManyMethods) measureInterface(_ *rule.Context, iface *model.Interfac
 
 type TooManyPublicMethods struct {
 	*rule.Base
-	*rule.ThresholdRule
+	*rule.ClassThresholdRule
 	ignorePattern *regexp.Regexp
 }
 
 func newTooManyPublicMethods() rule.Rule {
 	r := &TooManyPublicMethods{Base: rule.NewBase("ignorepattern")}
-	r.ThresholdRule = rule.NewThresholdRule(rule.ThresholdDeclaration{
+	r.ClassThresholdRule = rule.NewClassThresholdRule(rule.ThresholdDeclaration{
 		Property:    "maxmethods",
 		Default:     10,
 		Boundary:    rule.Above,
-		NodeKind:    rule.ThresholdClass,
 		ClassMetric: r.measure,
 	})
 	return r
@@ -523,16 +511,15 @@ func (r *TooManyPublicMethods) measure(_ *rule.Context, class *model.Class) (rul
 
 type WeightedMethodCount struct {
 	*rule.Base
-	*rule.ThresholdRule
+	*rule.ClassThresholdRule
 }
 
 func newWeightedMethodCount() rule.Rule {
 	r := &WeightedMethodCount{Base: rule.NewBase()}
-	r.ThresholdRule = rule.NewThresholdRule(rule.ThresholdDeclaration{
+	r.ClassThresholdRule = rule.NewClassThresholdRule(rule.ThresholdDeclaration{
 		Property:    "maximum",
 		Default:     50,
 		Boundary:    rule.AtOrAbove,
-		NodeKind:    rule.ThresholdClass,
 		ClassMetric: r.measure,
 	})
 	return r

@@ -163,16 +163,15 @@ func designClassNameMeasurement(class *model.Class, value int) rule.ThresholdMea
 
 type CouplingBetweenObjects struct {
 	*rule.Base
-	*rule.ThresholdRule
+	*rule.ClassThresholdRule
 }
 
 func newCouplingBetweenObjects() rule.Rule {
 	r := &CouplingBetweenObjects{Base: rule.NewBase()}
-	r.ThresholdRule = rule.NewThresholdRule(rule.ThresholdDeclaration{
+	r.ClassThresholdRule = rule.NewClassThresholdRule(rule.ThresholdDeclaration{
 		Property:    "maximum",
 		Default:     13,
 		Boundary:    rule.AtOrAbove,
-		NodeKind:    rule.ThresholdClass,
 		ClassMetric: r.measure,
 	})
 	return r
@@ -379,16 +378,15 @@ func baseTypeName(t string) string {
 
 type LackOfCohesionOfMethods struct {
 	*rule.Base
-	*rule.ThresholdRule
+	*rule.ClassThresholdRule
 }
 
 func newLackOfCohesionOfMethods() rule.Rule {
 	r := &LackOfCohesionOfMethods{Base: rule.NewBase()}
-	r.ThresholdRule = rule.NewThresholdRule(rule.ThresholdDeclaration{
+	r.ClassThresholdRule = rule.NewClassThresholdRule(rule.ThresholdDeclaration{
 		Property:    "maximum",
 		Default:     1,
 		Boundary:    rule.Above,
-		NodeKind:    rule.ThresholdClass,
 		ClassMetric: r.measure,
 	})
 	return r

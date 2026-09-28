@@ -31,14 +31,6 @@ func (b Boundary) Violates(value, threshold int) bool {
 	return value >= threshold
 }
 
-// ThresholdNodeKind selects which artifact stream a threshold rule evaluates.
-type ThresholdNodeKind int
-
-const (
-	ThresholdFunction ThresholdNodeKind = iota
-	ThresholdClass
-)
-
 // ThresholdMeasurement is the observable metric result for one artifact.
 // Args are the rule-specific leading message arguments; ThresholdRule appends
 // the measured value and configured threshold in one place.
@@ -61,14 +53,10 @@ type ThresholdDeclaration struct {
 	Property    string
 	Default     int
 	Boundary    Boundary
-	NodeKind    ThresholdNodeKind
 	FuncMetric  FuncThresholdMetric
 	ClassMetric ClassThresholdMetric
-	// InterfaceMetric, when non-nil, makes the threshold rule also evaluate
-	// interfaces. This is independent of NodeKind: a class rule (NodeKind ==
-	// ThresholdClass) may declare an InterfaceMetric to extend the same smell
-	// to interfaces without a separate rule. Rules that omit InterfaceMetric
-	// short-circuit on interfaces (ApplyInterface is a no-op).
+	// InterfaceMetric is evaluated by an InterfaceThresholdRule wrapper. A
+	// threshold helper does not register itself for interface dispatch.
 	InterfaceMetric InterfaceThresholdMetric
 	// InterfaceProperty and InterfaceDefault configure a separate threshold
 	// for the interface metric, since interface thresholds are typically
@@ -78,8 +66,9 @@ type ThresholdDeclaration struct {
 	InterfaceDefault  int
 }
 
-// ThresholdRule owns the common read-compare-report skeleton for threshold
-// rules. It is configured once by the ruleset loader, then reused during walks.
+// ThresholdRule owns common configuration, comparison, and reporting for
+// threshold rules. It does not implement artifact-awareness interfaces; a
+// wrapper declares which artifact stream the engine should dispatch.
 type ThresholdRule struct {
 	decl            ThresholdDeclaration
 	threshold       int
@@ -89,6 +78,65 @@ type ThresholdRule struct {
 // NewThresholdRule creates a threshold rule from its declaration.
 func NewThresholdRule(decl ThresholdDeclaration) *ThresholdRule {
 	return &ThresholdRule{decl: decl, threshold: decl.Default, interfaceThresh: decl.InterfaceDefault}
+}
+
+// FuncThresholdRule registers a threshold rule for function dispatch.
+type FuncThresholdRule struct{ *ThresholdRule }
+
+// NewFuncThresholdRule creates a function-aware threshold wrapper.
+func NewFuncThresholdRule(decl ThresholdDeclaration) *FuncThresholdRule {
+	return &FuncThresholdRule{ThresholdRule: NewThresholdRule(decl)}
+}
+
+// ApplyFunc evaluates this threshold rule for a function.
+func (r *FuncThresholdRule) ApplyFunc(c *Context, fn *model.Function) {
+	r.ThresholdRule.applyFunc(c, fn)
+}
+
+// ClassThresholdRule registers a threshold rule for class dispatch.
+type ClassThresholdRule struct{ *ThresholdRule }
+
+// NewClassThresholdRule creates a class-aware threshold wrapper.
+func NewClassThresholdRule(decl ThresholdDeclaration) *ClassThresholdRule {
+	return &ClassThresholdRule{ThresholdRule: NewThresholdRule(decl)}
+}
+
+// ApplyClass evaluates this threshold rule for a class.
+func (r *ClassThresholdRule) ApplyClass(c *Context, class *model.Class) {
+	r.ThresholdRule.applyClass(c, class)
+}
+
+// InterfaceThresholdRule registers a threshold rule for interface dispatch.
+type InterfaceThresholdRule struct{ *ThresholdRule }
+
+// NewInterfaceThresholdRule creates an interface-aware threshold wrapper.
+func NewInterfaceThresholdRule(decl ThresholdDeclaration) *InterfaceThresholdRule {
+	return &InterfaceThresholdRule{ThresholdRule: NewThresholdRule(decl)}
+}
+
+// ApplyInterface evaluates this threshold rule for an interface.
+func (r *InterfaceThresholdRule) ApplyInterface(c *Context, iface *model.Interface) {
+	r.ThresholdRule.applyInterface(c, iface)
+}
+
+// ClassInterfaceThresholdRule registers a threshold rule for both classes and
+// interfaces.
+type ClassInterfaceThresholdRule struct{ *ThresholdRule }
+
+// NewClassInterfaceThresholdRule creates a threshold wrapper for rules that
+// measure both classes and interfaces.
+func NewClassInterfaceThresholdRule(decl ThresholdDeclaration) *ClassInterfaceThresholdRule {
+	return &ClassInterfaceThresholdRule{ThresholdRule: NewThresholdRule(decl)}
+}
+
+// ApplyClass evaluates this threshold rule for a class.
+func (r *ClassInterfaceThresholdRule) ApplyClass(c *Context, class *model.Class) {
+	r.ThresholdRule.applyClass(c, class)
+}
+
+// ApplyInterface evaluates this threshold rule for an interface.
+func (r *ClassInterfaceThresholdRule) ApplyInterface(c *Context, iface *model.Interface) {
+	r.ThresholdRule.applyInterface(c, iface)
 }
 
 // PropertyNames returns the threshold property keys this rule reads.
@@ -127,9 +175,8 @@ func (r *ThresholdRule) Configure(props Properties) error {
 	return nil
 }
 
-// ApplyFunc evaluates configured function metrics.
-func (r *ThresholdRule) ApplyFunc(c *Context, fn *model.Function) {
-	if r.decl.NodeKind != ThresholdFunction || r.decl.FuncMetric == nil {
+func (r *ThresholdRule) applyFunc(c *Context, fn *model.Function) {
+	if r.decl.FuncMetric == nil {
 		return
 	}
 	measurement, ok := r.decl.FuncMetric(c, fn)
@@ -139,9 +186,8 @@ func (r *ThresholdRule) ApplyFunc(c *Context, fn *model.Function) {
 	r.reportFunc(c, fn, measurement)
 }
 
-// ApplyClass evaluates configured class metrics.
-func (r *ThresholdRule) ApplyClass(c *Context, class *model.Class) {
-	if r.decl.NodeKind != ThresholdClass || r.decl.ClassMetric == nil {
+func (r *ThresholdRule) applyClass(c *Context, class *model.Class) {
+	if r.decl.ClassMetric == nil {
 		return
 	}
 	measurement, ok := r.decl.ClassMetric(c, class)
@@ -151,10 +197,7 @@ func (r *ThresholdRule) ApplyClass(c *Context, class *model.Class) {
 	r.reportClass(c, class, measurement)
 }
 
-// ApplyInterface evaluates the configured interface metric, if any. Rules
-// without an InterfaceMetric short-circuit (no-op), so they never fire on
-// interfaces even though the method is promoted to them via embedding.
-func (r *ThresholdRule) ApplyInterface(c *Context, iface *model.Interface) {
+func (r *ThresholdRule) applyInterface(c *Context, iface *model.Interface) {
 	if r.decl.InterfaceMetric == nil {
 		return
 	}

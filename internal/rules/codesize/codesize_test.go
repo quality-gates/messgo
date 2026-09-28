@@ -25,6 +25,41 @@ func analyzeConfiguredRule(t *testing.T, src string, r rule.Rule, props rule.Pro
 	return rule.Analyze(f, []*rule.RuleSet{{Rules: []rule.Rule{r}}})
 }
 
+func TestThresholdRulesAdvertiseOnlyTheirArtifactKinds(t *testing.T) {
+	cases := []struct {
+		name                   string
+		rule                   rule.Rule
+		function, class, iface bool
+	}{
+		{name: "CyclomaticComplexity", rule: newCyclomaticComplexity(), function: true},
+		{name: "CognitiveComplexity", rule: newCognitiveComplexity(), function: true},
+		{name: "NestingDepth", rule: newNestingDepth(), function: true},
+		{name: "ExcessiveReturnCount", rule: newExcessiveReturnCount(), function: true},
+		{name: "NPathComplexity", rule: newNPathComplexity(), function: true},
+		{name: "LongMethod", rule: newLongMethod(), function: true},
+		{name: "LongParameterList", rule: newLongParameterList(), function: true},
+		{name: "LongClass", rule: newLongClass(), class: true},
+		{name: "ExcessivePublicCount", rule: newExcessivePublicCount(), class: true},
+		{name: "TooManyFields", rule: newTooManyFields(), class: true},
+		{name: "TooManyMethods", rule: newTooManyMethods(), class: true, iface: true},
+		{name: "TooManyPublicMethods", rule: newTooManyPublicMethods(), class: true},
+		{name: "WeightedMethodCount", rule: newWeightedMethodCount(), class: true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if _, ok := tc.rule.(rule.FuncRule); ok != tc.function {
+				t.Errorf("FuncRule awareness = %t, want %t", ok, tc.function)
+			}
+			if _, ok := tc.rule.(rule.ClassRule); ok != tc.class {
+				t.Errorf("ClassRule awareness = %t, want %t", ok, tc.class)
+			}
+			if _, ok := tc.rule.(rule.InterfaceRule); ok != tc.iface {
+				t.Errorf("InterfaceRule awareness = %t, want %t", ok, tc.iface)
+			}
+		})
+	}
+}
+
 func TestCyclomaticComplexityFlagsByDefault(t *testing.T) {
 	violations := analyzeConfiguredRule(t, `
 func complexFunc(x int) {

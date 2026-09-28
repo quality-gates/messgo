@@ -164,13 +164,14 @@ func CognitiveComplexity(fn *ast.FuncDecl) int {
 	if fn == nil {
 		return 0
 	}
-	v := &cognitiveVisitor{name: fn.Name}
+	v := &cognitiveVisitor{name: fn.Name, recv: receiverIdent(fn)}
 	ast.Walk(v, fn)
 	return v.complexity
 }
 
 type cognitiveVisitor struct {
 	name            *ast.Ident
+	recv            *ast.Ident
 	complexity      int
 	nesting         int
 	elseNodes       map[ast.Node]bool
@@ -348,10 +349,25 @@ func (v *cognitiveVisitor) visitCall(n *ast.CallExpr) {
 			v.inc() // direct recursion
 		}
 	case *ast.SelectorExpr:
-		if call.Sel.Name == v.name.Name {
+		if call.Sel.Name == v.name.Name && isReceiver(call.X, v.recv) {
 			v.inc() // direct method recursion
 		}
 	}
+}
+
+// isReceiver reports whether x is the method's own named receiver recv, so
+// that pkg.F(), other.F() and a shadowed receiver are not counted as recursion.
+func isReceiver(x ast.Expr, recv *ast.Ident) bool {
+	id, ok := x.(*ast.Ident)
+	return ok && recv != nil && id.Obj == recv.Obj
+}
+
+// receiverIdent returns the named receiver of a method, or nil.
+func receiverIdent(fn *ast.FuncDecl) *ast.Ident {
+	if fn.Recv == nil || len(fn.Recv.List[0].Names) == 0 {
+		return nil
+	}
+	return fn.Recv.List[0].Names[0]
 }
 
 func npathStmts(stmts []ast.Stmt) int {

@@ -295,16 +295,15 @@ func TestMessageTemplatePreserved(t *testing.T) {
 
 type loaderThresholdRule struct {
 	*rule.Base
-	*rule.ThresholdRule
+	*rule.FuncThresholdRule
 }
 
 func newLoaderThresholdRule() rule.Rule {
 	r := &loaderThresholdRule{Base: rule.NewBase()}
-	r.ThresholdRule = rule.NewThresholdRule(rule.ThresholdDeclaration{
+	r.FuncThresholdRule = rule.NewFuncThresholdRule(rule.ThresholdDeclaration{
 		Property: "limit",
 		Default:  10,
 		Boundary: rule.AtOrAbove,
-		NodeKind: rule.ThresholdFunction,
 		FuncMetric: func(_ *rule.Context, fn *model.Function) (rule.ThresholdMeasurement, bool) {
 			return rule.ThresholdMeasurement{
 				Value: len(fn.Params),

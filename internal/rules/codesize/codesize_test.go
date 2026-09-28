@@ -25,6 +25,97 @@ func analyzeConfiguredRule(t *testing.T, src string, r rule.Rule, props rule.Pro
 	return rule.Analyze(f, []*rule.RuleSet{{Rules: []rule.Rule{r}}})
 }
 
+func TestThresholdRulesAdvertiseOnlyTheirArtifactKinds(t *testing.T) {
+	cases := []struct {
+		name                   string
+		rule                   rule.Rule
+		function, class, iface bool
+	}{
+		{name: "CyclomaticComplexity", rule: newCyclomaticComplexity(), function: true},
+		{name: "CognitiveComplexity", rule: newCognitiveComplexity(), function: true},
+		{name: "NestingDepth", rule: newNestingDepth(), function: true},
+		{name: "ExcessiveReturnCount", rule: newExcessiveReturnCount(), function: true},
+		{name: "NPathComplexity", rule: newNPathComplexity(), function: true},
+		{name: "LongMethod", rule: newLongMethod(), function: true},
+		{name: "LongParameterList", rule: newLongParameterList(), function: true},
+		{name: "LongClass", rule: newLongClass(), class: true},
+		{name: "ExcessivePublicCount", rule: newExcessivePublicCount(), class: true},
+		{name: "TooManyFields", rule: newTooManyFields(), class: true},
+		{name: "TooManyMethods", rule: newTooManyMethods(), class: true, iface: true},
+		{name: "TooManyPublicMethods", rule: newTooManyPublicMethods(), class: true},
+		{name: "WeightedMethodCount", rule: newWeightedMethodCount(), class: true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if _, ok := tc.rule.(rule.FuncRule); ok != tc.function {
+				t.Errorf("FuncRule awareness = %t, want %t", ok, tc.function)
+			}
+			if _, ok := tc.rule.(rule.ClassRule); ok != tc.class {
+				t.Errorf("ClassRule awareness = %t, want %t", ok, tc.class)
+			}
+			if _, ok := tc.rule.(rule.InterfaceRule); ok != tc.iface {
+				t.Errorf("InterfaceRule awareness = %t, want %t", ok, tc.iface)
+			}
+		})
+	}
+}
+
+func TestThresholdConstructorsWireMeasurements(t *testing.T) {
+	src := `type Widget struct {
+	Name string
+	ID   int
+}
+
+func (Widget) RunA() {
+	if true {
+		println("run")
+	}
+}
+
+func (Widget) RunB() {}
+
+type Reader interface {
+	Read([]byte) (int, error)
+	Write([]byte) error
+}
+
+func complex(a, b int) (int, error) {
+	if a > 0 {
+		if b > 0 {
+			return 1, nil
+		}
+	}
+	return 0, nil
+}
+`
+	cases := []struct {
+		name  string
+		new   func() rule.Rule
+		props rule.Properties
+	}{
+		{name: "CyclomaticComplexity", new: newCyclomaticComplexity, props: rule.Properties{"reportLevel": "0"}},
+		{name: "CognitiveComplexity", new: newCognitiveComplexity, props: rule.Properties{"reportLevel": "0"}},
+		{name: "NestingDepth", new: newNestingDepth, props: rule.Properties{"maxdepth": "0"}},
+		{name: "ExcessiveReturnCount", new: newExcessiveReturnCount, props: rule.Properties{"maxresults": "0"}},
+		{name: "NPathComplexity", new: newNPathComplexity, props: rule.Properties{"minimum": "0"}},
+		{name: "LongMethod", new: newLongMethod, props: rule.Properties{"minimum": "0"}},
+		{name: "LongParameterList", new: newLongParameterList, props: rule.Properties{"minimum": "0"}},
+		{name: "LongClass", new: newLongClass, props: rule.Properties{"minimum": "0"}},
+		{name: "ExcessivePublicCount", new: newExcessivePublicCount, props: rule.Properties{"minimum": "0"}},
+		{name: "TooManyFields", new: newTooManyFields, props: rule.Properties{"maxfields": "0"}},
+		{name: "TooManyMethods", new: newTooManyMethods, props: rule.Properties{"maxmethods": "0", "maxifacemethods": "0"}},
+		{name: "TooManyPublicMethods", new: newTooManyPublicMethods, props: rule.Properties{"maxmethods": "0"}},
+		{name: "WeightedMethodCount", new: newWeightedMethodCount, props: rule.Properties{"maximum": "0"}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if violations := analyzeConfiguredRule(t, src, tc.new(), tc.props); len(violations) == 0 {
+				t.Fatal("configured threshold reported no violations")
+			}
+		})
+	}
+}
+
 func TestCyclomaticComplexityFlagsByDefault(t *testing.T) {
 	violations := analyzeConfiguredRule(t, `
 func complexFunc(x int) {

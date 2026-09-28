@@ -213,16 +213,15 @@ func formatStmts(stmts []ast.Stmt, fset *token.FileSet) string {
 // docs/adr/0001-go-mess-sign-backlog.md rank 8.
 type StructEmbeddingDepth struct {
 	*rule.Base
-	*rule.ThresholdRule
+	*rule.ClassThresholdRule
 }
 
 func newStructEmbeddingDepth() rule.Rule {
 	r := &StructEmbeddingDepth{Base: rule.NewBase()}
-	r.ThresholdRule = rule.NewThresholdRule(rule.ThresholdDeclaration{
+	r.ClassThresholdRule = rule.NewClassThresholdRule(rule.ThresholdDeclaration{
 		Property:    "maxdepth",
 		Default:     3,
 		Boundary:    rule.Above,
-		NodeKind:    rule.ThresholdClass,
 		ClassMetric: r.measure,
 	})
 	return r

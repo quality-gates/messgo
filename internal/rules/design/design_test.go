@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/quality-gates/messgo/internal/model"
+	"github.com/quality-gates/messgo/internal/rule"
 )
 
 func TestBuiltinTypeNamesIncludeGoContainersAndFunctionTypes(t *testing.T) {
@@ -20,6 +21,55 @@ func TestBuiltinTypeNamesIncludeGoContainersAndFunctionTypes(t *testing.T) {
 		if got := baseTypeName(input); got != want {
 			t.Errorf("baseTypeName(%q) = %q, want %q", input, got, want)
 		}
+	}
+}
+
+func TestCouplingBetweenObjectsThresholdReportsThroughAnalyze(t *testing.T) {
+	f, err := model.ParseSource("coupling.go", []byte(`package sample
+
+type Other struct{}
+type Service struct { dependency Other }
+`))
+	if err != nil {
+		t.Fatalf("ParseSource: %v", err)
+	}
+	threshold := newCouplingBetweenObjects()
+	if err := threshold.(rule.Configurable).Configure(rule.Properties{"maximum": "1"}); err != nil {
+		t.Fatalf("Configure: %v", err)
+	}
+
+	violations := rule.Analyze(f, []*rule.RuleSet{{Rules: []rule.Rule{threshold}}})
+	if len(violations) != 1 {
+		t.Fatalf("CouplingBetweenObjects violations = %d, want 1", len(violations))
+	}
+}
+
+func TestLackOfCohesionThresholdReportsThroughAnalyze(t *testing.T) {
+	f, err := model.ParseSource("cohesion.go", []byte(`package sample
+
+type Service struct {
+	first  int
+	second int
+}
+
+func (s *Service) AddFirst(value int) {
+	if value > 0 { s.first += value }
+}
+func (s *Service) AddSecond(value int) {
+	if value > 0 { s.second += value }
+}
+`))
+	if err != nil {
+		t.Fatalf("ParseSource: %v", err)
+	}
+	threshold := newLackOfCohesionOfMethods()
+	if err := threshold.(rule.Configurable).Configure(rule.Properties{"maximum": "1"}); err != nil {
+		t.Fatalf("Configure: %v", err)
+	}
+
+	violations := rule.Analyze(f, []*rule.RuleSet{{Rules: []rule.Rule{threshold}}})
+	if len(violations) != 1 {
+		t.Fatalf("LackOfCohesionOfMethods violations = %d, want 1", len(violations))
 	}
 }
 

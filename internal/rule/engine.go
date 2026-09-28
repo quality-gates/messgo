@@ -50,17 +50,11 @@ func applyRule(ctx *Context, r Rule, file *model.File) {
 	}
 }
 
-// applyFuncRule invokes a function-aware rule once for every function-level
-// artifact: free functions, methods (both in AllFuncs), and interface methods
-// (which PHPMD also models as methods). Method-only rules guard on
-// fn.IsMethod() in their own body.
+// applyFuncRule invokes a function-aware rule for declared functions and
+// concrete methods. Interface method signatures are interface artifacts and
+// are dispatched through InterfaceRule instead.
 func applyFuncRule(ctx *Context, fr FuncRule, file *model.File) {
 	for _, fn := range file.AllFuncs {
 		fr.ApplyFunc(ctx, fn)
-	}
-	for _, iface := range file.Interfaces {
-		for _, fn := range iface.Methods {
-			fr.ApplyFunc(ctx, fn)
-		}
 	}
 }

@@ -85,9 +85,11 @@ func TestThresholdRuleAllowsStrictBoundaryAtThreshold(t *testing.T) {
 
 func TestAnalyzeDoesNotDispatchFunctionThresholdToStandaloneInterface(t *testing.T) {
 	interfaceMeasurements := 0
+	functionMeasurements := []string{}
 	r := &thresholdRuleFixture{Base: NewBase()}
 	r.FuncThresholdRule = NewFuncThresholdRule(ThresholdDeclaration{
-		FuncMetric: func(_ *Context, _ *model.Function) (ThresholdMeasurement, bool) {
+		FuncMetric: func(_ *Context, fn *model.Function) (ThresholdMeasurement, bool) {
+			functionMeasurements = append(functionMeasurements, fn.Name)
 			return ThresholdMeasurement{}, true
 		},
 		InterfaceMetric: func(_ *Context, _ *model.Interface) (ThresholdMeasurement, bool) {
@@ -96,7 +98,7 @@ func TestAnalyzeDoesNotDispatchFunctionThresholdToStandaloneInterface(t *testing
 		},
 	})
 
-	file, err := model.ParseSource("fixture.go", []byte("package fixture\ntype Reader interface { Read() }\n"))
+	file, err := model.ParseSource("fixture.go", []byte("package fixture\ntype Reader interface { Read() }\nfunc fetch() {}\n"))
 	if err != nil {
 		t.Fatalf("parse: %v", err)
 	}
@@ -104,6 +106,9 @@ func TestAnalyzeDoesNotDispatchFunctionThresholdToStandaloneInterface(t *testing
 
 	if interfaceMeasurements != 0 {
 		t.Fatalf("function threshold measured %d standalone interfaces, want 0", interfaceMeasurements)
+	}
+	if len(functionMeasurements) != 1 || functionMeasurements[0] != "fetch" {
+		t.Fatalf("function threshold measured %v, want [fetch]", functionMeasurements)
 	}
 }
 
@@ -160,6 +165,144 @@ func TestThresholdWrappersDeclareTheirArtifactKinds(t *testing.T) {
 			assertThresholdAwareness(t, tc.rule, tc.function, tc.class, tc.iface)
 		})
 	}
+}
+
+func TestClassThresholdRuleAppliesClassMetric(t *testing.T) {
+	file := thresholdTestArtifacts(t)
+	classMeasurements := 0
+	r := &struct {
+		*Base
+		*ClassThresholdRule
+	}{Base: newThresholdBase(), ClassThresholdRule: NewClassThresholdRule(ThresholdDeclaration{
+		Default:  1,
+		Boundary: AtOrAbove,
+		ClassMetric: func(_ *Context, class *model.Class) (ThresholdMeasurement, bool) {
+			classMeasurements++
+			if class.Name != "Widget" {
+				t.Errorf("measured class %q, want Widget", class.Name)
+			}
+			return ThresholdMeasurement{Value: 1}, true
+		},
+	})}
+
+	violations := Analyze(file, []*RuleSet{{Rules: []Rule{r}}})
+	if classMeasurements != 1 || len(violations) != 1 {
+		t.Fatalf("class measurements = %d, violations = %d; want 1 each", classMeasurements, len(violations))
+	}
+}
+
+func TestInterfaceThresholdRuleAppliesInterfaceMetric(t *testing.T) {
+	file := thresholdTestArtifacts(t)
+	interfaceMeasurements := 0
+	r := &struct {
+		*Base
+		*InterfaceThresholdRule
+	}{Base: newThresholdBase(), InterfaceThresholdRule: NewInterfaceThresholdRule(ThresholdDeclaration{
+		Boundary:         AtOrAbove,
+		InterfaceDefault: 1,
+		InterfaceMetric: func(_ *Context, iface *model.Interface) (ThresholdMeasurement, bool) {
+			interfaceMeasurements++
+			if iface.Name != "Reader" {
+				t.Errorf("measured interface %q, want Reader", iface.Name)
+			}
+			return ThresholdMeasurement{Value: 1}, true
+		},
+	})}
+
+	violations := Analyze(file, []*RuleSet{{Rules: []Rule{r}}})
+	if interfaceMeasurements != 1 || len(violations) != 1 {
+		t.Fatalf("interface measurements = %d, violations = %d; want 1 each", interfaceMeasurements, len(violations))
+	}
+}
+
+func TestClassInterfaceThresholdRuleAppliesBothMetrics(t *testing.T) {
+	file := thresholdTestArtifacts(t)
+	classMeasurements, interfaceMeasurements := 0, 0
+	r := &struct {
+		*Base
+		*ClassInterfaceThresholdRule
+	}{Base: newThresholdBase(), ClassInterfaceThresholdRule: NewClassInterfaceThresholdRule(ThresholdDeclaration{
+		Default:          1,
+		Boundary:         AtOrAbove,
+		InterfaceDefault: 1,
+		ClassMetric: func(_ *Context, _ *model.Class) (ThresholdMeasurement, bool) {
+			classMeasurements++
+			return ThresholdMeasurement{Value: 1}, true
+		},
+		InterfaceMetric: func(_ *Context, _ *model.Interface) (ThresholdMeasurement, bool) {
+			interfaceMeasurements++
+			return ThresholdMeasurement{Value: 1}, true
+		},
+	})}
+
+	violations := Analyze(file, []*RuleSet{{Rules: []Rule{r}}})
+	if classMeasurements != 1 || interfaceMeasurements != 1 || len(violations) != 2 {
+		t.Fatalf("measurements = class %d/interface %d, violations = %d; want 1/1/2", classMeasurements, interfaceMeasurements, len(violations))
+	}
+}
+
+func TestThresholdWrappersIgnoreMissingAndUnavailableMetrics(t *testing.T) {
+	file := thresholdTestArtifacts(t)
+	missingMetrics := []Rule{
+		&struct {
+			*Base
+			*FuncThresholdRule
+		}{Base: newThresholdBase(), FuncThresholdRule: NewFuncThresholdRule(ThresholdDeclaration{})},
+		&struct {
+			*Base
+			*ClassThresholdRule
+		}{Base: newThresholdBase(), ClassThresholdRule: NewClassThresholdRule(ThresholdDeclaration{})},
+		&struct {
+			*Base
+			*InterfaceThresholdRule
+		}{Base: newThresholdBase(), InterfaceThresholdRule: NewInterfaceThresholdRule(ThresholdDeclaration{})},
+		&struct {
+			*Base
+			*ClassInterfaceThresholdRule
+		}{Base: newThresholdBase(), ClassInterfaceThresholdRule: NewClassInterfaceThresholdRule(ThresholdDeclaration{})},
+	}
+	for _, r := range missingMetrics {
+		if violations := Analyze(file, []*RuleSet{{Rules: []Rule{r}}}); len(violations) != 0 {
+			t.Errorf("%T with missing metrics reported %d violations, want 0", r, len(violations))
+		}
+	}
+
+	unavailable := &struct {
+		*Base
+		*ClassInterfaceThresholdRule
+	}{Base: newThresholdBase(), ClassInterfaceThresholdRule: NewClassInterfaceThresholdRule(ThresholdDeclaration{
+		ClassMetric: func(_ *Context, _ *model.Class) (ThresholdMeasurement, bool) {
+			return ThresholdMeasurement{}, false
+		},
+		InterfaceMetric: func(_ *Context, _ *model.Interface) (ThresholdMeasurement, bool) {
+			return ThresholdMeasurement{}, false
+		},
+	})}
+	if violations := Analyze(file, []*RuleSet{{Rules: []Rule{unavailable}}}); len(violations) != 0 {
+		t.Fatalf("unavailable metrics reported %d violations, want 0", len(violations))
+	}
+}
+
+func thresholdTestArtifacts(t *testing.T) *model.File {
+	t.Helper()
+	file, err := model.ParseSource("fixture.go", []byte(`package fixture
+
+type Widget struct{}
+type Reader interface { Read() }
+func fetch() {}
+`))
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+	return file
+}
+
+func newThresholdBase() *Base {
+	base := NewBase()
+	base.RuleName = "FixtureThreshold"
+	base.RuleMessage = "threshold exceeded"
+	base.RulePrio = 3
+	return base
 }
 
 func assertThresholdAwareness(t *testing.T, r Rule, function, class, iface bool) {

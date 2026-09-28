@@ -18,6 +18,27 @@ func analyzeSource(t *testing.T, r rule.Rule, src string) []*rule.Violation {
 	return rule.Analyze(f, sets)
 }
 
+func TestStructEmbeddingDepthThresholdReportsThroughAnalyze(t *testing.T) {
+	f, err := model.ParseSource("embedding.go", []byte(`package sample
+
+type Base struct{}
+type Middle struct { Base }
+type Outer struct { Middle }
+`))
+	if err != nil {
+		t.Fatalf("ParseSource: %v", err)
+	}
+	r := newStructEmbeddingDepth()
+	if err := r.(rule.Configurable).Configure(rule.Properties{"maxdepth": "1"}); err != nil {
+		t.Fatalf("Configure: %v", err)
+	}
+
+	violations := rule.Analyze(f, []*rule.RuleSet{{Rules: []rule.Rule{r}}})
+	if len(violations) != 1 || violations[0].Args[1] != "Outer" {
+		t.Fatalf("StructEmbeddingDepth violations = %+v, want one for Outer", violations)
+	}
+}
+
 func TestIdenticalBranchesEmptyIfElse(t *testing.T) {
 	r := newIdenticalBranches()
 	src := `package sample

@@ -9,8 +9,9 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 ### Changed
 - Threshold rules now declare function, class, and interface awareness through
   constructor wrappers, so each is dispatched only to the artifact kinds it
-  measures. `TooManyMethods` remains aware of both classes and interfaces
-  (#169).
+  measures. Function rules run on declared functions and concrete methods;
+  interface signatures are handled as interfaces. `TooManyMethods` remains
+  aware of both classes and interfaces (#169).
 
 ## [0.5.4] - 2026-09-27
 

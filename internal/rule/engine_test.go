@@ -7,9 +7,8 @@ import (
 	"github.com/quality-gates/messgo/internal/model"
 )
 
-// recordingFuncRule records every function it is applied to, so we can assert
-// the engine's unified function dispatch covers free functions, methods, and
-// interface methods exactly once each.
+// recordingFuncRule records each function it is applied to, so we can assert
+// that function dispatch covers free functions and concrete methods.
 type recordingFuncRule struct {
 	*Base
 	seen []string
@@ -19,7 +18,7 @@ func (r *recordingFuncRule) ApplyFunc(c *Context, fn *model.Function) {
 	r.seen = append(r.seen, fn.Name)
 }
 
-func TestFuncRuleDispatchCoversAllFunctions(t *testing.T) {
+func TestFuncRuleDispatchCoversFunctionsAndConcreteMethods(t *testing.T) {
 	src := `package fixture
 
 func Free() {}
@@ -43,7 +42,7 @@ type Speaker interface {
 
 	got := append([]string(nil), r.seen...)
 	sort.Strings(got)
-	want := []string{"Free", "Hello", "Say"}
+	want := []string{"Free", "Hello"}
 	if len(got) != len(want) {
 		t.Fatalf("ApplyFunc saw %v, want %v", got, want)
 	}

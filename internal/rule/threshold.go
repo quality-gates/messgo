@@ -55,7 +55,7 @@ type ThresholdDeclaration struct {
 	Boundary    Boundary
 	FuncMetric  FuncThresholdMetric
 	ClassMetric ClassThresholdMetric
-	// InterfaceMetric is evaluated by an InterfaceThresholdRule wrapper. A
+	// InterfaceMetric is evaluated by an interface-aware threshold wrapper. A
 	// threshold helper does not register itself for interface dispatch.
 	InterfaceMetric InterfaceThresholdMetric
 	// InterfaceProperty and InterfaceDefault configure a separate threshold

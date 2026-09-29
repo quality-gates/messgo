@@ -53,7 +53,7 @@ func collectMutations(f *ast.File, globals map[string]bool, topSpecs map[any]boo
 
 // markMutation calls mark on the lvalue(s) of any node that mutates a variable:
 // assignment (excluding ":=", which introduces locals), increment/decrement,
-// address-of, delete/clear of a map, copy into a slice, an in-place sort, a
+// address-of, delete/clear of a map, copy into a slice, an in-place change, a
 // send on or close of a channel, and a range clause that assigns into existing
 // variables.
 func markMutation(f *ast.File, n ast.Node, mark func(ast.Expr)) {
@@ -92,13 +92,16 @@ func markRangeAssign(s *ast.RangeStmt, mark func(ast.Expr)) {
 	mark(s.Value)
 }
 
-// InPlaceSorts are standard library functions that change the order of the
-// elements of their first argument.
-var InPlaceSorts = map[string]bool{
+// InPlaceChanges are standard library functions that change the elements of
+// their first argument in place: sorts, and the slices helpers that shift or
+// overwrite elements in the backing array even when the result is discarded.
+var InPlaceChanges = map[string]bool{
 	"sort.Slice": true, "sort.SliceStable": true, "sort.Sort": true,
 	"sort.Stable": true, "sort.Strings": true, "sort.Ints": true,
 	"sort.Float64s": true, "slices.Sort": true, "slices.SortFunc": true,
 	"slices.SortStableFunc": true, "slices.Reverse": true,
+	"slices.Delete": true, "slices.DeleteFunc": true, "slices.Compact": true,
+	"slices.CompactFunc": true, "slices.Replace": true, "slices.Insert": true,
 }
 
 // changingBuiltins are the builtin functions that change their first argument.
@@ -107,7 +110,7 @@ var changingBuiltins = map[string]bool{
 }
 
 // markFirstArgChange calls mark on the first argument of a call that changes
-// the data of that argument: delete, clear, copy, close, or an in-place sort.
+// the data of that argument: delete, clear, copy, close, or an in-place change.
 func markFirstArgChange(f *ast.File, call *ast.CallExpr, mark func(ast.Expr)) {
 	if len(call.Args) == 0 {
 		return
@@ -118,7 +121,7 @@ func markFirstArgChange(f *ast.File, call *ast.CallExpr, mark func(ast.Expr)) {
 			mark(call.Args[0])
 		}
 	case *ast.SelectorExpr:
-		if InPlaceSorts[QualifiedName(f, fun)] {
+		if InPlaceChanges[QualifiedName(f, fun)] {
 			mark(call.Args[0])
 		}
 	}

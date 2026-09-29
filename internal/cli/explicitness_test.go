@@ -441,6 +441,62 @@ func First() int { return list[0] }
 	)
 }
 
+func TestExplicitnessReportsInPlaceSliceChanges(t *testing.T) {
+	code, got := runExplicitness(t, "explicitness", map[string]string{
+		"a.go": `package p
+
+import "slices"
+
+func Delete(s []int) { _ = slices.Delete(s, 1, 2) }
+
+func DeleteFunc(s []int) { _ = slices.DeleteFunc(s, func(v int) bool { return v == 0 }) }
+
+func Compact(s []int) { _ = slices.Compact(s) }
+
+func CompactFunc(s []int) { _ = slices.CompactFunc(s, func(a, b int) bool { return a == b }) }
+
+func Replace(s []int) { _ = slices.Replace(s, 0, 1, 9) }
+
+func Insert(s []int) { _ = slices.Insert(s, 0, 9) }
+
+func Clone(s []int) []int { return slices.Clone(s) }
+
+func Index(s []int) int { return slices.Index(s, 9) }
+`,
+	})
+	if code != ExitViolation {
+		t.Errorf("exit = %d, want %d", code, ExitViolation)
+	}
+	assertFindings(t, got,
+		"a.go:5 ImplicitOutput Delete: write through parameter s",
+		"a.go:7 ImplicitOutput DeleteFunc: write through parameter s",
+		"a.go:9 ImplicitOutput Compact: write through parameter s",
+		"a.go:11 ImplicitOutput CompactFunc: write through parameter s",
+		"a.go:13 ImplicitOutput Replace: write through parameter s",
+		"a.go:15 ImplicitOutput Insert: write through parameter s",
+	)
+}
+
+func TestExplicitnessReadsPackageVariableThatASliceDeleteChanges(t *testing.T) {
+	_, got := runExplicitness(t, "explicitness", map[string]string{
+		"a.go": `package p
+
+import "slices"
+
+var list = []int{1, 2, 3}
+
+func Drop() { _ = slices.Delete(list, 0, 1) }
+
+func First() int { return list[0] }
+`,
+	})
+	assertFindings(t, got,
+		"a.go:7 ImplicitInput Drop: package variable list",
+		"a.go:7 ImplicitOutput Drop: package variable list",
+		"a.go:9 ImplicitInput First: package variable list",
+	)
+}
+
 func TestExplicitnessReadsPackageVariableThatACopyChanges(t *testing.T) {
 	_, got := runExplicitness(t, "explicitness", map[string]string{
 		"a.go": `package p

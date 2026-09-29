@@ -56,8 +56,8 @@ func (w *writeVisitor) visitRange(r *ast.RangeStmt) {
 	}
 }
 
-// visitCall records a builtin or a sort that changes the data that its first
-// argument refers to.
+// visitCall records a builtin or a library call that changes the data that its
+// first argument refers to.
 func (w *writeVisitor) visitCall(call *ast.CallExpr) {
 	if len(call.Args) == 0 {
 		return
@@ -68,7 +68,7 @@ func (w *writeVisitor) visitCall(call *ast.CallExpr) {
 			w.write(call.Args[0], only, true)
 		}
 	case *ast.SelectorExpr:
-		if util.InPlaceSorts[w.qualified(fun)] {
+		if util.InPlaceChanges[w.qualified(fun)] {
 			w.write(call.Args[0], false, true)
 		}
 	}

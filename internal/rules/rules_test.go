@@ -1296,6 +1296,15 @@ func order() { s.Ints(list) }
 	mustHave(t, hits, "GlobalVariable")
 }
 
+func TestGlobalVariableFlagsInPlaceSliceDelete(t *testing.T) {
+	hits := analyze(t, `
+import "slices"
+var list = []int{1, 2, 3, 4}
+func drop() { _ = slices.Delete(list, 1, 2) }
+`, "design")
+	mustHave(t, hits, "GlobalVariable")
+}
+
 func TestGlobalVariableIgnoresSortOfCopy(t *testing.T) {
 	hits := analyze(t, `
 import "slices"

@@ -120,7 +120,7 @@ func annotatePackageGroup(group []*model.File) {
 }
 
 func collectPackageMapTypes(group []*model.File) map[string]bool {
-	mapTypes := map[string]bool{}
+	typeExprs := map[string]ast.Expr{}
 	for _, f := range group {
 		for _, decl := range f.Syntax.Decls {
 			gen, ok := decl.(*ast.GenDecl)
@@ -128,17 +128,37 @@ func collectPackageMapTypes(group []*model.File) map[string]bool {
 				continue
 			}
 			for _, spec := range gen.Specs {
-				typeSpec, ok := spec.(*ast.TypeSpec)
-				if !ok {
-					continue
-				}
-				if _, ok := typeSpec.Type.(*ast.MapType); ok {
-					mapTypes[typeSpec.Name.Name] = true
+				if typeSpec, ok := spec.(*ast.TypeSpec); ok {
+					typeExprs[typeSpec.Name.Name] = typeSpec.Type
 				}
 			}
 		}
 	}
+	mapTypes := map[string]bool{}
+	for name := range typeExprs {
+		if resolvesToMapType(typeExprs, name) {
+			mapTypes[name] = true
+		}
+	}
 	return mapTypes
+}
+
+// resolvesToMapType follows a chain of package type names, through generic
+// instantiations, to report whether name denotes a map type.
+func resolvesToMapType(typeExprs map[string]ast.Expr, name string) bool {
+	seen := map[string]bool{}
+	for !seen[name] {
+		seen[name] = true
+		switch t := util.UnwrapTypeInstance(typeExprs[name]).(type) {
+		case *ast.MapType:
+			return true
+		case *ast.Ident:
+			name = t.Name
+		default:
+			return false
+		}
+	}
+	return false
 }
 
 func attachPackageMethods(group []*model.File, classByName map[string]*model.Class, aliases map[string]string) {

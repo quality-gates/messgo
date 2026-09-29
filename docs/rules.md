@@ -129,7 +129,7 @@ line. The analysis uses only the syntax tree, thus it does not see:
   (`var f = func() { ... }`);
 - an unaliased `math/rand/v2` import;
 - a read of a package variable in a key of a map literal whose named map type
-  another file or package declares (`names{n: "x"}`).
+  another package declares (`other.Names{n: "x"}`).
 
 For the same reason, a write to an array element in a copied struct
 (`p.arr[0] = v`) is reported as a write to shared data. A parameter that the

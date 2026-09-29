@@ -3,6 +3,7 @@ package runner
 import (
 	"os"
 	"path/filepath"
+	"reflect"
 	"runtime"
 	"strings"
 	"testing"
@@ -99,6 +100,66 @@ func MakeRecord() record { return record{n: 1} }
 	}
 	if labelInputs != 1 {
 		t.Fatalf("got %d Label implicit inputs, want exactly one for package variable n", labelInputs)
+	}
+}
+
+func TestImplicitInputReadsCrossFileGenericAndAliasedMapLiteralKeys(t *testing.T) {
+	dir := t.TempDir()
+	files := map[string]string{
+		"types.go": `package p
+
+type M[K comparable, V any] map[K]V
+type Named map[string]string
+type record struct{ n string }
+`,
+		"aliases.go": `package p
+
+type Alias = Named
+type Chain = Alias
+type Inst = M[string, string]
+type Wrapped Named
+type RecordAlias = record
+`,
+		"worker.go": `package p
+
+var n = "a"
+
+func Bump() { n = "b" }
+
+func Generic() { _ = M[string, string]{n: "x"} }
+
+func Aliased() { _ = Chain{n: "x"} }
+
+func Instance() { _ = Inst{n: "x"} }
+
+func Defined() { _ = Wrapped{n: "x"} }
+
+func Fields() { _ = RecordAlias{n: "x"} }
+`,
+	}
+	for name, src := range files {
+		if err := os.WriteFile(filepath.Join(dir, name), []byte(src), 0o644); err != nil {
+			t.Fatalf("write %s: %v", name, err)
+		}
+	}
+
+	sets, err := (&ruleset.Loader{}).Load("explicitness")
+	if err != nil {
+		t.Fatalf("load explicitness ruleset: %v", err)
+	}
+	rep, err := Run(Options{Paths: []string{dir}, RuleSets: sets})
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	got := map[string]int{}
+	for _, violation := range rep.Violations {
+		if violation.Rule.Name() == "ImplicitInput" && strings.Contains(violation.Description, "package variable n") {
+			got[violation.Function]++
+		}
+	}
+	want := map[string]int{"Generic": 1, "Aliased": 1, "Instance": 1, "Defined": 1}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("ImplicitInput reads of n per function = %v, want %v", got, want)
 	}
 }
 

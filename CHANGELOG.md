@@ -18,6 +18,10 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
   A method `Walk` calling `filepath.Walk`, a function `Serve` calling
   `http.Serve`, or method `f` calling `other.f()` no longer adds +1; only a
   call through the method's own receiver (`t.Walk()`) counts (#209).
+- Fixed `ImplicitInput` missing package-variable reads in the keys of map
+  literals whose type is a generic map instantiation (`M[string, string]{n: "x"}`)
+  or an alias or defined type of a named map (`type Alias = Named`), in the
+  same file or another file of the package (#210).
 
 ## [0.5.4] - 2026-09-27
 

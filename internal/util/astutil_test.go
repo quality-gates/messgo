@@ -4,6 +4,7 @@ import (
 	"go/ast"
 	"go/parser"
 	"go/token"
+	"go/types"
 	"testing"
 )
 
@@ -241,6 +242,26 @@ func TestResolveTypeAlias(t *testing.T) {
 	for _, tt := range tests {
 		if got := ResolveTypeAlias(aliases, tt.in); got != tt.want {
 			t.Errorf("ResolveTypeAlias(%q) = %q, want %q", tt.in, got, tt.want)
+		}
+	}
+}
+
+func TestUnwrapTypeInstance(t *testing.T) {
+	tests := []struct{ in, want string }{
+		{"M", "M"},
+		{"M[int]", "M"},
+		{"M[string, int]", "M"},
+		{"(M[string, int])", "M"},
+		{"map[string]int", "map[string]int"},
+		{"pkg.M[int]", "pkg.M"},
+	}
+	for _, tt := range tests {
+		expr, err := parser.ParseExpr(tt.in)
+		if err != nil {
+			t.Fatalf("parse %q: %v", tt.in, err)
+		}
+		if got := types.ExprString(UnwrapTypeInstance(expr)); got != tt.want {
+			t.Errorf("UnwrapTypeInstance(%q) = %q, want %q", tt.in, got, tt.want)
 		}
 	}
 }

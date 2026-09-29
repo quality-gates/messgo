@@ -22,6 +22,12 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
   literals whose type is a generic map instantiation (`M[string, string]{n: "x"}`)
   or an alias or defined type of a named map (`type Alias = Named`), in the
   same file or another file of the package (#210).
+- Fixed the explicitness rules ignoring parenthesized forms of documented
+  inputs and outputs: a write through a parenthesized pointer receiver
+  (`func (t (*T)) set()`) under `explicitness-strict`, a range over a
+  parenthesized channel parameter (`for range (ch)`), and a stream call with a
+  parenthesized callee (`(fmt.Fprintf)(w, "x")`) now report like their
+  unparenthesized forms (#211).
 
 ## [0.5.4] - 2026-09-27
 

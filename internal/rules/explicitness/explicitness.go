@@ -143,7 +143,7 @@ func receiverObject(decl *ast.FuncDecl) (*ast.Object, bool) {
 		return nil, false
 	}
 	field := decl.Recv.List[0]
-	_, pointer := field.Type.(*ast.StarExpr)
+	_, pointer := ast.Unparen(field.Type).(*ast.StarExpr)
 	return field.Names[0].Obj, pointer
 }
 

@@ -8,6 +8,7 @@ import (
 	"regexp"
 	"slices"
 	"sort"
+	"strings"
 	"testing"
 )
 
@@ -575,4 +576,38 @@ func TestExplicitnessStrictReportsReceiverData(t *testing.T) {
 		"a.go:25 ImplicitOutput cart.clear: receiver field total",
 		"a.go:27 ImplicitOutput cart.Tag: receiver field items",
 	)
+}
+
+func TestExplicitnessPeelsParentheses(t *testing.T) {
+	files := map[string]string{
+		"a.go": `package p
+
+import "fmt"
+
+type T struct{ x int }
+
+func (t (*T)) set(v int) { t.x = v }
+
+func drain(ch chan int) {
+	for range (ch) {
+	}
+}
+
+func write(w interface{ Write([]byte) (int, error) }) {
+	(fmt.Fprintf)(w, "x")
+}
+`,
+	}
+	_, got := runExplicitness(t, "explicitness", files)
+	assertFindings(t, got,
+		"a.go:10 ImplicitInput drain: receive from ch",
+		"a.go:15 ImplicitOutput write: write to w",
+	)
+	_, got = runExplicitness(t, "explicitness-strict", files)
+	receiverWrite := func(f string) bool {
+		return strings.HasPrefix(f, "a.go:7 ImplicitOutput ") && strings.HasSuffix(f, "set: receiver field x")
+	}
+	if !slices.ContainsFunc(got, receiverWrite) {
+		t.Errorf("strict findings missing receiver write: %q", got)
+	}
 }

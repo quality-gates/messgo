@@ -271,7 +271,7 @@ func (f *flowVisitor) visit(n ast.Node) bool {
 
 // visitRange records a range over a channel parameter, which is a receive.
 func (f *flowVisitor) visitRange(r *ast.RangeStmt) {
-	if id, ok := r.X.(*ast.Ident); ok && f.params.isChan(id) {
+	if id, ok := ast.Unparen(r.X).(*ast.Ident); ok && f.params.isChan(id) {
 		f.flow(&f.inputs, id, "receive from ")
 	}
 }
@@ -280,7 +280,7 @@ func (f *flowVisitor) visitRange(r *ast.RangeStmt) {
 // writes to or reads from a stream. The panic builtin sends data out of the
 // function, and the recover builtin gets it back.
 func (f *flowVisitor) visitCall(call *ast.CallExpr) {
-	switch fun := call.Fun.(type) {
+	switch fun := ast.Unparen(call.Fun).(type) {
 	case *ast.Ident:
 		f.visitBuiltin(fun, call)
 	case *ast.SelectorExpr:

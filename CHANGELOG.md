@@ -6,6 +6,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 
 ## [Unreleased]
 
+## [0.5.5] - 2026-09-29
+
 ### Changed
 - Threshold rules now declare function, class, and interface awareness through
   constructor wrappers, so each is dispatched only to the artifact kinds it

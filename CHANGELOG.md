@@ -28,6 +28,11 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
   parenthesized channel parameter (`for range (ch)`), and a stream call with a
   parenthesized callee (`(fmt.Fprintf)(w, "x")`) now report like their
   unparenthesized forms (#211).
+- Fixed `GlobalVariable` and `ImplicitOutput` missing in-place slice changes.
+  `slices.Delete`, `DeleteFunc`, `Compact`, `CompactFunc`, `Replace` and
+  `Insert` overwrite the backing array of their first argument even when the
+  result is discarded, so they now count as a mutation of a package variable
+  and as a write through a parameter, like `slices.Sort` (#213).
 
 ## [0.5.4] - 2026-09-27
 

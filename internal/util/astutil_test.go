@@ -122,6 +122,7 @@ import (
 
 var copied, sliced, sliceStable, sorted, stable, strs, ints, floats []int
 var slicesSorted, sortFunc, sortStableFunc, reversed []int
+var sliceDeleted, deletedFunc, compacted, compactedFunc, replaced, inserted, cloned []int
 var searched, sortedCopy, measured, shadowSorted []int
 var deleted, cleared = map[int]int{}, map[int]int{}
 
@@ -150,6 +151,13 @@ func work(src []int, less func(i, j int) bool, cmp func(a, b int) int) {
 	slices.SortFunc(sortFunc, cmp)
 	slices.SortStableFunc(sortStableFunc, cmp)
 	slices.Reverse(reversed)
+	_ = slices.Delete(sliceDeleted, 0, 1)
+	_ = slices.DeleteFunc(deletedFunc, func(int) bool { return true })
+	_ = slices.Compact(compacted)
+	_ = slices.CompactFunc(compactedFunc, func(a, b int) bool { return a == b })
+	_ = slices.Replace(replaced, 0, 1, 9)
+	_ = slices.Insert(inserted, 0, 9)
+	_ = slices.Clone(cloned)
 	_ = s.SearchInts(searched, 1)
 	_ = slices.Sorted(slices.Values(sortedCopy))
 }
@@ -157,12 +165,12 @@ func work(src []int, less func(i, j int) bool, cmp func(a, b int) int) {
 
 	got := MutatedGlobalNames([]*ast.File{f})
 
-	for _, name := range []string{"deleted", "cleared", "copied", "sliced", "sliceStable", "sorted", "stable", "strs", "ints", "floats", "slicesSorted", "sortFunc", "sortStableFunc", "reversed"} {
+	for _, name := range []string{"deleted", "cleared", "copied", "sliced", "sliceStable", "sorted", "stable", "strs", "ints", "floats", "slicesSorted", "sortFunc", "sortStableFunc", "reversed", "sliceDeleted", "deletedFunc", "compacted", "compactedFunc", "replaced", "inserted"} {
 		if !got[name] {
 			t.Errorf("expected %q to be detected as mutated; got %v", name, got)
 		}
 	}
-	for _, name := range []string{"searched", "sortedCopy", "measured", "shadowSorted"} {
+	for _, name := range []string{"searched", "sortedCopy", "measured", "shadowSorted", "cloned"} {
 		if got[name] {
 			t.Errorf("%q is only read; must not be detected as mutated; got %v", name, got)
 		}

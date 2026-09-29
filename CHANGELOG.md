@@ -14,6 +14,10 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
   aware of both classes and interfaces (#169).
 
 ### Fixed
+- Fixed `NestingDepth` ignoring control flow inside function literals. An
+  `if`/`for`/`switch` chain in a closure, `defer`, or `go` statement now counts
+  toward the enclosing function, starting from the depth where the literal
+  appears (#212).
 - Fixed `CognitiveComplexity` scoring same-named calls as direct recursion.
   A method `Walk` calling `filepath.Walk`, a function `Serve` calling
   `http.Serve`, or method `f` calling `other.f()` no longer adds +1; only a

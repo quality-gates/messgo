@@ -211,6 +211,31 @@ func arrow(a, b, c, d, e, f bool) {
 	mustHave(t, hits, "NestingDepth")
 }
 
+func TestNestingDepthFiresOnDeepControlFlowInFunctionLiteral(t *testing.T) {
+	// The same six levels, written inside a deferred closure.
+	src := `
+func arrow(a, b, c, d, e, f bool) {
+	defer func() {
+		if a {
+			if b {
+				if c {
+					if d {
+						if e {
+							if f {
+								return
+							}
+						}
+					}
+				}
+			}
+		}
+	}()
+}
+`
+	hits := analyze(t, src, "codesize")
+	mustHave(t, hits, "NestingDepth")
+}
+
 func TestNestingDepthDoesNotFireOnShallowFlow(t *testing.T) {
 	src := `
 func shallow(a, b bool) {

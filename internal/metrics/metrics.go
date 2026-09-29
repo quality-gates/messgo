@@ -86,6 +86,31 @@ func maxStmtNesting(stmts []ast.Stmt, depth int) int {
 // nestingDepthStmt returns the max nesting depth reachable from s, where depth
 // is the nesting level of the block containing s.
 func nestingDepthStmt(s ast.Stmt, depth int) int {
+	return max(funcLitNesting(s, depth), controlNesting(s, depth))
+}
+
+// funcLitNesting measures the bodies of function literals found in n outside
+// any nested block. A literal's body continues at depth: a closure, defer, or
+// goroutine does not reset or add nesting. Blocks are skipped because the
+// control-flow walk reaches them at their own, deeper level.
+func funcLitNesting(n ast.Node, depth int) int {
+	m := depth
+	ast.Inspect(n, func(c ast.Node) bool {
+		switch c := c.(type) {
+		case *ast.FuncLit:
+			m = max(m, maxStmtNesting(c.Body.List, depth))
+			return false
+		case *ast.BlockStmt:
+			return false
+		}
+		return true
+	})
+	return m
+}
+
+// controlNesting returns the max nesting depth reachable through the
+// control-flow structure of s.
+func controlNesting(s ast.Stmt, depth int) int {
 	switch n := s.(type) {
 	case *ast.IfStmt:
 		return nestingDepthIf(n, depth)
@@ -130,6 +155,9 @@ func caseNesting(clauses []ast.Stmt, depth int) int {
 		if !ok {
 			continue
 		}
+		for _, e := range cc.List {
+			m = max(m, funcLitNesting(e, depth))
+		}
 		if d := maxStmtNesting(cc.Body, depth); d > m {
 			m = d
 		}
@@ -145,6 +173,9 @@ func commNesting(clauses []ast.Stmt, depth int) int {
 		cc, ok := c.(*ast.CommClause)
 		if !ok {
 			continue
+		}
+		if cc.Comm != nil {
+			m = max(m, funcLitNesting(cc.Comm, depth))
 		}
 		if d := maxStmtNesting(cc.Body, depth); d > m {
 			m = d

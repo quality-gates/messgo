@@ -546,6 +546,110 @@ func TestNestingDepth(t *testing.T) {
 			want: 1,
 		},
 		{
+			name: "function literal body counts at its enclosing depth",
+			src: `func f(a, b, c bool) {
+				_ = func() {
+					if a {
+						if b {
+							if c {
+							}
+						}
+					}
+				}
+			}`,
+			want: 3,
+		},
+		{
+			name: "deferred and go function literals",
+			src: `func f(a, b bool) {
+				defer func() {
+					if a {
+						return
+					}
+				}()
+				go func() {
+					for {
+						if b {
+							return
+						}
+					}
+				}()
+			}`,
+			want: 2,
+		},
+		{
+			name: "function literal inside control flow keeps outer depth",
+			src: `func f(items []int) {
+				for range items {
+					run(func() {
+						if true {
+							return
+						}
+					})
+				}
+			}`,
+			want: 2,
+		},
+		{
+			name: "function literal in if condition sits at the header level",
+			src: `func f() {
+				if func() bool {
+					for {
+						if true {
+							return true
+						}
+					}
+				}() {
+					return
+				}
+			}`,
+			want: 2,
+		},
+		{
+			name: "function literal in case expression sits inside the switch",
+			src: `func f(n int) {
+				switch {
+				case func() bool {
+					if n > 0 {
+						return true
+					}
+					return false
+				}():
+				}
+			}`,
+			want: 2,
+		},
+		{
+			name: "function literal in select comm clause sits inside the select",
+			src: `func f(ch chan int, n int) {
+				select {
+				case ch <- func() int {
+					if n > 0 {
+						return n
+					}
+					return 0
+				}():
+				}
+			}`,
+			want: 2,
+		},
+		{
+			name: "nested function literals",
+			src: `func f(a bool) {
+				fn := func() func() {
+					return func() {
+						if a {
+							if a {
+								return
+							}
+						}
+					}
+				}
+				_ = fn
+			}`,
+			want: 2,
+		},
+		{
 			name: "nil body",
 			src:  `func f()`,
 			want: 0,

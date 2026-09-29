@@ -204,21 +204,29 @@ func (r *readVisitor) visitComposite(lit *ast.CompositeLit) {
 	}
 }
 
-// isMapType reports whether t is a map type or the name of one. The parser
+// isMapType reports whether t is a map type or the name of one, looking
+// through generic instantiations and chains of type names. The parser
 // resolves same-file type objects; the package index covers unresolved names
 // declared in other files.
 func isMapType(t ast.Expr, packageMapTypes map[string]bool) bool {
-	if id, ok := t.(*ast.Ident); ok {
-		if id.Obj != nil {
-			if spec, ok := id.Obj.Decl.(*ast.TypeSpec); ok {
-				t = spec.Type
-			}
-		} else if packageMapTypes[id.Name] {
-			return true
+	seen := map[*ast.TypeSpec]bool{}
+	for {
+		t = util.UnwrapTypeInstance(t)
+		id, ok := t.(*ast.Ident)
+		if !ok {
+			_, ok = t.(*ast.MapType)
+			return ok
 		}
+		if id.Obj == nil {
+			return packageMapTypes[id.Name]
+		}
+		spec, ok := id.Obj.Decl.(*ast.TypeSpec)
+		if !ok || seen[spec] {
+			return false
+		}
+		seen[spec] = true
+		t = spec.Type
 	}
-	_, ok := t.(*ast.MapType)
-	return ok
 }
 
 func isIdent(e ast.Expr) bool {

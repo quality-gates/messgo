@@ -320,6 +320,23 @@ func aliasTargetName(e ast.Expr) string {
 	return ""
 }
 
+// UnwrapTypeInstance strips parentheses and generic instantiation from a type
+// expression, so `(M[string, int])` becomes `M`.
+func UnwrapTypeInstance(e ast.Expr) ast.Expr {
+	for {
+		switch t := e.(type) {
+		case *ast.ParenExpr:
+			e = t.X
+		case *ast.IndexExpr:
+			e = t.X
+		case *ast.IndexListExpr:
+			e = t.X
+		default:
+			return e
+		}
+	}
+}
+
 // ResolveTypeAlias follows a chain of type aliases to the name of the defined
 // type they denote. Names that are not aliases are returned unchanged, and a
 // cyclic chain resolves to the name it started from.

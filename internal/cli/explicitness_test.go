@@ -386,6 +386,40 @@ func Label() names { return names{n: "x"} }
 	)
 }
 
+func TestExplicitnessReadsKeysOfGenericAndAliasedMapLiterals(t *testing.T) {
+	_, got := runExplicitness(t, "explicitness", map[string]string{
+		"a.go": `package p
+
+var n = "a"
+
+func init() { n = "b" }
+
+type M[K comparable, V any] map[K]V
+type Named map[string]string
+type Alias = Named
+type Pair[K comparable, V any] = M[K, V]
+type record struct{ n string }
+
+func generic() { _ = M[string, string]{n: "x"} }
+
+func aliased() { _ = Alias{n: "x"} }
+
+func genericAlias() { _ = Pair[string, string]{n: "x"} }
+
+func plain() { _ = Named{n: "x"} }
+
+func fields() { _ = record{n: "x"} }
+`,
+	})
+	assertFindings(t, got,
+		"a.go:5 ImplicitOutput init: package variable n",
+		"a.go:13 ImplicitInput generic: package variable n",
+		"a.go:15 ImplicitInput aliased: package variable n",
+		"a.go:17 ImplicitInput genericAlias: package variable n",
+		"a.go:19 ImplicitInput plain: package variable n",
+	)
+}
+
 func TestExplicitnessReadsPackageVariableThatASortChanges(t *testing.T) {
 	_, got := runExplicitness(t, "explicitness", map[string]string{
 		"a.go": `package p

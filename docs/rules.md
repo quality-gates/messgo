@@ -62,7 +62,9 @@ the same smell three times.
 `NestingDepth` flags functions whose deepest control-flow nesting (if/for/range/
 switch/type-switch/select) exceeds `maxdepth` (default 5). This is the "arrow
 code" smell that cyclomatic and NPath complexity do not capture. An else-if chain
-does not add depth; an else block does.
+does not add depth; an else block does. Control flow inside a function literal
+(a closure, `defer`, or `go` statement) counts toward the enclosing function,
+continuing from the depth where the literal appears.
 
 `ExcessiveReturnCount` flags functions returning more values than `maxresults`
 (default 3). Go allows multiple returns, but a function returning many values

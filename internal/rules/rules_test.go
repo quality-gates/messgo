@@ -1382,6 +1382,37 @@ loop:
 	)
 }
 
+func TestDevelopmentCodeFragmentMatchesAliasedImports(t *testing.T) {
+	rulesetPath := filepath.Join(t.TempDir(), "development.xml")
+	rulesetXML := []byte(`<ruleset name="development">
+  <rule ref="design/DevelopmentCodeFragment">
+    <properties><property name="unwanted-functions" value="fmt.Println"/></properties>
+  </rule>
+</ruleset>
+`)
+	if err := os.WriteFile(rulesetPath, rulesetXML, 0o600); err != nil {
+		t.Fatalf("write ruleset: %v", err)
+	}
+
+	hits := analyze(t, `
+import (
+	"fmt"
+	myfmt "fmt"
+)
+
+func A() { fmt.Println("x") }
+func B() { myfmt.Println("y") }
+`, rulesetPath)
+	mustHave(t, hits, "DevelopmentCodeFragment")
+	want := []hit{
+		{rule: "DevelopmentCodeFragment", line: 7},
+		{rule: "DevelopmentCodeFragment", line: 8},
+	}
+	if !slices.Equal(hits, want) {
+		t.Fatalf("development-code hits = %v, want %v", hits, want)
+	}
+}
+
 func TestCouplingBetweenObjectsIgnoresBuiltinMapType(t *testing.T) {
 	rulesetPath := filepath.Join(t.TempDir(), "coupling.xml")
 	rulesetXML := []byte(`<ruleset name="coupling">

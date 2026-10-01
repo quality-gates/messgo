@@ -238,45 +238,6 @@ func RootIdent(e ast.Expr) *ast.Ident {
 	}
 }
 
-// FindCalls returns all call expressions in a node whose callee renders to one
-// of the given function names (matched against the textual call expression,
-// e.g. "fmt.Println" or "panic").
-type Call struct {
-	Expr *ast.CallExpr
-	Name string // dotted name of the callee
-	Line int
-}
-
-// Calls returns every call expression within n along with its dotted callee
-// name and line.
-func Calls(n ast.Node, fset *token.FileSet) []Call {
-	var out []Call
-	ast.Inspect(n, func(node ast.Node) bool {
-		if ce, ok := node.(*ast.CallExpr); ok {
-			out = append(out, Call{Expr: ce, Name: CalleeName(ce.Fun), Line: fset.Position(ce.Pos()).Line})
-		}
-		return true
-	})
-	return out
-}
-
-// CalleeName renders a call's function expression to a dotted name, e.g.
-// "fmt.Println", "os.Exit", "panic". Returns "" if it can't be expressed.
-func CalleeName(e ast.Expr) string {
-	switch t := e.(type) {
-	case *ast.Ident:
-		return t.Name
-	case *ast.SelectorExpr:
-		if x := CalleeName(t.X); x != "" {
-			return x + "." + t.Sel.Name
-		}
-		return t.Sel.Name
-	case *ast.ParenExpr:
-		return CalleeName(t.X)
-	}
-	return ""
-}
-
 // TypeAliasNames maps each type-alias name declared across the given files
 // (`type alias = original`) to the local type name it aliases. Aliases of
 // types from other packages, and of unnamed types such as struct literals,

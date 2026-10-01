@@ -16,6 +16,16 @@ type Call struct {
 	Line        int
 }
 
+// QualifiedName returns the import-path-qualified callee (e.g. "fmt.Println",
+// "net/http.Get") for calls into an imported package, or the lexical name for
+// local and builtin calls.
+func (c Call) QualifiedName() string {
+	if c.PackagePath == "" {
+		return c.Name
+	}
+	return c.PackagePath + "." + c.Selector
+}
+
 // SourcePosition identifies a position in the original source file.
 type SourcePosition struct {
 	Line   int

@@ -130,11 +130,19 @@ func (r *DevelopmentCodeFragment) check(c *rule.Context, fn *model.Function) {
 		image = fn.Receiver + "::" + fn.Name
 	}
 	for _, call := range model.Calls(fn) {
-		if r.unwantedFunctions[strings.ToLower(call.Name)] {
+		if r.unwanted(call) {
 			c.ReportFuncAt(fn, call.Line, call.Line, string(fn.NodeType()), image, call.Name)
 		}
 	}
 }
+
+// unwanted matches the configured names against both the lexical callee and
+// its import-path-qualified form, so aliased imports cannot bypass the rule.
+func (r *DevelopmentCodeFragment) unwanted(call model.Call) bool {
+	return r.unwantedFunctions[strings.ToLower(call.Name)] ||
+		r.unwantedFunctions[strings.ToLower(call.QualifiedName())]
+}
+
 func (r *DevelopmentCodeFragment) ApplyFunc(c *rule.Context, fn *model.Function) { r.check(c, fn) }
 
 // ----- EmptyCatchBlock ----------------------------------------------------

@@ -122,11 +122,11 @@ func stop(os target) {
 
 	calls := Calls(f.Functions[0])
 	want := []struct {
-		name, selector, packagePath string
+		name, selector, packagePath, qualified string
 	}{
-		{name: "o.Exit", selector: "Exit", packagePath: "os"},
-		{name: "syscall.Exit", selector: "Exit", packagePath: "syscall"},
-		{name: "os.Exit", selector: "Exit"},
+		{name: "o.Exit", selector: "Exit", packagePath: "os", qualified: "os.Exit"},
+		{name: "syscall.Exit", selector: "Exit", packagePath: "syscall", qualified: "syscall.Exit"},
+		{name: "os.Exit", selector: "Exit", qualified: "os.Exit"},
 	}
 	if len(calls) != len(want) {
 		t.Fatalf("Calls() = %+v, want %d calls", calls, len(want))
@@ -134,6 +134,9 @@ func stop(os target) {
 	for i, call := range calls {
 		if call.Name != want[i].name || call.Selector != want[i].selector || call.PackagePath != want[i].packagePath {
 			t.Errorf("Calls()[%d] = %+v, want name %q, selector %q, package path %q", i, call, want[i].name, want[i].selector, want[i].packagePath)
+		}
+		if got := call.QualifiedName(); got != want[i].qualified {
+			t.Errorf("Calls()[%d].QualifiedName() = %q, want %q", i, got, want[i].qualified)
 		}
 	}
 }

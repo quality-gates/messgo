@@ -395,7 +395,7 @@ func isReceiver(x ast.Expr, recv *ast.Ident) bool {
 
 // receiverIdent returns the named receiver of a method, or nil.
 func receiverIdent(fn *ast.FuncDecl) *ast.Ident {
-	if fn.Recv == nil || len(fn.Recv.List[0].Names) == 0 {
+	if fn.Recv == nil || len(fn.Recv.List) == 0 || len(fn.Recv.List[0].Names) == 0 {
 		return nil
 	}
 	return fn.Recv.List[0].Names[0]

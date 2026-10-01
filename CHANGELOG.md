@@ -6,6 +6,17 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 
 ## [Unreleased]
 
+### Fixed
+- Fixed `DevelopmentCodeFragment` missing calls made through an import alias.
+  An `unwanted-functions` entry such as `fmt.Println` now also matches
+  `myfmt.Println` when `myfmt` aliases `"fmt"`; entries still match the
+  lexical callee name as before (#223).
+
+### Removed
+- Removed the unused `util.Calls`, `util.Call`, and `util.CalleeName` AST
+  helpers; `model.Call` is the single callee representation and now exposes
+  `QualifiedName()` (#223).
+
 ## [0.5.5] - 2026-09-29
 
 ### Changed

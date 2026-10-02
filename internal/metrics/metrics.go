@@ -374,7 +374,7 @@ func (v *cognitiveVisitor) visitCall(n *ast.CallExpr) {
 	if v.name == nil {
 		return
 	}
-	switch call := n.Fun.(type) {
+	switch call := callee(n.Fun).(type) {
 	case *ast.Ident:
 		if call.Obj == v.name.Obj && call.Name == v.name.Name {
 			v.inc() // direct recursion
@@ -382,6 +382,23 @@ func (v *cognitiveVisitor) visitCall(n *ast.CallExpr) {
 	case *ast.SelectorExpr:
 		if call.Sel.Name == v.name.Name && isReceiver(call.X, v.recv) {
 			v.inc() // direct method recursion
+		}
+	}
+}
+
+// callee strips parentheses and explicit type instantiation from a call's
+// function expression, so (f)(), f[T]() and f[K, V]() all yield f.
+func callee(fun ast.Expr) ast.Expr {
+	for {
+		switch e := fun.(type) {
+		case *ast.ParenExpr:
+			fun = e.X
+		case *ast.IndexExpr:
+			fun = e.X
+		case *ast.IndexListExpr:
+			fun = e.X
+		default:
+			return fun
 		}
 	}
 }

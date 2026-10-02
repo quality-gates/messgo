@@ -6,6 +6,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 
 ## [Unreleased]
 
+## [0.5.6] - 2026-10-02
+
 ### Fixed
 - Fixed `DevelopmentCodeFragment` missing calls made through an import alias.
   An `unwanted-functions` entry such as `fmt.Println` now also matches

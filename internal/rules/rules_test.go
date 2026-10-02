@@ -2877,6 +2877,73 @@ func Run() error {
 	})
 }
 
+func TestUnusedPrivateMethodMethodExpression(t *testing.T) {
+	cases := map[string]string{
+		"value receiver": `
+type worker struct{}
+
+func (w worker) work() {}
+
+func Run() {
+	worker.work(worker{})
+}
+`,
+		"pointer receiver": `
+type worker struct{}
+
+func (w *worker) work() {}
+
+func Run() {
+	f := (*worker).work
+	f(&worker{})
+}
+`,
+		"generic receiver": `
+type worker[T any] struct{}
+
+func (w worker[T]) work() {}
+
+func Run() {
+	worker[int].work(worker[int]{})
+}
+`,
+		"promoted through embedding": `
+type worker struct{}
+
+func (w worker) work() {}
+
+type outer struct {
+	worker
+}
+
+func Run() {
+	outer.work(outer{})
+}
+`,
+	}
+	for name, src := range cases {
+		t.Run(name, func(t *testing.T) {
+			hits := analyze(t, src, "unusedcode")
+			mustNotHave(t, hits, "UnusedPrivateMethod")
+		})
+	}
+
+	t.Run("unreferenced method still flagged", func(t *testing.T) {
+		src := `
+type worker struct{}
+
+func (w worker) work() {}
+func (w worker) idle() {}
+
+func Run() {
+	worker.work(worker{})
+}
+`
+		hits := analyze(t, src, "unusedcode")
+		mustHaveCount(t, hits, "UnusedPrivateMethod", 1)
+	})
+}
+
 func TestUnusedPrivateMemberRangeLoop(t *testing.T) {
 	t.Run("slice parameter iteration", func(t *testing.T) {
 		src := `

@@ -478,7 +478,7 @@ func (c *memberTypeResolver) expressionType(expr ast.Expr, types map[string]memb
 func (c *memberTypeResolver) resolvedType(expr ast.Expr, types map[string]memberVarType) memberVarType {
 	switch node := expr.(type) {
 	case *ast.Ident:
-		return types[node.Name]
+		return c.identType(node, types)
 	case *ast.SelectorExpr:
 		return c.selectorType(node, types)
 	case *ast.CompositeLit:
@@ -490,6 +490,19 @@ func (c *memberTypeResolver) resolvedType(expr ast.Expr, types map[string]member
 	default:
 		return c.wrappedExpressionType(expr, types)
 	}
+}
+
+// identType resolves a variable to its bound type. An identifier with no
+// binding that names a package struct is the receiver of a method expression
+// such as T.m or (*T).m, so it resolves to that struct.
+func (c *memberTypeResolver) identType(id *ast.Ident, types map[string]memberVarType) memberVarType {
+	if bound, ok := types[id.Name]; ok {
+		return bound
+	}
+	if _, ok := c.classes[id.Name]; ok {
+		return memberVarType{name: id.Name}
+	}
+	return memberVarType{}
 }
 
 func (c *memberTypeResolver) wrappedExpressionType(expr ast.Expr, types map[string]memberVarType) memberVarType {

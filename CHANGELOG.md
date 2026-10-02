@@ -11,6 +11,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
   An `unwanted-functions` entry such as `fmt.Println` now also matches
   `myfmt.Println` when `myfmt` aliases `"fmt"`; entries still match the
   lexical callee name as before (#223).
+- Fixed `CognitiveComplexity` panicking on a function declared with an empty
+  receiver list (`func () f() {}`), which `go/parser` accepts (#227).
 
 ### Removed
 - Removed the unused `util.Calls`, `util.Call`, and `util.CalleeName` AST

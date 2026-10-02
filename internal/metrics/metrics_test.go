@@ -717,6 +717,7 @@ func TestCognitiveComplexity(t *testing.T) {
 		{"same-named call on shadowed receiver is not recursion", `func (t *T) f() { { t := &T{}; t.f() } }`, 0},
 		{"same-named call in unnamed-receiver method is not recursion", `func (T) Walk() { filepath.Walk() }`, 0},
 		{"same-named call in blank-receiver method is not recursion", `func (_ *T) Walk() { filepath.Walk() }`, 0},
+		{"empty receiver list does not panic", `func () f() { if true { } }`, 1},
 		{"different method on own receiver is not recursion", `func (t *T) f() { t.g() }`, 0},
 		{"shadowed function name is not recursion", `func f() { f := func() {}; f() }`, 0},
 		{"different unresolved function call is not recursion", `func f() { g() }`, 0},

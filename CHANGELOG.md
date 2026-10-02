@@ -16,6 +16,9 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 - Fixed `UnusedPrivateMethod` flagging methods referenced only through method
   expressions such as `T.m`, `(*T).m`, `T[int].m`, or a promoted `Outer.m`
   (#228).
+- Fixed `CognitiveComplexity` missing direct recursion when a generic function
+  calls itself with explicit type arguments (`f[T]()`, `f[K, V]()`) or through
+  a parenthesised callee (`(f)()`) (#229).
 
 ### Removed
 - Removed the unused `util.Calls`, `util.Call`, and `util.CalleeName` AST

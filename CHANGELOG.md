@@ -13,6 +13,9 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
   lexical callee name as before (#223).
 - Fixed `CognitiveComplexity` panicking on a function declared with an empty
   receiver list (`func () f() {}`), which `go/parser` accepts (#227).
+- Fixed `UnusedPrivateMethod` flagging methods referenced only through method
+  expressions such as `T.m`, `(*T).m`, `T[int].m`, or a promoted `Outer.m`
+  (#228).
 
 ### Removed
 - Removed the unused `util.Calls`, `util.Call`, and `util.CalleeName` AST

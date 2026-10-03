@@ -698,6 +698,8 @@ func TestCognitiveComplexity(t *testing.T) {
 		{"single if", `func f(a bool) { if a { } }`, 1},
 		{"nested if", `func f(a, b bool) { if a { if b { } } }`, 3},
 		{"if else block", `func f(a bool) { if a { } else { } }`, 2},
+		{"nested if in else block", `func f(a, b bool) { if a { } else { if b { } } }`, 4},
+		{"else block restores nesting", `func f(a, b, c bool) { if a { } else { if b { } }; if c { } }`, 5},
 		{"if else-if chain", `func f(a, b bool) { if a { } else if b { } }`, 2},
 		{"for with nested if", `func f(items []int) { for _, x := range items { if x > 0 { } } }`, 3},
 		{"binary and", `func f(a, b bool) bool { return a && b }`, 1},

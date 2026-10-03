@@ -6,6 +6,9 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 
 ## [Unreleased]
 
+### Fixed
+- Fixed `CognitiveComplexity` undercounting control flow inside `else` blocks by applying the else-block nesting level (#234).
+
 ### Added
 - Added an exploratory testing report for type semantics and metrics (CognitiveComplexity nesting in else blocks, InterfaceMethodSatisfied alias equivalence, DuplicatedArrayKey type conversions, and UnusedPrivateMethod on non-struct types), with a replay script for findings #234–#237.
 

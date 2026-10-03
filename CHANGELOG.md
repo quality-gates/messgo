@@ -6,6 +6,12 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 
 ## [Unreleased]
 
+### Fixed
+- Fixed `UnusedPrivateMethod` reporting methods that implement a package
+  interface when the signatures differ only by predeclared aliases (`any` vs
+  `interface{}`, `byte` vs `uint8`, `rune` vs `int32`), including nested
+  types such as `map[string]any` and `[]byte` (#235).
+
 ## [0.5.7] - 2026-10-03
 
 ### Fixed

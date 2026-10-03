@@ -8,6 +8,7 @@ import (
 	"go/ast"
 	"go/token"
 	"maps"
+	"regexp"
 	"sync"
 
 	"github.com/quality-gates/messgo/internal/metrics"
@@ -227,16 +228,41 @@ func sameSignature(a, b *Function) bool {
 		return false
 	}
 	for i := range a.Params {
-		if a.Params[i].Type != b.Params[i].Type {
+		if !sameType(a.Params[i].Type, b.Params[i].Type) {
 			return false
 		}
 	}
 	for i := range a.Results {
-		if a.Results[i].Type != b.Results[i].Type {
+		if !sameType(a.Results[i].Type, b.Results[i].Type) {
 			return false
 		}
 	}
 	return true
+}
+
+// predeclaredAliases maps Go's predeclared alias names to the types they
+// denote, so `any` and `interface{}` (or `byte` and `uint8`) compare equal.
+var predeclaredAliases = map[string]string{
+	"any":  "interface{}",
+	"byte": "uint8",
+	"rune": "int32",
+}
+
+// typeNameRun matches an identifier or a qualified selector chain, so only
+// whole, unqualified names are candidates for alias canonicalisation.
+var typeNameRun = regexp.MustCompile(`[\p{L}_][\p{L}\p{N}_.]*`)
+
+func sameType(a, b string) bool {
+	return canonicalType(a) == canonicalType(b)
+}
+
+func canonicalType(s string) string {
+	return typeNameRun.ReplaceAllStringFunc(s, func(name string) string {
+		if alias, ok := predeclaredAliases[name]; ok {
+			return alias
+		}
+		return name
+	})
 }
 
 // EffectiveLinesOfCode returns the number of code-bearing physical source

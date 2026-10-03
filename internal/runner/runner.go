@@ -100,13 +100,15 @@ func annotatePackageGroup(group []*model.File) {
 		pkgInterfaces = append(pkgInterfaces, f.Interfaces...)
 		pkgFunctions = append(pkgFunctions, f.Functions...)
 	}
+	pkgTypeDefs := collectPackageTypeExprs(group)
 	pkgTypeIndex := model.NewPackageTypeIndex(pkgClasses, pkgInterfaces)
-	packageMapTypes := collectPackageMapTypes(group)
+	packageMapTypes := collectPackageMapTypes(pkgTypeDefs)
 	for _, f := range group {
 		f.PackageClasses = pkgClasses
 		f.PackageInterfaces = pkgInterfaces
 		f.PackageTypeIndex = pkgTypeIndex
 		f.PackageMapTypes = packageMapTypes
+		f.PackageTypeDefs = pkgTypeDefs
 		f.PackageFunctions = pkgFunctions
 	}
 	attachPackageMethods(group, classByName, util.TypeAliasNames(asts))
@@ -119,7 +121,7 @@ func annotatePackageGroup(group []*model.File) {
 	}
 }
 
-func collectPackageMapTypes(group []*model.File) map[string]bool {
+func collectPackageTypeExprs(group []*model.File) map[string]ast.Expr {
 	typeExprs := map[string]ast.Expr{}
 	for _, f := range group {
 		for _, decl := range f.Syntax.Decls {
@@ -134,6 +136,10 @@ func collectPackageMapTypes(group []*model.File) map[string]bool {
 			}
 		}
 	}
+	return typeExprs
+}
+
+func collectPackageMapTypes(typeExprs map[string]ast.Expr) map[string]bool {
 	mapTypes := map[string]bool{}
 	for name := range typeExprs {
 		if resolvesToMapType(typeExprs, name) {

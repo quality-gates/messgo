@@ -122,6 +122,45 @@ func use(t thing, s shadowed, c cycleA) {
 	}
 }
 
+func TestSelectedMemberUsesForNonStructTypeExpressions(t *testing.T) {
+	f, err := ParseSource("types.go", []byte(`package sample
+
+type StatusCode int
+func use(code StatusCode) {
+	code.valueMethod()
+	StatusCode(1).conversionMethod()
+	StatusCode.methodExpression(StatusCode(1))
+}
+`))
+	if err != nil {
+		t.Fatalf("ParseSource: %v", err)
+	}
+
+	assertMemberUses(t, f, map[MemberKey]bool{
+		{Type: "StatusCode", Name: "valueMethod"}:      true,
+		{Type: "StatusCode", Name: "conversionMethod"}: true,
+		{Type: "StatusCode", Name: "methodExpression"}: true,
+	})
+}
+
+func TestPackageTypeDefsResolveNonStructMethodExpressions(t *testing.T) {
+	f, err := ParseSource("uses.go", []byte(`package sample
+func use() {
+	StatusCode(1).conversionMethod()
+	StatusCode.methodExpression(StatusCode(1))
+}
+`))
+	if err != nil {
+		t.Fatalf("ParseSource: %v", err)
+	}
+	f.PackageTypeDefs = map[string]ast.Expr{"StatusCode": ast.NewIdent("int")}
+
+	assertMemberUses(t, f, map[MemberKey]bool{
+		{Type: "StatusCode", Name: "conversionMethod"}: true,
+		{Type: "StatusCode", Name: "methodExpression"}: true,
+	})
+}
+
 func TestMemberTypeResolverExpressions(t *testing.T) {
 	f, err := ParseSource("types.go", []byte(`package sample
 

@@ -227,6 +227,39 @@ func use(t T) {
 	}
 }
 
+func TestUnusedPrivateMethodAnalyzesAllConcreteMethods(t *testing.T) {
+	f, err := model.ParseSource("methods.go", []byte(`package p
+
+type Number int
+type HiddenMethod interface{ hidden() }
+
+func (Number) hidden() {}
+func (Number) unusedNumber() {}
+func (Number) usedNumber() {}
+func (Number) Exported() {}
+
+type Box struct{}
+type boxAlias = Box
+func (boxAlias) aliasMethod() {}
+
+func use(n Number, b Box) {
+	n.usedNumber()
+	b.aliasMethod()
+}
+
+func unrelated() {}
+`))
+	if err != nil {
+		t.Fatalf("ParseSource: %v", err)
+	}
+
+	methodRule := &UnusedPrivateMethod{Base: rule.NewBase()}
+	violations := rule.Analyze(f, []*rule.RuleSet{{Rules: []rule.Rule{methodRule}}})
+	if len(violations) != 1 || violations[0].Method != "unusedNumber" || violations[0].Class != "Number" {
+		t.Fatalf("violations = %+v, want only Number.unusedNumber", violations)
+	}
+}
+
 func TestUnusedPrivateFieldUsedThroughPromotedMethod(t *testing.T) {
 	f, err := model.ParseSource("embed.go", []byte(`package p
 

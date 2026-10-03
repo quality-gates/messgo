@@ -79,6 +79,10 @@ type PackageScope struct {
 	// package. The runner populates it after parsing so rules can recognize
 	// named map literals whose declarations are in another file.
 	PackageMapTypes map[string]bool
+	// PackageTypeDefs holds named type declarations across this file's package.
+	// It enables member-use resolution for conversions and method expressions
+	// whose type is declared in another file.
+	PackageTypeDefs map[string]ast.Expr
 	// PackageFunctions holds all package-level free functions from every file
 	// in this file's package. It is populated by the runner after parsing,
 	// enabling cross-file call return-type resolution. When nil (file analyzed

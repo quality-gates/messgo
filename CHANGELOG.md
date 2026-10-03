@@ -6,6 +6,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 
 ## [Unreleased]
 
+## [0.5.7] - 2026-10-03
+
 ### Fixed
 - Fixed `CognitiveComplexity` undercounting control flow inside `else` blocks by applying the else-block nesting level (#234).
 

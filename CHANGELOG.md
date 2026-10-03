@@ -13,6 +13,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
   interface when the signatures differ only by predeclared aliases (`any` vs
   `interface{}`, `byte` vs `uint8`, `rune` vs `int32`), including nested
   types such as `map[string]any` and `[]byte` (#235).
+- Fixed `UnusedPrivateMethod` skipping unexported methods on named non-struct
+  types, including scalar, function, map, and slice types (#237).
 
 ## [0.5.7] - 2026-10-03
 

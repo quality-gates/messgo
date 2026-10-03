@@ -74,7 +74,7 @@ func newMemberSelectionCollector(f *File) *memberSelectionCollector {
 			functions[fn.Name] = fn
 		}
 	}
-	typeDefs := collectPackageTypeDefs(f, classes)
+	typeDefs := memberTypeDefs(f, classes)
 	collector := &memberSelectionCollector{
 		types: memberTypeResolver{
 			classes:    classByName,
@@ -86,6 +86,13 @@ func newMemberSelectionCollector(f *File) *memberSelectionCollector {
 	collector.scope.resolver = &collector.types
 	collector.recorder.resolver = &collector.types
 	return collector
+}
+
+func memberTypeDefs(f *File, classes []*Class) map[string]ast.Expr {
+	if f.PackageTypeDefs != nil {
+		return f.PackageTypeDefs
+	}
+	return collectPackageTypeDefs(f, classes)
 }
 
 func (c *memberSelectionCollector) packageTypes(f *File) map[string]memberVarType {
@@ -502,6 +509,9 @@ func (c *memberTypeResolver) identType(id *ast.Ident, types map[string]memberVar
 	if _, ok := c.classes[id.Name]; ok {
 		return memberVarType{name: id.Name}
 	}
+	if _, ok := c.typeDefs[id.Name]; ok {
+		return memberVarType{name: id.Name}
+	}
 	return memberVarType{}
 }
 
@@ -552,6 +562,9 @@ func (c *memberTypeResolver) callResultTypes(call *ast.CallExpr, types map[strin
 	}
 	fun := unwrapParen(call.Fun)
 	if id, ok := fun.(*ast.Ident); ok {
+		if _, ok := c.typeDefs[id.Name]; ok {
+			return []memberVarType{memberVarTypeOf(id)}
+		}
 		return resolveIdentCall(c.classes, c.functions, id, call.Args)
 	}
 	if sel, ok := fun.(*ast.SelectorExpr); ok {

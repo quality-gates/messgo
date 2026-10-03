@@ -35,19 +35,23 @@ func (r *UnusedPrivateField) ApplyClass(c *rule.Context, class *model.Class) {
 
 type UnusedPrivateMethod struct{ *rule.Base }
 
-func (r *UnusedPrivateMethod) ApplyClass(c *rule.Context, class *model.Class) {
-	for _, m := range class.Methods {
-		if m.Exported {
-			continue
-		}
-		// A method that satisfies an interface declared in the same package is
-		// used even when never selected by name (the sealed-interface idiom).
-		// Only a matching signature can satisfy anything: a same-named
-		// interface method with an incompatible signature leaves the concrete
-		// method unused.
-		if !c.File.MemberSelectedForType(class.Name, m.Name) && !c.File.InterfaceMethodSatisfied(m) {
-			c.ReportFunc(m, m.Name)
-		}
+func (r *UnusedPrivateMethod) ApplyFunc(c *rule.Context, method *model.Function) {
+	if !method.IsMethod() || method.Exported {
+		return
+	}
+	// Struct methods have an owning Class, whose name also normalizes local
+	// aliases. Non-struct named types have no Class, so use the receiver name.
+	typeName := method.Receiver
+	if method.Class != nil {
+		typeName = method.Class.Name
+	}
+	// A method that satisfies an interface declared in the same package is
+	// used even when never selected by name (the sealed-interface idiom).
+	// Only a matching signature can satisfy anything: a same-named
+	// interface method with an incompatible signature leaves the concrete
+	// method unused.
+	if !c.File.MemberSelectedForType(typeName, method.Name) && !c.File.InterfaceMethodSatisfied(method) {
+		c.ReportFunc(method, method.Name)
 	}
 }
 

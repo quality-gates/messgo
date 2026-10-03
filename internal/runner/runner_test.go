@@ -832,6 +832,26 @@ func runPackageUnusedCode(t *testing.T, files map[string]string, ruleNames ...st
 	return rep.Violations
 }
 
+func TestCrossFileNonStructMethodExpressionsPreventUnusedMethodFalsePositive(t *testing.T) {
+	violations := runPackageUnusedCode(t, map[string]string{
+		"types.go": `package p
+
+type StatusCode int
+func (s StatusCode) selectedByConversion() {}
+func (s StatusCode) selectedByMethodExpression() {}
+`,
+		"use.go": `package p
+func use() {
+	StatusCode(1).selectedByConversion()
+	StatusCode.selectedByMethodExpression(StatusCode(1))
+}
+`,
+	}, "UnusedPrivateMethod")
+	if len(violations) != 0 {
+		t.Fatalf("violations = %+v, want none: sibling-file conversions and method expressions select the methods", violations)
+	}
+}
+
 func TestCrossFileFunctionReturnTypePreventsUnusedMemberFalsePositive(t *testing.T) {
 	violations := runPackageUnusedCode(t, map[string]string{
 		"a.go": `package p

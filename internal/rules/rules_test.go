@@ -2896,6 +2896,51 @@ func Run() error {
 	})
 }
 
+func TestUnusedPrivateMethodOnNonStructNamedTypes(t *testing.T) {
+	src := `
+type StatusCode int
+func (s StatusCode) unusedHelper() {}
+type HandlerFunc func() error
+func (h HandlerFunc) unusedMethod() {}
+type StringSet map[string]struct{}
+func (s StringSet) unusedMapMethod() {}
+type IDList []string
+func (ids IDList) unusedSliceMethod() {}
+`
+	hits := analyze(t, src, "unusedcode")
+	mustHaveCount(t, hits, "UnusedPrivateMethod", 4)
+
+	wantLines := map[int]bool{3: true, 5: true, 7: true, 9: true}
+	for _, h := range hits {
+		if h.rule != "UnusedPrivateMethod" {
+			continue
+		}
+		if !wantLines[h.line] {
+			t.Errorf("unexpected UnusedPrivateMethod hit on line %d; hits = %v", h.line, hits)
+		}
+		delete(wantLines, h.line)
+	}
+	if len(wantLines) != 0 {
+		t.Errorf("missing UnusedPrivateMethod hits on lines %v; hits = %v", wantLines, hits)
+	}
+}
+
+func TestUnusedPrivateMethodUsedOnNonStructNamedType(t *testing.T) {
+	src := `
+type StatusCode int
+func (s StatusCode) selectedByValue() {}
+func (s StatusCode) selectedByConversion() {}
+func (s StatusCode) selectedByMethodExpression() {}
+func use(s StatusCode) {
+	s.selectedByValue()
+	StatusCode(1).selectedByConversion()
+	StatusCode.selectedByMethodExpression(s)
+}
+`
+	hits := analyze(t, src, "unusedcode")
+	mustNotHave(t, hits, "UnusedPrivateMethod")
+}
+
 func TestUnusedPrivateMethodMethodExpression(t *testing.T) {
 	cases := map[string]string{
 		"value receiver": `

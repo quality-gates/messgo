@@ -421,6 +421,63 @@ func (s S) other()         {}
 	}
 }
 
+func TestUnusedPrivateMethodSuppressedByAliasEquivalentInterfaceSignature(t *testing.T) {
+	cases := []struct {
+		name   string
+		iface  string
+		method string
+	}{
+		{name: "any vs interface{}", iface: "do(any) bool", method: "func (s S) do(v interface{}) bool { return v != nil }"},
+		{name: "interface{} vs any", iface: "do(interface{})", method: "func (s S) do(v any) {}"},
+		{name: "byte vs uint8", iface: "do([]byte) error", method: "func (s S) do(b []uint8) error { return nil }"},
+		{name: "rune vs int32", iface: "do() rune", method: "func (s S) do() int32 { return 0 }"},
+		{name: "nested map", iface: "do(map[string]any) []byte", method: "func (s S) do(m map[string]interface{}) []uint8 { return nil }"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			f, err := model.ParseSource("a.go", []byte(`package p
+
+type Wants interface { `+tc.iface+` }
+
+type S struct{}
+
+`+tc.method+`
+`))
+			if err != nil {
+				t.Fatalf("ParseSource: %v", err)
+			}
+
+			methodRule := &UnusedPrivateMethod{Base: rule.NewBase()}
+			violations := rule.Analyze(f, []*rule.RuleSet{{Rules: []rule.Rule{methodRule}}})
+			if len(violations) != 0 {
+				t.Fatalf("violations = %+v, want none: predeclared aliases denote identical types", violations)
+			}
+		})
+	}
+}
+
+func TestUnusedPrivateMethodNotSuppressedByAliasLookalikeIdentifier(t *testing.T) {
+	f, err := model.ParseSource("a.go", []byte(`package p
+
+type bytes int
+
+type Wants interface { do(bytes) }
+
+type S struct{}
+
+func (s S) do(v uint8) {}
+`))
+	if err != nil {
+		t.Fatalf("ParseSource: %v", err)
+	}
+
+	methodRule := &UnusedPrivateMethod{Base: rule.NewBase()}
+	violations := rule.Analyze(f, []*rule.RuleSet{{Rules: []rule.Rule{methodRule}}})
+	if len(violations) != 1 || violations[0].Args[0] != "do" {
+		t.Fatalf("violations = %+v, want one 'do' violation: bytes is not the byte alias", violations)
+	}
+}
+
 func TestUnusedPrivateMethodSelectionAndInterfaceInteractions(t *testing.T) {
 	f, err := model.ParseSource("a.go", []byte(`package p
 

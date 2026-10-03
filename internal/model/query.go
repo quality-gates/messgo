@@ -342,8 +342,22 @@ func literalKey(e ast.Expr) (string, bool) {
 	case *ast.SelectorExpr:
 		name, ok := qualifiedName(k)
 		return "ident:" + name, ok
+	case *ast.CallExpr:
+		return callLiteralKey(k)
 	}
 	return "", false
+}
+
+func callLiteralKey(call *ast.CallExpr) (string, bool) {
+	if len(call.Args) != 1 {
+		return "", false
+	}
+	name := calleeName(call.Fun)
+	arg, ok := literalKey(call.Args[0])
+	if name == "" || !ok {
+		return "", false
+	}
+	return "call:" + name + "(" + arg + ")", true
 }
 
 // qualifiedName renders a selector chain rooted at an identifier, such as
@@ -393,8 +407,22 @@ func displayKey(e ast.Expr) string {
 	case *ast.SelectorExpr:
 		name, _ := qualifiedName(k)
 		return name
+	case *ast.CallExpr:
+		return displayCallKey(k)
 	}
 	return ""
+}
+
+func displayCallKey(call *ast.CallExpr) string {
+	if len(call.Args) != 1 {
+		return ""
+	}
+	name := calleeName(call.Fun)
+	arg := displayKey(call.Args[0])
+	if name == "" || arg == "" {
+		return ""
+	}
+	return name + "(" + arg + ")"
 }
 
 func calleeName(e ast.Expr) string {

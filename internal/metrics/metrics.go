@@ -316,7 +316,9 @@ func (v *cognitiveVisitor) visitIf(n *ast.IfStmt) ast.Visitor {
 	v.decNesting()
 	if blk, ok := n.Else.(*ast.BlockStmt); ok {
 		v.inc() // +1 for the else keyword
+		v.incNesting()
 		ast.Walk(v, blk)
+		v.decNesting()
 	} else if _, ok := n.Else.(*ast.IfStmt); ok {
 		v.markElse(n.Else)
 		ast.Walk(v, n.Else)

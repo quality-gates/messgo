@@ -390,6 +390,100 @@ var nested = map[int]string{
 	}
 }
 
+func TestDuplicateLiteralKeysCompareTypeConversions(t *testing.T) {
+	f, err := ParseSource("query.go", []byte(`package sample
+import "time"
+
+type StatusCode int
+
+var durations = map[time.Duration]string{
+	time.Duration(1): "one",
+	time.Duration(1): "duplicate",
+}
+
+var codes = map[StatusCode]string{
+	StatusCode(200): "ok",
+	StatusCode(200): "duplicate",
+}
+
+var distinct = map[any]string{
+	time.Duration(2): "duration two",
+	time.Duration(3): "duration three",
+	StatusCode(201):  "status",
+}
+`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []DuplicateLiteralKey{
+		{Display: "time.Duration(1)", FirstLine: 7, Line: 8},
+		{Display: "StatusCode(200)", FirstLine: 12, Line: 13},
+	}
+	if got := f.PackageDuplicateLiteralKeys(); !slices.Equal(got, want) {
+		t.Fatalf("PackageDuplicateLiteralKeys() = %+v, want %+v", got, want)
+	}
+}
+
+func TestCallLiteralKeyRejectsUnsupportedForms(t *testing.T) {
+	validArg := ast.NewIdent("key")
+	unsupportedArg := &ast.CallExpr{Fun: ast.NewIdent("compute")}
+	unsupportedCallee := &ast.CallExpr{Fun: ast.NewIdent("factory")}
+	tests := []struct {
+		name string
+		call *ast.CallExpr
+	}{
+		{
+			name: "multiple arguments",
+			call: &ast.CallExpr{Fun: ast.NewIdent("Key"), Args: []ast.Expr{validArg, validArg}},
+		},
+		{
+			name: "unsupported callee",
+			call: &ast.CallExpr{Fun: unsupportedCallee, Args: []ast.Expr{validArg}},
+		},
+		{
+			name: "unsupported argument",
+			call: &ast.CallExpr{Fun: ast.NewIdent("Key"), Args: []ast.Expr{unsupportedArg}},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got, ok := callLiteralKey(tt.call); ok {
+				t.Fatalf("callLiteralKey() = %q, true; want false", got)
+			}
+		})
+	}
+}
+
+func TestDisplayCallKeyRejectsUnsupportedForms(t *testing.T) {
+	validArg := ast.NewIdent("key")
+	unsupportedCallee := &ast.CallExpr{Fun: ast.NewIdent("factory")}
+	unsupportedArg := &ast.CompositeLit{}
+	tests := []struct {
+		name string
+		call *ast.CallExpr
+	}{
+		{
+			name: "multiple arguments",
+			call: &ast.CallExpr{Fun: ast.NewIdent("Key"), Args: []ast.Expr{validArg, validArg}},
+		},
+		{
+			name: "unsupported callee",
+			call: &ast.CallExpr{Fun: unsupportedCallee, Args: []ast.Expr{validArg}},
+		},
+		{
+			name: "unsupported argument",
+			call: &ast.CallExpr{Fun: ast.NewIdent("Key"), Args: []ast.Expr{unsupportedArg}},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := displayCallKey(tt.call); got != "" {
+				t.Fatalf("displayCallKey() = %q, want empty", got)
+			}
+		})
+	}
+}
+
 func TestEmptyNilCheckRequiresInequality(t *testing.T) {
 	f, err := ParseSource("query.go", []byte(`package sample
 func f(pointer *int) {

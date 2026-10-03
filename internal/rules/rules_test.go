@@ -1246,6 +1246,25 @@ var values = map[string]int{
 	mustHave(t, hits, "DuplicatedArrayKey")
 }
 
+func TestDuplicatedArrayKeyReportsTypeConversionKeys(t *testing.T) {
+	hits := analyze(t, `
+import "time"
+
+type StatusCode int
+
+var durations = map[time.Duration]string{
+	time.Duration(1): "one",
+	time.Duration(1): "duplicate one",
+}
+
+var codes = map[StatusCode]string{
+	StatusCode(200): "ok",
+	StatusCode(200): "duplicate ok",
+}
+`, "cleancode")
+	mustHaveCount(t, hits, "DuplicatedArrayKey", 2)
+}
+
 func TestDuplicatedArrayKeyUsesConstantValue(t *testing.T) {
 	hits := analyze(t, `
 func f() {

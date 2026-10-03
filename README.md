@@ -123,7 +123,8 @@ Command reference: [docs/usage.md](docs/usage.md). Rulesets: [docs/rules.md](doc
 Homebrew release path: [docs/homebrew-release.md](docs/homebrew-release.md).
 Exploratory testing: [2026-09-19 CLI journeys](docs/exploratory-testing/2026-09-19-cli-journeys.md),
 [2026-09-23 explicitness rulesets](docs/exploratory-testing/2026-09-23-explicitness.md),
-[2026-09-26 rules and metrics](docs/exploratory-testing/2026-09-26-rules-and-metrics.md).
+[2026-09-26 rules and metrics](docs/exploratory-testing/2026-09-26-rules-and-metrics.md),
+[2026-10-03 type semantics and metrics](docs/exploratory-testing/2026-10-03-type-semantics-and-metrics.md).
 
 Development checks:
 

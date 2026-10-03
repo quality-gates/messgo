@@ -1,0 +1,11 @@
+== B1 (#234) CognitiveComplexity inside else block: expect NestedInElse complexity 4, got 3
+b1/a.go:3   CognitiveComplexity  The function NestedInIf() has a cognitive complexity of 3. The configured cognitive complexity threshold is 1.
+b1/a.go:10  CognitiveComplexity  The function NestedInElse() has a cognitive complexity of 3. The configured cognitive complexity threshold is 1.
+exit=2
+== B2 (#235) InterfaceMethodSatisfied any vs interface{}: expect exit 0, got exit 2 false positive
+b2/a.go:9  UnusedPrivateMethod  Avoid unused private methods such as 'handle'.
+exit=2
+== B3 (#236) DuplicatedArrayKey with type conversions: expect exit 2, got exit 0 false negative
+exit=0
+== B4 (#237) UnusedPrivateMethod on non-struct types: expect exit 2, got exit 0 false negative
+exit=0

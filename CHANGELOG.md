@@ -6,6 +6,9 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 
 ## [Unreleased]
 
+### Added
+- Added an exploratory testing report for type semantics and metrics (CognitiveComplexity nesting in else blocks, InterfaceMethodSatisfied alias equivalence, DuplicatedArrayKey type conversions, and UnusedPrivateMethod on non-struct types), with a replay script for findings #234–#237.
+
 ## [0.5.6] - 2026-10-02
 
 ### Fixed

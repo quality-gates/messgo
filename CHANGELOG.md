@@ -6,6 +6,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 
 ## [Unreleased]
 
+## [0.5.8] - 2026-10-03
+
 ### Fixed
 - Fixed `DuplicatedArrayKey` ignoring duplicate keys written as type
   conversions, including qualified conversions such as `time.Duration(1)` (#236).

@@ -89,7 +89,7 @@ Default five-role vocabulary (`needs-triage`, `needs-info`, `ready-for-agent`, `
 
 ### Domain docs
 
-Single-context layout — `CONTEXT.md` + `docs/adr/` at the repo root (not yet created). See `docs/agents/domain.md`.
+Single-context layout — `GLOSSARY.md` + `docs/adr/` at the repo root (not yet created). See `docs/agents/domain.md`.
 
 ## Releasing: Homebrew tap approval gate
 

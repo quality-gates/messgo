@@ -219,7 +219,7 @@ This section records the decisions taken in the grilling session that adopted
 this analysis. See `docs/adr/0001-go-mess-sign-backlog.md`.
 
 **Charter:** Go-native mess detection, PHPMD as lineage not ceiling. "Port" in
-`CONTEXT.md` sharpened to "Go-native mess detector with PHPMD as its lineage."
+`GLOSSARY.md` sharpened to "Go-native mess detector with PHPMD as its lineage."
 
 **Inclusion bar:** (i) AST-only, no build; (ii) primary signal is maintainability
 (would a reviewer flag it in a PR?), correctness edges allowed; (iii) principled

@@ -310,11 +310,10 @@ func TestExternalTestPackageDoesNotMutateProductionGlobal(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(dir, "main_test.go"), []byte("package p_test\nvar shared = 1\nfunc mutate() { shared++ }\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	sets, err := (&ruleset.Loader{}).Load("design")
+	sets, err := (&ruleset.Loader{Enable: []string{"GlobalVariable"}}).Load("design")
 	if err != nil {
 		t.Fatal(err)
 	}
-	ruleset.FilterRules(sets, []string{"GlobalVariable"}, nil)
 	rep, err := Run(Options{Paths: []string{dir}, RuleSets: sets})
 	if err != nil {
 		t.Fatal(err)
@@ -348,11 +347,10 @@ func TestMixedRelAbsPathsSharePackage(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = os.Chdir(cwd) })
-	sets, err := (&ruleset.Loader{}).Load("design")
+	sets, err := (&ruleset.Loader{Enable: []string{"GlobalVariable"}}).Load("design")
 	if err != nil {
 		t.Fatal(err)
 	}
-	ruleset.FilterRules(sets, []string{"GlobalVariable"}, nil)
 	rep, err := Run(Options{Paths: []string{"a.go", absB}, RuleSets: sets})
 	if err != nil {
 		t.Fatal(err)
@@ -397,11 +395,10 @@ func (h Host) C() int { return h.field * 2 }
 		}
 	}
 
-	sets, err := (&ruleset.Loader{}).Load("design")
+	sets, err := (&ruleset.Loader{Enable: []string{"LackOfCohesionOfMethods"}}).Load("design")
 	if err != nil {
 		t.Fatalf("load design ruleset: %v", err)
 	}
-	ruleset.FilterRules(sets, []string{"LackOfCohesionOfMethods"}, nil)
 	rep, err := Run(Options{Paths: []string{dir}, RuleSets: sets})
 	if err != nil {
 		t.Fatalf("Run: %v", err)
@@ -520,11 +517,10 @@ func TestDirectoryDiscoverySkipsHiddenAndUnderscoreFiles(t *testing.T) {
 			t.Fatalf("write %s: %v", name, err)
 		}
 	}
-	sets, err := (&ruleset.Loader{}).Load("unusedcode")
+	sets, err := (&ruleset.Loader{Enable: []string{"UnusedPrivateField"}}).Load("unusedcode")
 	if err != nil {
 		t.Fatalf("load ruleset: %v", err)
 	}
-	ruleset.FilterRules(sets, []string{"UnusedPrivateField"}, nil)
 
 	recursive, err := Run(Options{Paths: []string{dir}, RuleSets: sets})
 	if err != nil {
@@ -619,11 +615,10 @@ func TestCrossFileMethodAttachmentForClassRules(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	sets, err := (&ruleset.Loader{}).Load("codesize")
+	sets, err := (&ruleset.Loader{Enable: []string{"TooManyMethods"}}).Load("codesize")
 	if err != nil {
 		t.Fatal(err)
 	}
-	ruleset.FilterRules(sets, []string{"TooManyMethods"}, nil)
 	rep, err := Run(Options{Paths: []string{dir}, RuleSets: sets})
 	if err != nil {
 		t.Fatal(err)
@@ -659,11 +654,10 @@ func Audit(a *Account) {
 		t.Fatal(err)
 	}
 
-	sets, err := (&ruleset.Loader{}).Load("unusedcode")
+	sets, err := (&ruleset.Loader{Enable: []string{"UnusedPrivateField", "UnusedPrivateMethod"}}).Load("unusedcode")
 	if err != nil {
 		t.Fatal(err)
 	}
-	ruleset.FilterRules(sets, []string{"UnusedPrivateField", "UnusedPrivateMethod"}, nil)
 	rep, err := Run(Options{Paths: []string{dir}, RuleSets: sets})
 	if err != nil {
 		t.Fatal(err)
@@ -708,11 +702,10 @@ func use(t T) {
 		t.Fatal(err)
 	}
 
-	sets, err := (&ruleset.Loader{}).Load("unusedcode")
+	sets, err := (&ruleset.Loader{Enable: []string{"UnusedPrivateField", "UnusedPrivateMethod"}}).Load("unusedcode")
 	if err != nil {
 		t.Fatal(err)
 	}
-	ruleset.FilterRules(sets, []string{"UnusedPrivateField", "UnusedPrivateMethod"}, nil)
 	rep, err := Run(Options{Paths: []string{dir}, RuleSets: sets})
 	if err != nil {
 		t.Fatal(err)
@@ -759,11 +752,10 @@ func Seen(seen map[key]bool, typ string, ptr any) bool {
 		t.Fatal(err)
 	}
 
-	sets, err := (&ruleset.Loader{}).Load("unusedcode")
+	sets, err := (&ruleset.Loader{Enable: []string{"UnusedPrivateField"}}).Load("unusedcode")
 	if err != nil {
 		t.Fatal(err)
 	}
-	ruleset.FilterRules(sets, []string{"UnusedPrivateField"}, nil)
 	rep, err := Run(Options{Paths: []string{dir}, RuleSets: sets})
 	if err != nil {
 		t.Fatal(err)
@@ -796,11 +788,10 @@ type Book interface {
 		t.Fatal(err)
 	}
 
-	sets, err := (&ruleset.Loader{}).Load("unusedcode")
+	sets, err := (&ruleset.Loader{Enable: []string{"UnusedPrivateMethod"}}).Load("unusedcode")
 	if err != nil {
 		t.Fatal(err)
 	}
-	ruleset.FilterRules(sets, []string{"UnusedPrivateMethod"}, nil)
 	rep, err := Run(Options{Paths: []string{dir}, RuleSets: sets})
 	if err != nil {
 		t.Fatal(err)
@@ -818,12 +809,9 @@ func runPackageUnusedCode(t *testing.T, files map[string]string, ruleNames ...st
 			t.Fatal(err)
 		}
 	}
-	sets, err := (&ruleset.Loader{}).Load("unusedcode")
+	sets, err := (&ruleset.Loader{Enable: ruleNames}).Load("unusedcode")
 	if err != nil {
 		t.Fatal(err)
-	}
-	if len(ruleNames) > 0 {
-		ruleset.FilterRules(sets, ruleNames, nil)
 	}
 	rep, err := Run(Options{Paths: []string{dir}, RuleSets: sets})
 	if err != nil {
@@ -1038,11 +1026,10 @@ func TestRunFollowsSymlinkRootsAndDeduplicatesAliases(t *testing.T) {
 	if err := os.Symlink(file, alias); err != nil {
 		t.Fatal(err)
 	}
-	sets, err := (&ruleset.Loader{}).Load("codesize")
+	sets, err := (&ruleset.Loader{Enable: []string{"ExcessiveParameterList"}}).Load("codesize")
 	if err != nil {
 		t.Fatal(err)
 	}
-	ruleset.FilterRules(sets, []string{"ExcessiveParameterList"}, nil)
 	cases := []struct {
 		name  string
 		paths []string
@@ -1156,11 +1143,10 @@ func writeSources(t *testing.T, dir string, files map[string]string) {
 
 func unusedMethodSets(t *testing.T) []*rule.RuleSet {
 	t.Helper()
-	sets, err := (&ruleset.Loader{}).Load("unusedcode")
+	sets, err := (&ruleset.Loader{Enable: []string{"UnusedPrivateMethod"}}).Load("unusedcode")
 	if err != nil {
 		t.Fatalf("load ruleset: %v", err)
 	}
-	ruleset.FilterRules(sets, []string{"UnusedPrivateMethod"}, nil)
 	return sets
 }
 

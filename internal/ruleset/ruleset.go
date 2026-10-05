@@ -116,20 +116,24 @@ type Loader struct {
 	// MaxPriority drops rules with a numerically smaller priority value (higher
 	// importance), mirroring PHPMD's --maximumpriority. Zero means no limit.
 	MaxPriority int
-	// Warn receives messages about skipped/unknown rules and unknown properties.
+	// Enable, when non-empty, keeps only rules whose name appears in it (the
+	// CLI's --enable/--only). Names are matched exactly and case-sensitively.
+	Enable []string
+	// Disable drops rules whose name appears in it (the CLI's --disable),
+	// applied after Enable. Rules excluded by name are never constructed.
+	Disable []string
+	// Warn receives messages about skipped/unknown rules, unknown properties,
+	// and name filters that select nothing.
 	Warn func(string)
-	// Verbose enables diagnostics for skipped unimplemented rules.
+	// Verbose enables diagnostics for skipped unimplemented rules and for
+	// Enable/Disable names that match no loaded rule.
 	Verbose bool
 }
 
 // Load resolves a comma-separated list of ruleset identifiers or file paths
 // into RuleSets.
 func (l *Loader) Load(spec string) ([]*rule.RuleSet, error) {
-	session := &loadSession{
-		loader:     l,
-		sources:    make(map[string]xmlRuleSet),
-		candidates: make(map[*rule.RuleSet][]ruleCandidate),
-	}
+	session := newLoadSession(l)
 	var sets []*rule.RuleSet
 	for _, part := range strings.Split(spec, ",") {
 		part = strings.TrimSpace(part)
@@ -149,13 +153,24 @@ func (l *Loader) Load(spec string) ([]*rule.RuleSet, error) {
 	if err := dedupeRules(sets, session.candidates); err != nil {
 		return nil, err
 	}
+	session.selection.report(sets)
 	return sets, nil
+}
+
+func newLoadSession(l *Loader) *loadSession {
+	return &loadSession{
+		loader:     l,
+		sources:    make(map[string]xmlRuleSet),
+		candidates: make(map[*rule.RuleSet][]ruleCandidate),
+		selection:  &ruleSelection{loader: l, loaded: make(map[string]bool)},
+	}
 }
 
 type loadSession struct {
 	loader     *Loader
 	sources    map[string]xmlRuleSet
 	candidates map[*rule.RuleSet][]ruleCandidate
+	selection  *ruleSelection
 
 	builtinOwners map[string]string
 }
@@ -202,99 +217,6 @@ func builtinRuleOwner(session *loadSession, name string) string {
 		}
 	}
 	return session.builtinOwners[name]
-}
-
-// FilterRules narrows the loaded rule sets by rule name, in place. When enable
-// is non-empty, only rules whose name appears in it are kept (a whitelist —
-// the CLI's --enable/--only). Any rule whose name appears in disable is then
-// removed (a blacklist — the CLI's --disable). Names are matched exactly and
-// case-sensitively; names that match no loaded rule are simply ignored. An
-// empty enable list means "keep everything" before disable is applied.
-func FilterRules(sets []*rule.RuleSet, enable, disable []string) {
-	ApplyRuleFilter(sets, enable, disable)
-}
-
-// FilterResult reports the outcome of a name-based rule filter.
-type FilterResult struct {
-	// Remaining is the number of rules kept after filtering.
-	Remaining int
-	// Unmatched lists requested names that matched no loaded rule, in the
-	// order given: --enable/--only entries first, then --disable entries,
-	// each deduplicated.
-	Unmatched []string
-}
-
-// ApplyRuleFilter applies the same filtering as FilterRules and additionally
-// reports how many rules survived and which requested names matched nothing.
-func ApplyRuleFilter(sets []*rule.RuleSet, enable, disable []string) FilterResult {
-	if len(enable) == 0 && len(disable) == 0 {
-		return FilterResult{Remaining: countRules(sets)}
-	}
-	matched := make(map[string]bool)
-	for _, set := range sets {
-		for _, r := range set.Rules {
-			matched[r.Name()] = true
-		}
-	}
-	res := FilterResult{Unmatched: unmatchedNames(append(append([]string{}, enable...), disable...), matched)}
-	enabled := toSet(enable)
-	disabled := toSet(disable)
-	for _, set := range sets {
-		set.Rules = filterSet(set.Rules, enabled, disabled)
-		res.Remaining += len(set.Rules)
-	}
-	return res
-}
-
-// filterSet keeps the rules of set that survive the enable whitelist and the
-// disable blacklist, in place.
-func filterSet(rules []rule.Rule, enabled, disabled map[string]bool) []rule.Rule {
-	kept := rules[:0]
-	for _, r := range rules {
-		name := r.Name()
-		if len(enabled) > 0 && !enabled[name] {
-			continue
-		}
-		if disabled[name] {
-			continue
-		}
-		kept = append(kept, r)
-	}
-	return kept
-}
-
-// unmatchedNames returns the entries of names not present in matched, keeping
-// first-seen order and dropping duplicates.
-func unmatchedNames(names []string, matched map[string]bool) []string {
-	var out []string
-	seen := make(map[string]bool, len(names))
-	for _, n := range names {
-		if matched[n] || seen[n] {
-			continue
-		}
-		seen[n] = true
-		out = append(out, n)
-	}
-	return out
-}
-
-func countRules(sets []*rule.RuleSet) int {
-	n := 0
-	for _, set := range sets {
-		n += len(set.Rules)
-	}
-	return n
-}
-
-func toSet(names []string) map[string]bool {
-	if len(names) == 0 {
-		return nil
-	}
-	set := make(map[string]bool, len(names))
-	for _, n := range names {
-		set[n] = true
-	}
-	return set
 }
 
 // dedupeRules merges same-named candidates across the loaded sets. Identical

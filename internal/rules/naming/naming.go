@@ -261,9 +261,9 @@ func (r *BooleanGetMethodName) ApplyFunc(c *rule.Context, fn *model.Function) { 
 type ConstantNamingConventions struct{ *rule.Base }
 
 func (r *ConstantNamingConventions) ApplyFile(c *rule.Context) {
-	for _, cst := range collectConstants(c.File) {
-		if strings.Contains(cst.name, "_") {
-			c.Report(cst.line, cst.line, cst.name)
+	for _, cst := range c.File.Constants {
+		if strings.Contains(cst.Name, "_") {
+			c.Report(cst.Line, cst.Line, cst.Name)
 		}
 	}
 }

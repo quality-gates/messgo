@@ -57,6 +57,7 @@ func (b *fileBuilder) build() {
 	b.aliases = util.TypeAliasNames([]*ast.File{b.f.Syntax})
 	b.collectTypes()
 	b.collectFuncs()
+	b.f.Constants = collectConstants(b.f.Syntax, b.f.Fset)
 }
 
 func (b *fileBuilder) collectTypes() {

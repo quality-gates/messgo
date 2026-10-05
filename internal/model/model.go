@@ -46,6 +46,9 @@ type File struct {
 	Functions  []*Function
 	// AllFuncs includes both free functions and methods, in source order.
 	AllFuncs []*Function
+	// Constants includes package-level and function-scoped constants, in
+	// source order, skipping the blank identifier.
+	Constants []Constant
 
 	PackageScope
 
@@ -297,6 +300,15 @@ type Field struct {
 	Exported bool
 	Static   bool // package-level var attached as a "static" field (unused for structs)
 	Ident    *ast.Ident
+}
+
+// Constant is a constant declaration (the analog of a PHP class constant).
+// Package is true for package-level constants and false for function-scoped
+// ones.
+type Constant struct {
+	Name    string
+	Line    int
+	Package bool
 }
 
 // Function represents a free function OR a method (when Receiver != "").

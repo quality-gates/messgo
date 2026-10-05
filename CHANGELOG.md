@@ -6,6 +6,11 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 
 ## [Unreleased]
 
+### Changed
+- `model.File` now exposes `Constants`, every package-level and
+  function-scoped constant collected at build time. `ConstantNamingConventions`
+  uses it instead of its own AST walk; rule output is unchanged (#248).
+
 ## [0.5.8] - 2026-10-03
 
 ### Fixed

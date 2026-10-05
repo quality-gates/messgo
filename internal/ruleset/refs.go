@@ -56,13 +56,7 @@ func addRule(e *refExpander, setName string, xr xmlRule, fromDir string) error {
 	case xr.Ref != "":
 		return e.addRef(xr, fromDir)
 	case xr.Class != "":
-		r, err := e.buildRule(setName, xr, &xr)
-		if err != nil {
-			return err
-		}
-		if r != nil {
-			e.appendRuleWithKind(r, candidateDefinition, xr.Class)
-		}
+		return e.addCandidate(setName, xr, &xr, candidateDefinition)
 	}
 	return nil
 }
@@ -185,12 +179,8 @@ func (e *refExpander) expandSourceRule(srcName string, sr xmlRule, ruleName stri
 	if sr.Class == "" || excluded[sr.Name] || (ruleName != "" && sr.Name != ruleName) {
 		return false, nil
 	}
-	r, err := e.buildRule(srcName, sr, refOverride(sr, ov, ruleName))
-	if err != nil {
+	if err := e.addCandidate(srcName, sr, refOverride(sr, ov, ruleName), kind); err != nil {
 		return false, err
-	}
-	if r != nil {
-		e.appendRuleWithKind(r, kind, sr.Class)
 	}
 	return true, nil
 }
@@ -245,6 +235,38 @@ func resolvePath(part, fromDir string) string {
 	return part
 }
 
+// addCandidate builds and appends the rule defined by def unless the
+// loader's name filters exclude it. An excluded rule is never constructed,
+// but its name is still recorded as loaded when it would have survived the
+// priority bounds, so it does not count as an unmatched filter name.
+func (e *refExpander) addCandidate(setName string, def xmlRule, ov *xmlRule, kind candidateKind) error {
+	selection := e.session.selection
+	if !selection.selects(def.Name) {
+		if rule.Registered(def.Class) && selection.withinPriority(effectivePriority(def, ov)) {
+			selection.markLoaded(def.Name)
+		}
+		return nil
+	}
+	r, err := e.buildRule(setName, def, ov)
+	if err != nil || r == nil {
+		return err
+	}
+	e.appendRuleWithKind(r, kind, def.Class)
+	return nil
+}
+
+// effectivePriority is the priority buildRule assigns: the override's, else
+// the definition's, else 3.
+func effectivePriority(def xmlRule, ov *xmlRule) int {
+	switch {
+	case ov.Priority != nil:
+		return *ov.Priority
+	case def.Priority != nil:
+		return *def.Priority
+	}
+	return 3
+}
+
 // buildRule constructs a configured rule from a definition (def, which carries
 // message/class/url/since/description) and an override source (ov, which
 // carries priority and property overrides — usually the same element, but for
@@ -267,15 +289,9 @@ func (e *refExpander) buildRule(setName string, def xmlRule, ov *xmlRule) (rule.
 	base.RuleURL = def.ExternalInfoURL
 	base.RuleSince = def.Since
 	base.RuleDesc = strings.TrimSpace(def.Description)
-	base.RulePrio = 3
-	if def.Priority != nil {
-		base.RulePrio = *def.Priority
-	}
+	base.RulePrio = effectivePriority(def, ov)
 	base.RuleProps = mergeProps(def.Properties, ov.Properties)
 	warnUnknownProperties(e, def, ov, r)
-	if ov.Priority != nil {
-		base.RulePrio = *ov.Priority
-	}
 	if configurable, configurableRule := r.(rule.Configurable); configurableRule {
 		if err := configurable.Configure(base.RuleProps); err != nil {
 			return nil, fmt.Errorf("configure rule %s: %w", def.Name, err)
@@ -287,14 +303,11 @@ func (e *refExpander) buildRule(setName string, def xmlRule, ov *xmlRule) (rule.
 // appendRuleWithKind adds a rule unless it is filtered out by the configured
 // priority bounds, retaining the candidate's merge provenance.
 func (e *refExpander) appendRuleWithKind(r rule.Rule, kind candidateKind, class string) {
-	priority := rule.BaseOf(r).RulePrio
-	loader := e.session.loader
-	if loader.MinPriority > 0 && priority > loader.MinPriority {
+	selection := e.session.selection
+	if !selection.withinPriority(rule.BaseOf(r).RulePrio) {
 		return
 	}
-	if loader.MaxPriority > 0 && priority < loader.MaxPriority {
-		return
-	}
+	selection.markLoaded(r.Name())
 	e.set.Rules = append(e.set.Rules, r)
 	e.candidates = append(e.candidates, ruleCandidate{rule: r, class: class, kind: kind})
 }

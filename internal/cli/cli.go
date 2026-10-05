@@ -89,7 +89,6 @@ func run(opt options, stdout, stderr io.Writer) int {
 		fmt.Fprintln(stderr, "error:", err)
 		return ExitError
 	}
-	applyRuleFilters(opt, sets, stderr)
 	rep, err := runner.Run(runner.Options{
 		Paths:       splitList(opt.paths),
 		RuleSets:    sets,
@@ -106,24 +105,6 @@ func run(opt options, stdout, stderr io.Writer) int {
 		return ExitError
 	}
 	return exitCodeFor(rep, opt)
-}
-
-// applyRuleFilters narrows the loaded rule sets by name and warns when the
-// filter leaves nothing selected or names rules that are not loaded.
-func applyRuleFilters(opt options, sets []*rule.RuleSet, stderr io.Writer) {
-	enable, disable := splitList(opt.ruleFilter.enable), splitList(opt.ruleFilter.disable)
-	if len(enable) == 0 && len(disable) == 0 {
-		return
-	}
-	res := ruleset.ApplyRuleFilter(sets, enable, disable)
-	if res.Remaining == 0 {
-		fmt.Fprintln(stderr, "warning: no rules selected (check --enable/--only/--disable)")
-	}
-	if opt.verbose {
-		for _, name := range res.Unmatched {
-			fmt.Fprintf(stderr, "warning: no rule named %q (check --enable/--only/--disable)\n", name)
-		}
-	}
 }
 
 // handleInfoFlags handles --version/--help, which short-circuit normal runs
@@ -212,6 +193,8 @@ func loadRuleSets(opt options, stderr io.Writer) ([]*rule.RuleSet, error) {
 	loader := &ruleset.Loader{
 		MinPriority: opt.minPriority,
 		MaxPriority: opt.maxPriority,
+		Enable:      splitList(opt.ruleFilter.enable),
+		Disable:     splitList(opt.ruleFilter.disable),
 		Verbose:     opt.verbose,
 		Warn: func(msg string) {
 			fmt.Fprintln(stderr, "warning:", msg)

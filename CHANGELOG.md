@@ -10,6 +10,11 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 - `model.File` now exposes `Constants`, every package-level and
   function-scoped constant collected at build time. `ConstantNamingConventions`
   uses it instead of its own AST walk; rule output is unchanged (#248).
+- `ruleset.Loader` now applies `--enable`/`--only`/`--disable` name filters
+  itself through new `Enable` and `Disable` fields, and reports filter warnings
+  through `Warn`. Rules excluded by name are no longer constructed or
+  configured. `ruleset.FilterRules` and `ruleset.ApplyRuleFilter` are removed;
+  CLI output is unchanged (#246).
 
 ## [0.5.8] - 2026-10-03
 

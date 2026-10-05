@@ -189,96 +189,234 @@ func ruleNames(sets []*rule.RuleSet) map[string]bool {
 	return names
 }
 
-func TestFilterRules(t *testing.T) {
-	load := func(t *testing.T) []*rule.RuleSet {
-		sets, err := (&Loader{}).Load("codesize")
-		if err != nil {
-			t.Fatalf("load: %v", err)
-		}
-		return sets
+// loadFiltered loads spec through l, returning the sets and every Warn
+// message.
+func loadFiltered(t *testing.T, spec string, l Loader) ([]*rule.RuleSet, []string) {
+	t.Helper()
+	var warnings []string
+	l.Warn = func(msg string) { warnings = append(warnings, msg) }
+	sets, err := l.Load(spec)
+	if err != nil {
+		t.Fatalf("load %q: %v", spec, err)
 	}
+	return sets, warnings
+}
+
+func TestLoaderNameFilterSelection(t *testing.T) {
+	all := len(ruleNames([]*rule.RuleSet{loadOne(t, "codesize")}))
 
 	t.Run("enable keeps only the whitelist", func(t *testing.T) {
-		sets := load(t)
-		FilterRules(sets, []string{"CyclomaticComplexity", "NPathComplexity"}, nil)
+		sets, warnings := loadFiltered(t, "codesize", Loader{Enable: []string{"CyclomaticComplexity", "NPathComplexity"}})
 		got := ruleNames(sets)
 		if len(got) != 2 || !got["CyclomaticComplexity"] || !got["NPathComplexity"] {
 			t.Errorf("enable filter = %v, want only the two named rules", got)
 		}
+		if warnings != nil {
+			t.Errorf("warnings = %q, want none", warnings)
+		}
 	})
 
 	t.Run("disable removes the blacklist", func(t *testing.T) {
-		sets := load(t)
-		before := len(ruleNames(sets))
-		FilterRules(sets, nil, []string{"CyclomaticComplexity"})
+		sets, _ := loadFiltered(t, "codesize", Loader{Disable: []string{"CyclomaticComplexity"}})
 		got := ruleNames(sets)
 		if got["CyclomaticComplexity"] {
 			t.Error("disabled rule still present")
 		}
-		if len(got) != before-1 {
-			t.Errorf("disable removed %d rules, want 1", before-len(got))
+		if len(got) != all-1 {
+			t.Errorf("disable removed %d rules, want 1", all-len(got))
 		}
 	})
 
 	t.Run("enable then disable", func(t *testing.T) {
-		sets := load(t)
-		FilterRules(sets, []string{"CyclomaticComplexity", "NPathComplexity"}, []string{"NPathComplexity"})
+		sets, _ := loadFiltered(t, "codesize", Loader{
+			Enable:  []string{"CyclomaticComplexity", "NPathComplexity"},
+			Disable: []string{"NPathComplexity"},
+		})
 		got := ruleNames(sets)
 		if len(got) != 1 || !got["CyclomaticComplexity"] {
 			t.Errorf("enable+disable = %v, want only CyclomaticComplexity", got)
 		}
 	})
 
-	t.Run("unknown names are ignored", func(t *testing.T) {
-		sets := load(t)
-		before := len(ruleNames(sets))
-		FilterRules(sets, nil, []string{"NoSuchRule"})
-		if got := len(ruleNames(sets)); got != before {
-			t.Errorf("unknown disable changed rule count: %d -> %d", before, got)
+}
+
+func TestLoaderNameFilterWarnings(t *testing.T) {
+	all := len(ruleNames([]*rule.RuleSet{loadOne(t, "codesize")}))
+
+	t.Run("unknown names are ignored silently without Verbose", func(t *testing.T) {
+		sets, warnings := loadFiltered(t, "codesize", Loader{Disable: []string{"NoSuchRule"}})
+		if got := len(ruleNames(sets)); got != all {
+			t.Errorf("unknown disable changed rule count: %d -> %d", all, got)
+		}
+		if warnings != nil {
+			t.Errorf("warnings = %q, want none without Verbose", warnings)
 		}
 	})
 
-	t.Run("empty filters are a no-op", func(t *testing.T) {
-		sets := load(t)
-		before := len(ruleNames(sets))
-		FilterRules(sets, nil, nil)
-		if got := len(ruleNames(sets)); got != before {
-			t.Errorf("no-op filter changed rule count: %d -> %d", before, got)
+	t.Run("unknown names are reported with Verbose, enable first, deduplicated", func(t *testing.T) {
+		sets, warnings := loadFiltered(t, "codesize", Loader{
+			Verbose: true,
+			Enable:  []string{"CyclomaticComplexity", "Nope", "Nope"},
+			Disable: []string{"NoSuchRule", "Nope"},
+		})
+		if got := len(ruleNames(sets)); got != 1 {
+			t.Errorf("rule count = %d, want 1", got)
+		}
+		want := []string{
+			`no rule named "Nope" (check --enable/--only/--disable)`,
+			`no rule named "NoSuchRule" (check --enable/--only/--disable)`,
+		}
+		if !reflect.DeepEqual(warnings, want) {
+			t.Errorf("warnings = %q, want %q", warnings, want)
+		}
+	})
+
+	t.Run("an empty selection warns without Verbose", func(t *testing.T) {
+		sets, warnings := loadFiltered(t, "codesize", Loader{Enable: []string{"Nope"}})
+		if got := len(ruleNames(sets)); got != 0 {
+			t.Errorf("rule count = %d, want 0", got)
+		}
+		want := []string{"no rules selected (check --enable/--only/--disable)"}
+		if !reflect.DeepEqual(warnings, want) {
+			t.Errorf("warnings = %q, want %q", warnings, want)
+		}
+	})
+
+	t.Run("an empty selection warns before unmatched names", func(t *testing.T) {
+		_, warnings := loadFiltered(t, "codesize", Loader{Verbose: true, Enable: []string{"Nope"}})
+		want := []string{
+			"no rules selected (check --enable/--only/--disable)",
+			`no rule named "Nope" (check --enable/--only/--disable)`,
+		}
+		if !reflect.DeepEqual(warnings, want) {
+			t.Errorf("warnings = %q, want %q", warnings, want)
+		}
+	})
+
+	t.Run("a disabled rule is not reported as unmatched", func(t *testing.T) {
+		_, warnings := loadFiltered(t, "codesize", Loader{Verbose: true, Disable: []string{"CyclomaticComplexity"}})
+		if warnings != nil {
+			t.Errorf("warnings = %q, want none", warnings)
+		}
+	})
+
+	t.Run("empty filters keep everything", func(t *testing.T) {
+		sets, warnings := loadFiltered(t, "codesize", Loader{Verbose: true})
+		if got := len(ruleNames(sets)); got != all {
+			t.Errorf("no-op filter changed rule count: %d -> %d", all, got)
+		}
+		if warnings != nil {
+			t.Errorf("warnings = %q, want none", warnings)
 		}
 	})
 }
 
-func TestApplyRuleFilterReports(t *testing.T) {
-	t.Run("survivor count and unmatched names", func(t *testing.T) {
-		sets := []*rule.RuleSet{loadOne(t, "codesize")}
-		res := ApplyRuleFilter(sets, []string{"CyclomaticComplexity", "Nope"}, []string{"NoSuchRule"})
-		if res.Remaining != 1 {
-			t.Errorf("Remaining = %d, want 1", res.Remaining)
+var countedConstructions = map[string]int{}
+
+func registerCountedRule(class string) {
+	rule.Register(class, func() rule.Rule {
+		countedConstructions[class]++
+		return rule.NewBase()
+	})
+}
+
+// writeCountedRuleset writes a ruleset with an important rule (priority 1)
+// and a minor rule (priority 5), each backed by its own counted class.
+func writeCountedRuleset(t *testing.T, important, minor string) string {
+	t.Helper()
+	registerCountedRule(important)
+	registerCountedRule(minor)
+	path := filepath.Join(t.TempDir(), "counted.xml")
+	xml := fmt.Sprintf(`<?xml version="1.0"?>
+<ruleset name="counted">
+  <rule name="Important" message="m" class="%s"><priority>1</priority></rule>
+  <rule name="Minor" message="m" class="%s"><priority>5</priority></rule>
+</ruleset>`, important, minor)
+	if err := os.WriteFile(path, []byte(xml), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	return path
+}
+
+func TestLoaderNeverConstructsRulesExcludedByName(t *testing.T) {
+	important, minor := "Messgo\\Test\\CountedImportantA", "Messgo\\Test\\CountedMinorA"
+	path := writeCountedRuleset(t, important, minor)
+
+	t.Run("enable", func(t *testing.T) {
+		countedConstructions = map[string]int{}
+		sets, _ := loadFiltered(t, path, Loader{Enable: []string{"Important"}})
+		if got := ruleNames(sets); len(got) != 1 || !got["Important"] {
+			t.Fatalf("rules = %v, want only Important", got)
 		}
-		if len(res.Unmatched) != 2 || res.Unmatched[0] != "Nope" || res.Unmatched[1] != "NoSuchRule" {
-			t.Errorf("Unmatched = %v, want [Nope NoSuchRule]", res.Unmatched)
+		if countedConstructions[minor] != 0 {
+			t.Errorf("Minor constructed %d times, want 0", countedConstructions[minor])
 		}
 	})
 
-	t.Run("duplicate unmatched names are reported once", func(t *testing.T) {
-		sets := []*rule.RuleSet{loadOne(t, "codesize")}
-		res := ApplyRuleFilter(sets, []string{"Nope", "Nope"}, nil)
-		if len(res.Unmatched) != 1 {
-			t.Errorf("Unmatched = %v, want a single entry", res.Unmatched)
+	t.Run("disable", func(t *testing.T) {
+		countedConstructions = map[string]int{}
+		sets, _ := loadFiltered(t, path, Loader{Disable: []string{"Important"}})
+		if got := ruleNames(sets); len(got) != 1 || !got["Minor"] {
+			t.Fatalf("rules = %v, want only Minor", got)
+		}
+		if countedConstructions[important] != 0 {
+			t.Errorf("Important constructed %d times, want 0", countedConstructions[important])
 		}
 	})
+}
 
-	t.Run("no filters counts all rules", func(t *testing.T) {
-		sets := []*rule.RuleSet{loadOne(t, "codesize")}
-		before := len(ruleNames(sets))
-		res := ApplyRuleFilter(sets, nil, nil)
-		if res.Remaining != before {
-			t.Errorf("Remaining = %d, want %d", res.Remaining, before)
-		}
-		if res.Unmatched != nil {
-			t.Errorf("Unmatched = %v, want nil", res.Unmatched)
-		}
-	})
+func TestLoaderNameFiltersCombineWithPriorityBounds(t *testing.T) {
+	path := writeCountedRuleset(t, "Messgo\\Test\\CountedImportantB", "Messgo\\Test\\CountedMinorB")
+	unmatchedMinor := `no rule named "Minor" (check --enable/--only/--disable)`
+	unmatchedImportant := `no rule named "Important" (check --enable/--only/--disable)`
+	empty := "no rules selected (check --enable/--only/--disable)"
+
+	tests := []struct {
+		name      string
+		loader    Loader
+		wantRules []string
+		warnings  []string
+	}{
+		{
+			name:      "enabled rule dropped by MinPriority is unmatched",
+			loader:    Loader{Verbose: true, MinPriority: 3, Enable: []string{"Important", "Minor"}},
+			wantRules: []string{"Important"},
+			warnings:  []string{unmatchedMinor},
+		},
+		{
+			name:     "disabled rule dropped by MinPriority is unmatched",
+			loader:   Loader{Verbose: true, MinPriority: 3, Disable: []string{"Important", "Minor"}},
+			warnings: []string{empty, unmatchedMinor},
+		},
+		{
+			name:     "disabled rule inside MaxPriority is matched",
+			loader:   Loader{Verbose: true, MaxPriority: 3, Disable: []string{"Minor"}},
+			warnings: []string{empty},
+		},
+		{
+			name:      "disabled rule outside MaxPriority is unmatched",
+			loader:    Loader{Verbose: true, MaxPriority: 3, Disable: []string{"Important"}},
+			wantRules: []string{"Minor"},
+			warnings:  []string{unmatchedImportant},
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			sets, warnings := loadFiltered(t, path, tc.loader)
+			got := ruleNames(sets)
+			if len(got) != len(tc.wantRules) {
+				t.Errorf("rules = %v, want %v", got, tc.wantRules)
+			}
+			for _, name := range tc.wantRules {
+				if !got[name] {
+					t.Errorf("rules = %v, missing %s", got, name)
+				}
+			}
+			if !reflect.DeepEqual(warnings, tc.warnings) {
+				t.Errorf("warnings = %q, want %q", warnings, tc.warnings)
+			}
+		})
+	}
 }
 
 func TestMessageTemplatePreserved(t *testing.T) {
@@ -905,7 +1043,7 @@ func TestRefExpanderAppliesPriorityBoundaries(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			set := &rule.RuleSet{}
-			expander := newRefExpander(&loadSession{loader: &tc.loader}, set)
+			expander := newRefExpander(newLoadSession(&tc.loader), set)
 			base := rule.NewBase()
 			base.RulePrio = tc.priority
 			expander.appendRuleWithKind(base, candidateInherited, "")

@@ -497,3 +497,39 @@ func f(pointer *int) {
 		t.Fatalf("EmptyNilCheckBlockLines() = %v, want none for == nil", got)
 	}
 }
+
+func TestConstantsCollectsPackageAndNestedDeclarationsInSourceOrder(t *testing.T) {
+	f, err := ParseSource("query.go", []byte(`package sample
+const Top = 1
+const (
+	A = iota
+	_
+	B
+)
+func f() {
+	const local = 2
+	_ = func() {
+		const inLit = 3
+	}
+	const _ = 4
+}
+var notConst = func() int {
+	const inVarLit = 5
+	return inVarLit
+}()
+`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []Constant{
+		{Name: "Top", Line: 2, PackageLevel: true},
+		{Name: "A", Line: 4, PackageLevel: true},
+		{Name: "B", Line: 6, PackageLevel: true},
+		{Name: "local", Line: 9, PackageLevel: false},
+		{Name: "inLit", Line: 11, PackageLevel: false},
+		{Name: "inVarLit", Line: 16, PackageLevel: false},
+	}
+	if !slices.Equal(f.Constants, want) {
+		t.Fatalf("Constants = %+v, want %+v", f.Constants, want)
+	}
+}

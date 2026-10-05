@@ -311,21 +311,18 @@ func TestLoaderNameFilterWarnings(t *testing.T) {
 	})
 }
 
-var countedConstructions = map[string]int{}
-
-func registerCountedRule(class string) {
-	rule.Register(class, func() rule.Rule {
-		countedConstructions[class]++
-		return rule.NewBase()
-	})
-}
-
 // writeCountedRuleset writes a ruleset with an important rule (priority 1)
-// and a minor rule (priority 5), each backed by its own counted class.
-func writeCountedRuleset(t *testing.T, important, minor string) string {
+// and a minor rule (priority 5), each backed by its own class. It returns the
+// path and a per-class count of constructor calls.
+func writeCountedRuleset(t *testing.T, important, minor string) (string, map[string]int) {
 	t.Helper()
-	registerCountedRule(important)
-	registerCountedRule(minor)
+	constructions := map[string]int{}
+	for _, class := range []string{important, minor} {
+		rule.Register(class, func() rule.Rule {
+			constructions[class]++
+			return rule.NewBase()
+		})
+	}
 	path := filepath.Join(t.TempDir(), "counted.xml")
 	xml := fmt.Sprintf(`<?xml version="1.0"?>
 <ruleset name="counted">
@@ -335,38 +332,38 @@ func writeCountedRuleset(t *testing.T, important, minor string) string {
 	if err := os.WriteFile(path, []byte(xml), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	return path
+	return path, constructions
 }
 
 func TestLoaderNeverConstructsRulesExcludedByName(t *testing.T) {
 	important, minor := "Messgo\\Test\\CountedImportantA", "Messgo\\Test\\CountedMinorA"
-	path := writeCountedRuleset(t, important, minor)
+	path, constructions := writeCountedRuleset(t, important, minor)
 
 	t.Run("enable", func(t *testing.T) {
-		countedConstructions = map[string]int{}
+		clear(constructions)
 		sets, _ := loadFiltered(t, path, Loader{Enable: []string{"Important"}})
 		if got := ruleNames(sets); len(got) != 1 || !got["Important"] {
 			t.Fatalf("rules = %v, want only Important", got)
 		}
-		if countedConstructions[minor] != 0 {
-			t.Errorf("Minor constructed %d times, want 0", countedConstructions[minor])
+		if constructions[minor] != 0 {
+			t.Errorf("Minor constructed %d times, want 0", constructions[minor])
 		}
 	})
 
 	t.Run("disable", func(t *testing.T) {
-		countedConstructions = map[string]int{}
+		clear(constructions)
 		sets, _ := loadFiltered(t, path, Loader{Disable: []string{"Important"}})
 		if got := ruleNames(sets); len(got) != 1 || !got["Minor"] {
 			t.Fatalf("rules = %v, want only Minor", got)
 		}
-		if countedConstructions[important] != 0 {
-			t.Errorf("Important constructed %d times, want 0", countedConstructions[important])
+		if constructions[important] != 0 {
+			t.Errorf("Important constructed %d times, want 0", constructions[important])
 		}
 	})
 }
 
 func TestLoaderNameFiltersCombineWithPriorityBounds(t *testing.T) {
-	path := writeCountedRuleset(t, "Messgo\\Test\\CountedImportantB", "Messgo\\Test\\CountedMinorB")
+	path, _ := writeCountedRuleset(t, "Messgo\\Test\\CountedImportantB", "Messgo\\Test\\CountedMinorB")
 	unmatchedMinor := `no rule named "Minor" (check --enable/--only/--disable)`
 	unmatchedImportant := `no rule named "Important" (check --enable/--only/--disable)`
 	empty := "no rules selected (check --enable/--only/--disable)"

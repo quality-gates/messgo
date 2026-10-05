@@ -236,9 +236,9 @@ func resolvePath(part, fromDir string) string {
 }
 
 // addCandidate builds and appends the rule defined by def unless the
-// loader's name filters exclude it. An excluded rule is never constructed,
-// but its name is still recorded as loaded when it would have survived the
-// priority bounds, so it does not count as an unmatched filter name.
+// loader's name filters exclude it. The loader never constructs an excluded
+// rule. If the rule is implemented and its priority is in bounds, the name is
+// recorded as loaded. Thus the name is not reported as unmatched.
 func (e *refExpander) addCandidate(setName string, def xmlRule, ov *xmlRule, kind candidateKind) error {
 	selection := e.session.selection
 	if !selection.selects(def.Name) {
@@ -301,7 +301,8 @@ func (e *refExpander) buildRule(setName string, def xmlRule, ov *xmlRule) (rule.
 }
 
 // appendRuleWithKind adds a rule unless it is filtered out by the configured
-// priority bounds, retaining the candidate's merge provenance.
+// priority bounds, retaining the candidate's merge provenance. A kept rule's
+// name is recorded as loaded for unmatched-filter reporting.
 func (e *refExpander) appendRuleWithKind(r rule.Rule, kind candidateKind, class string) {
 	selection := e.session.selection
 	if !selection.withinPriority(rule.BaseOf(r).RulePrio) {

@@ -5,28 +5,26 @@ import (
 	"go/token"
 )
 
-// collectConstants returns every constant declared in the file (both
-// package-level and nested), the Go analog of PHPMD's ConstantDeclarator
-// nodes, in source order. The blank identifier is skipped.
-func collectConstants(file *ast.File, fset *token.FileSet) []Constant {
+// collectConstants returns the constants for File.Constants.
+func collectConstants(f *File) []Constant {
 	topLevel := map[*ast.GenDecl]bool{}
-	for _, decl := range file.Decls {
+	for _, decl := range f.Syntax.Decls {
 		if gen, ok := decl.(*ast.GenDecl); ok {
 			topLevel[gen] = true
 		}
 	}
 	var out []Constant
-	ast.Inspect(file, func(n ast.Node) bool {
+	ast.Inspect(f.Syntax, func(n ast.Node) bool {
 		gen, ok := n.(*ast.GenDecl)
 		if ok && gen.Tok == token.CONST {
-			out = appendConstSpecs(out, gen, topLevel[gen], fset)
+			out = appendConstSpecs(out, gen, topLevel[gen], f.Fset)
 		}
 		return true
 	})
 	return out
 }
 
-func appendConstSpecs(out []Constant, gen *ast.GenDecl, pkg bool, fset *token.FileSet) []Constant {
+func appendConstSpecs(out []Constant, gen *ast.GenDecl, packageLevel bool, fset *token.FileSet) []Constant {
 	for _, spec := range gen.Specs {
 		vs, ok := spec.(*ast.ValueSpec)
 		if !ok {
@@ -36,7 +34,7 @@ func appendConstSpecs(out []Constant, gen *ast.GenDecl, pkg bool, fset *token.Fi
 			if id.Name == "_" {
 				continue
 			}
-			out = append(out, Constant{Name: id.Name, Line: fset.Position(id.Pos()).Line, Package: pkg})
+			out = append(out, Constant{Name: id.Name, Line: fset.Position(id.Pos()).Line, PackageLevel: packageLevel})
 		}
 	}
 	return out

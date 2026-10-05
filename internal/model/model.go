@@ -302,13 +302,13 @@ type Field struct {
 	Ident    *ast.Ident
 }
 
-// Constant is a constant declaration (the analog of a PHP class constant).
-// Package is true for package-level constants and false for function-scoped
-// ones.
+// Constant is a constant declaration, the Go analog of PHPMD's
+// ConstantDeclarator node. PackageLevel is false for function-scoped
+// constants.
 type Constant struct {
-	Name    string
-	Line    int
-	Package bool
+	Name         string
+	Line         int
+	PackageLevel bool
 }
 
 // Function represents a free function OR a method (when Receiver != "").

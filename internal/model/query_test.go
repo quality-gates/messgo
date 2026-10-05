@@ -513,25 +513,23 @@ func f() {
 	}
 	const _ = 4
 }
-var notConst = 5
+var notConst = func() int {
+	const inVarLit = 5
+	return inVarLit
+}()
 `))
 	if err != nil {
 		t.Fatal(err)
 	}
 	want := []Constant{
-		{Name: "Top", Line: 2, Package: true},
-		{Name: "A", Line: 4, Package: true},
-		{Name: "B", Line: 6, Package: true},
-		{Name: "local", Line: 9, Package: false},
-		{Name: "inLit", Line: 11, Package: false},
+		{Name: "Top", Line: 2, PackageLevel: true},
+		{Name: "A", Line: 4, PackageLevel: true},
+		{Name: "B", Line: 6, PackageLevel: true},
+		{Name: "local", Line: 9, PackageLevel: false},
+		{Name: "inLit", Line: 11, PackageLevel: false},
+		{Name: "inVarLit", Line: 16, PackageLevel: false},
 	}
-	got := f.Constants
-	if len(got) != len(want) {
-		t.Fatalf("Constants = %+v, want %+v", got, want)
-	}
-	for i := range want {
-		if got[i] != want[i] {
-			t.Fatalf("Constants[%d] = %+v, want %+v", i, got[i], want[i])
-		}
+	if !slices.Equal(f.Constants, want) {
+		t.Fatalf("Constants = %+v, want %+v", f.Constants, want)
 	}
 }

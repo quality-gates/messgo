@@ -6,6 +6,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 
 ## [Unreleased]
 
+## [0.5.9] - 2026-10-07
+
 ### Changed
 - `model.File` now exposes `Constants`, every package-level and
   function-scoped constant collected at build time. `ConstantNamingConventions`

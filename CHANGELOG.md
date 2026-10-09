@@ -6,6 +6,14 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 
 ## [Unreleased]
 
+### Changed
+- New package `internal/model/controlflow` unrolls Go's
+  `if / else if / else` chains into an `IfChain` of ordered clauses plus an
+  optional trailing `else`. `IfChains` enumerates chain heads only.
+  `NestingDepth`, `CognitiveComplexity`, `NPathComplexity`, `IdenticalBranches`
+  and `ElseExpression` all use it instead of walking `ast.IfStmt.Else`
+  themselves; metric values and rule output are unchanged (#245).
+
 ## [0.5.9] - 2026-10-07
 
 ### Changed

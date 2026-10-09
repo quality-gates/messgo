@@ -5,6 +5,7 @@ import (
 	"go/constant"
 	"go/token"
 
+	"github.com/quality-gates/messgo/internal/model/controlflow"
 	"github.com/quality-gates/messgo/internal/util"
 )
 
@@ -179,16 +180,11 @@ func ElseBlockLines(f *Function) []int {
 		return nil
 	}
 	var lines []int
-	ast.Inspect(f.Body, func(n ast.Node) bool {
-		ifs, ok := n.(*ast.IfStmt)
-		if !ok {
-			return true
+	for _, chain := range controlflow.IfChains(f.Body) {
+		if chain.Else != nil {
+			lines = append(lines, f.File.Fset.Position(chain.ElsePos).Line)
 		}
-		if _, isBlock := ifs.Else.(*ast.BlockStmt); isBlock {
-			lines = append(lines, f.File.Fset.Position(ifs.Else.Pos()).Line)
-		}
-		return true
-	})
+	}
 	return lines
 }
 

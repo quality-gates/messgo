@@ -7,6 +7,8 @@ import (
 	"go/scanner"
 	"go/token"
 	"slices"
+
+	"github.com/quality-gates/messgo/internal/model/controlflow"
 )
 
 func ccnIncrement(n ast.Node) int {
@@ -134,16 +136,18 @@ func controlNesting(s ast.Stmt, depth int) int {
 
 // nestingDepthIf handles the if/else branching rules: the if body and an else
 // block sit at depth+1; an else-if chain stays at the parent's depth.
+// Func literals in a chained clause's Init or Cond are already measured by the
+// head's funcLitNesting, which reaches every clause outside its blocks.
 func nestingDepthIf(n *ast.IfStmt, depth int) int {
-	m := max(depth+1, maxStmtNesting(n.Body.List, depth+1))
-	if n.Else == nil {
-		return m
+	chain := controlflow.NewIfChain(n)
+	m := depth + 1
+	for _, c := range chain.Clauses {
+		m = max(m, maxStmtNesting(c.Body.List, depth+1))
 	}
-	if blk, ok := n.Else.(*ast.BlockStmt); ok {
-		return max(m, maxStmtNesting(blk.List, depth+1))
+	if chain.Else != nil {
+		m = max(m, maxStmtNesting(chain.Else.List, depth+1))
 	}
-	// else-if chain: the chained if sits at the same level as its parent.
-	return max(m, nestingDepthStmt(n.Else, depth))
+	return m
 }
 
 // caseNesting measures nesting within a switch body, whose direct children are
@@ -205,7 +209,6 @@ type cognitiveVisitor struct {
 	recv            *ast.Ident
 	complexity      int
 	nesting         int
-	elseNodes       map[ast.Node]bool
 	calculatedExprs map[ast.Expr]bool
 }
 
@@ -213,17 +216,6 @@ func (v *cognitiveVisitor) inc()        { v.complexity++ }
 func (v *cognitiveVisitor) nestInc()    { v.complexity += v.nesting + 1 }
 func (v *cognitiveVisitor) incNesting() { v.nesting++ }
 func (v *cognitiveVisitor) decNesting() { v.nesting-- }
-
-func (v *cognitiveVisitor) markElse(n ast.Node) {
-	if v.elseNodes == nil {
-		v.elseNodes = make(map[ast.Node]bool)
-	}
-	v.elseNodes[n] = true
-}
-
-func (v *cognitiveVisitor) isElse(n ast.Node) bool {
-	return v.elseNodes != nil && v.elseNodes[n]
-}
 
 func (v *cognitiveVisitor) markCalc(e ast.Expr) {
 	if v.calculatedExprs == nil {
@@ -303,25 +295,27 @@ func (v *cognitiveVisitor) visitNonNesting(n ast.Node) ast.Visitor {
 	return v
 }
 
+// visitIf scores a whole if chain. Visit only reaches chain heads because the
+// chained clauses are walked here and never handed back to ast.Walk.
 func (v *cognitiveVisitor) visitIf(n *ast.IfStmt) ast.Visitor {
-	if v.isElse(n) {
-		v.inc()
-	} else {
-		v.nestInc()
+	chain := controlflow.NewIfChain(n)
+	for i, c := range chain.Clauses {
+		if i == 0 {
+			v.nestInc()
+		} else {
+			v.inc() // +1 for else-if, without a nesting increment
+		}
+		v.walkIfSet(c.Init)
+		ast.Walk(v, c.Cond)
+		v.incNesting()
+		ast.Walk(v, c.Body)
+		v.decNesting()
 	}
-	v.walkIfSet(n.Init)
-	ast.Walk(v, n.Cond)
-	v.incNesting()
-	ast.Walk(v, n.Body)
-	v.decNesting()
-	if blk, ok := n.Else.(*ast.BlockStmt); ok {
+	if chain.Else != nil {
 		v.inc() // +1 for the else keyword
 		v.incNesting()
-		ast.Walk(v, blk)
+		ast.Walk(v, chain.Else)
 		v.decNesting()
-	} else if _, ok := n.Else.(*ast.IfStmt); ok {
-		v.markElse(n.Else)
-		ast.Walk(v, n.Else)
 	}
 	return nil
 }
@@ -550,24 +544,28 @@ func npathStmt(s ast.Stmt) int {
 // where the closure factor folds execution paths of func literals declared in
 // the initializer or invoked in the condition — they run on every path through
 // the if, so their paths multiply the result.
+//
+// An else-if is the else-part of the clause before it, so the chain folds from
+// its last clause back to the head.
 func npathIf(n *ast.IfStmt) int {
-	expr := expressionComplexity(n.Cond)
-	body := npathStmts(n.Body.List)
-	var elsePart int
-	switch e := n.Else.(type) {
-	case nil:
-		elsePart = 1 // implicit empty else
-	case *ast.IfStmt:
-		elsePart = npathIf(e)
-	case *ast.BlockStmt:
-		elsePart = npathStmts(e.List)
-	default:
-		elsePart = npathStmt(e)
+	chain := controlflow.NewIfChain(n)
+	npath := 1 // implicit empty else
+	if chain.Else != nil {
+		npath = npathStmts(chain.Else.List)
 	}
-	npath := npathAdd(elsePart, body)
-	npath = npathAdd(npath, expr)
-	npath = npathAdd(npath, assignExprComplexity(n.Init))
-	return npathMul(npath, npathMul(funcLitsComplexity(n.Init), funcLitsComplexity(n.Cond)))
+	for i := len(chain.Clauses) - 1; i >= 0; i-- {
+		npath = npathIfClause(chain.Clauses[i], npath)
+	}
+	return npath
+}
+
+// npathIfClause applies the NP(if) formula to one clause given the NPath of
+// everything after it in the chain.
+func npathIfClause(c controlflow.IfClause, elsePart int) int {
+	npath := npathAdd(elsePart, npathStmts(c.Body.List))
+	npath = npathAdd(npath, expressionComplexity(c.Cond))
+	npath = npathAdd(npath, assignExprComplexity(c.Init))
+	return npathMul(npath, npathMul(funcLitsComplexity(c.Init), funcLitsComplexity(c.Cond)))
 }
 
 // assignExprComplexity returns the boolean-operator complexity of the right

@@ -12,6 +12,7 @@ import (
 	"strings"
 
 	"github.com/quality-gates/messgo/internal/model"
+	"github.com/quality-gates/messgo/internal/model/controlflow"
 	"github.com/quality-gates/messgo/internal/rule"
 )
 
@@ -116,14 +117,11 @@ func (r *IdenticalBranches) ApplyFunc(c *rule.Context, fn *model.Function) {
 		return
 	}
 	fset := c.File.Fset
-	elseIfs := map[*ast.IfStmt]bool{}
+	for _, chain := range controlflow.IfChains(fn.Body) {
+		r.checkBranches(c, fn, ifChainBranches(chain), fset)
+	}
 	ast.Inspect(fn.Body, func(n ast.Node) bool {
 		switch n := n.(type) {
-		case *ast.IfStmt:
-			// An else-if was already compared as part of its chain's head.
-			if !elseIfs[n] {
-				r.checkBranches(c, fn, ifChainBranches(n, elseIfs), fset)
-			}
 		case *ast.SwitchStmt:
 			r.checkBranches(c, fn, caseBranches(n.Body), fset)
 		case *ast.TypeSwitchStmt:
@@ -160,20 +158,14 @@ func (r *IdenticalBranches) checkBranches(c *rule.Context, fn *model.Function, b
 	}
 }
 
-// ifChainBranches flattens an if/else-if/else chain into its branches and
-// records each nested else-if in seen so it is not checked again on its own.
-func ifChainBranches(n *ast.IfStmt, seen map[*ast.IfStmt]bool) []branch {
+// ifChainBranches lists the branches of an if/else-if/else chain in order.
+func ifChainBranches(chain controlflow.IfChain) []branch {
 	var branches []branch
-	for cur := n; cur != nil; {
-		branches = append(branches, branch{pos: cur.Body.Pos(), body: cur.Body.List})
-		next, _ := cur.Else.(*ast.IfStmt)
-		if block, ok := cur.Else.(*ast.BlockStmt); ok {
-			branches = append(branches, branch{pos: block.Pos(), body: block.List})
-		}
-		if next != nil {
-			seen[next] = true
-		}
-		cur = next
+	for _, cl := range chain.Clauses {
+		branches = append(branches, branch{pos: cl.Body.Pos(), body: cl.Body.List})
+	}
+	if chain.Else != nil {
+		branches = append(branches, branch{pos: chain.ElsePos, body: chain.Else.List})
 	}
 	return branches
 }

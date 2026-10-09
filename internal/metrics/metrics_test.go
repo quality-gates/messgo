@@ -1001,3 +1001,49 @@ func TestNPathFuncLiteral(t *testing.T) {
 		})
 	}
 }
+
+// An else-if chain whose clauses carry an initializer, a boolean condition, a
+// nested if, and a func literal in the condition. The expected values were
+// measured before the chain was decomposed by model/controlflow (#245) and
+// pin every metric that walks the chain.
+const elseIfChainWithInitAndClosure = `
+func f(a int) int {
+	if a > 0 {
+		a++
+	} else if b := a * 2; b < 0 && a < -1 {
+		if b < -10 {
+			a = b
+		}
+	} else if func() bool {
+		if a == 0 {
+			for range a {
+				return true
+			}
+		}
+		return false
+	}() {
+		a = 1
+	} else {
+		a = 2
+	}
+	return a
+}
+`
+
+func TestElseIfChainMetrics(t *testing.T) {
+	fset := token.NewFileSet()
+	f, err := parser.ParseFile(fset, "x.go", "package p\n"+elseIfChainWithInitAndClosure, 0)
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+	fd := f.Decls[0].(*ast.FuncDecl)
+	if got := NestingDepth(fd.Body); got != 2 {
+		t.Errorf("NestingDepth = %d, want 2", got)
+	}
+	if got := CognitiveComplexity(fd); got != 12 {
+		t.Errorf("CognitiveComplexity = %d, want 12", got)
+	}
+	if got := NPathComplexity(fd.Body); got != 10 {
+		t.Errorf("NPathComplexity = %d, want 10", got)
+	}
+}

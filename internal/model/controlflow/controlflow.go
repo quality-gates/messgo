@@ -3,9 +3,8 @@
 //
 // Go's AST stores an if / else if / else chain as a linked list in
 // ast.IfStmt.Else: an else-if is a nested *ast.IfStmt and a final else is an
-// *ast.BlockStmt. This package unrolls that list once. It lives below
-// internal/model, rather than in it, because internal/metrics consumes it and
-// internal/model already imports internal/metrics.
+// *ast.BlockStmt. This package unrolls that list once. It is a leaf package so
+// that internal/metrics can use it without an import cycle through model.
 package controlflow
 
 import (

@@ -14,6 +14,12 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 - `ShortClassName`, `LongClassName` and `CamelCaseClassName` now record the
   struct or interface name as the violation's class, so JSON `class` and the
   XML `class` attribute are filled in as they are for `TooManyFields` (#257).
+- SARIF reports with `controversial` findings now pass SARIF 2.1.0 schema
+  validation. The six controversial rules had a placeholder
+  `externalInfoUrl="#"`; they now link to their phpmd.org documentation. The
+  `sarif` renderer also leaves out `helpUri` when a rule's URL is not an
+  absolute URL, so a custom ruleset with a placeholder or relative URL cannot
+  make the report invalid (#258).
 
 ### Changed
 - New package `internal/model/controlflow` unrolls Go's

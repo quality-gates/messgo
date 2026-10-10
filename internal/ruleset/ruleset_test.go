@@ -1,7 +1,9 @@
 package ruleset
 
 import (
+	"encoding/xml"
 	"fmt"
+	"net/url"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -1455,5 +1457,40 @@ func TestBuiltinIDRecognisesOnlyBuiltinForms(t *testing.T) {
 		if got != want || ok != (want != "") {
 			t.Errorf("builtinID(%q) = %q, %v; want %q, %v", ref, got, ok, want, want != "")
 		}
+	}
+}
+
+func TestBuiltinExternalInfoURLsAreAbsolute(t *testing.T) {
+	for _, name := range BuiltinNames() {
+		data, err := builtinFS.ReadFile(builtinNames[name])
+		if err != nil {
+			t.Fatal(err)
+		}
+		var set xmlRuleSet
+		if err := xml.Unmarshal(data, &set); err != nil {
+			t.Fatalf("%s: %v", name, err)
+		}
+		for _, r := range set.Rules {
+			if r.ExternalInfoURL == "" {
+				continue
+			}
+			if u, err := url.Parse(r.ExternalInfoURL); err != nil || !u.IsAbs() || u.Host == "" {
+				t.Errorf("%s/%s externalInfoUrl = %q, want an absolute URL", name, r.Name, r.ExternalInfoURL)
+			}
+		}
+	}
+}
+
+func TestDistributedControversialRulesetMatchesBuiltin(t *testing.T) {
+	builtin, err := builtinFS.ReadFile("builtin/controversial.xml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	distributed, err := os.ReadFile(filepath.Join("..", "..", "rulesets", "controversial.xml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(builtin) != string(distributed) {
+		t.Fatal("rulesets/controversial.xml differs from internal/ruleset/builtin/controversial.xml")
 	}
 }

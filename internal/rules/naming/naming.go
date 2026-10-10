@@ -40,20 +40,18 @@ func (r *ShortClassName) Configure(props rule.Properties) error {
 	return nil
 }
 
-func (r *ShortClassName) check(c *rule.Context, name string, line, end int) {
-	if utf8.RuneCountInString(name) >= r.minimum {
-		return
-	}
-	if util.Contains(r.exceptions, name) {
-		return
-	}
-	c.Report(line, end, name, r.minimum)
+func (r *ShortClassName) violates(name string) bool {
+	return utf8.RuneCountInString(name) < r.minimum && !util.Contains(r.exceptions, name)
 }
 func (r *ShortClassName) ApplyClass(c *rule.Context, cl *model.Class) {
-	r.check(c, cl.Name, cl.Line, cl.EndLine)
+	if r.violates(cl.Name) {
+		c.ReportClass(cl, cl.Name, r.minimum)
+	}
 }
 func (r *ShortClassName) ApplyInterface(c *rule.Context, i *model.Interface) {
-	r.check(c, i.Name, i.Line, i.EndLine)
+	if r.violates(i.Name) {
+		c.ReportInterface(i, i.Name, r.minimum)
+	}
 }
 
 // ----- LongClassName ------------------------------------------------------
@@ -76,17 +74,18 @@ func (r *LongClassName) Configure(props rule.Properties) error {
 	return nil
 }
 
-func (r *LongClassName) check(c *rule.Context, name string, line, end int) {
-	if util.LengthWithoutPrefixesAndSuffixes(name, r.prefixes, r.suffixes) <= r.maximum {
-		return
-	}
-	c.Report(line, end, name, r.maximum)
+func (r *LongClassName) violates(name string) bool {
+	return util.LengthWithoutPrefixesAndSuffixes(name, r.prefixes, r.suffixes) > r.maximum
 }
 func (r *LongClassName) ApplyClass(c *rule.Context, cl *model.Class) {
-	r.check(c, cl.Name, cl.Line, cl.EndLine)
+	if r.violates(cl.Name) {
+		c.ReportClass(cl, cl.Name, r.maximum)
+	}
 }
 func (r *LongClassName) ApplyInterface(c *rule.Context, i *model.Interface) {
-	r.check(c, i.Name, i.Line, i.EndLine)
+	if r.violates(i.Name) {
+		c.ReportInterface(i, i.Name, r.maximum)
+	}
 }
 
 // ----- ShortVariable ------------------------------------------------------

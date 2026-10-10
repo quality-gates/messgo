@@ -1,6 +1,8 @@
 package naming
 
 import (
+	"fmt"
+	"slices"
 	"testing"
 
 	"github.com/quality-gates/messgo/internal/model"
@@ -122,6 +124,74 @@ func Error() string { return "" }
 		t.Run(tt.name, func(t *testing.T) {
 			if got := constructorHits(t, tt.src); got != tt.want {
 				t.Fatalf("hits = %d, want %d", got, tt.want)
+			}
+		})
+	}
+}
+
+// typeNameFindings configures r, analyzes src and returns one
+// "line-end class method function args" entry per violation.
+func typeNameFindings(t *testing.T, r rule.Rule, props rule.Properties, src string) []string {
+	t.Helper()
+	if err := r.(rule.Configurable).Configure(props); err != nil {
+		t.Fatalf("configure %T: %v", r, err)
+	}
+	f, err := model.ParseSource("fixture.go", []byte("package p\n"+src))
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+	var got []string
+	for _, v := range rule.Analyze(f, []*rule.RuleSet{{Rules: []rule.Rule{r}}}) {
+		got = append(got, fmt.Sprintf("%d-%d %s %s %s %v", v.BeginLine, v.EndLine, v.Class, v.Method, v.Function, v.Args))
+	}
+	return got
+}
+
+const typeNameSrc = `
+type Ab struct{}
+type Abc struct{}
+type Cd interface {
+	M()
+}
+type Cde interface{ N() }
+`
+
+func TestTypeNameRulesReportClassContext(t *testing.T) {
+	tests := []struct {
+		name    string
+		newRule func() rule.Rule
+		props   rule.Properties
+		want    []string
+	}{
+		{
+			name:    "ShortClassName below minimum",
+			newRule: newShortClassName,
+			props:   rule.Properties{},
+			want:    []string{"3-3 Ab   [Ab 3]", "5-7 Cd   [Cd 3]"},
+		},
+		{
+			name:    "ShortClassName exceptions",
+			newRule: newShortClassName,
+			props:   rule.Properties{"exceptions": "Ab,Cd"},
+			want:    nil,
+		},
+		{
+			name:    "LongClassName above maximum",
+			newRule: newLongClassName,
+			props:   rule.Properties{"maximum": "2"},
+			want:    []string{"4-4 Abc   [Abc 2]", "8-8 Cde   [Cde 2]"},
+		},
+		{
+			name:    "LongClassName subtracted prefix",
+			newRule: newLongClassName,
+			props:   rule.Properties{"maximum": "2", "subtract-prefixes": "C"},
+			want:    []string{"4-4 Abc   [Abc 2]"},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := typeNameFindings(t, tt.newRule(), tt.props, typeNameSrc); !slices.Equal(got, tt.want) {
+				t.Fatalf("findings = %q, want %q", got, tt.want)
 			}
 		})
 	}

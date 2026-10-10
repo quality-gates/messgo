@@ -1,6 +1,8 @@
 package controversial
 
 import (
+	"fmt"
+	"slices"
 	"testing"
 
 	"github.com/quality-gates/messgo/internal/model"
@@ -119,5 +121,29 @@ func TestCamelCaseRulesConfigureAllowUnderscoreTest(t *testing.T) {
 
 	if got := len(analyzeConfiguredRule(t, "func private_method() {}", &CamelCaseMethodName{Base: rule.NewBase()}, rule.Properties{"allow-underscore-test": "true"})); got != 1 {
 		t.Fatalf("allow-underscore-test produced %d violations for an ordinary method, want 1", got)
+	}
+}
+
+func TestCamelCaseClassNameReportsClassContext(t *testing.T) {
+	src := `
+type Good struct{}
+type bad_name struct{}
+type GoodIface interface{ M() }
+type bad_iface interface {
+	N()
+}
+`
+	f, err := model.ParseSource("fixture.go", []byte("package fixture\n"+src))
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+	r := &CamelCaseClassName{Base: rule.NewBase()}
+	var got []string
+	for _, v := range rule.Analyze(f, []*rule.RuleSet{{Rules: []rule.Rule{r}}}) {
+		got = append(got, fmt.Sprintf("%d-%d %s %s %s %v", v.BeginLine, v.EndLine, v.Class, v.Method, v.Function, v.Args))
+	}
+	want := []string{"4-4 bad_name   [bad_name]", "6-8 bad_iface   [bad_iface]"}
+	if !slices.Equal(got, want) {
+		t.Fatalf("findings = %q, want %q", got, want)
 	}
 }

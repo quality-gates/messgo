@@ -50,12 +50,12 @@ type CamelCaseClassName struct{ *rule.Base }
 
 func (r *CamelCaseClassName) ApplyClass(c *rule.Context, cl *model.Class) {
 	if !isCamelCase(cl.Name) {
-		c.Report(cl.Line, cl.EndLine, cl.Name)
+		c.ReportClass(cl, cl.Name)
 	}
 }
 func (r *CamelCaseClassName) ApplyInterface(c *rule.Context, i *model.Interface) {
 	if !isCamelCase(i.Name) {
-		c.Report(i.Line, i.EndLine, i.Name)
+		c.ReportInterface(i, i.Name)
 	}
 }
 

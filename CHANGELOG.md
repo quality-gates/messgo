@@ -11,6 +11,9 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
   `ShortMethodName` now measure identifier length in characters, not UTF-8
   bytes. A 19-character `überÄnderungsgrößen` no longer trips `LongVariable`,
   and a 2-character `名前` is now reported by `ShortVariable` (#256).
+- `ShortClassName`, `LongClassName` and `CamelCaseClassName` now record the
+  struct or interface name as the violation's class, so JSON `class` and the
+  XML `class` attribute are filled in as they are for `TooManyFields` (#257).
 
 ### Changed
 - New package `internal/model/controlflow` unrolls Go's

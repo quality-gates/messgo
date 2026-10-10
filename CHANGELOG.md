@@ -6,6 +6,12 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 
 ## [Unreleased]
 
+### Fixed
+- `ShortVariable`, `LongVariable`, `ShortClassName`, `LongClassName` and
+  `ShortMethodName` now measure identifier length in characters, not UTF-8
+  bytes. A 19-character `überÄnderungsgrößen` no longer trips `LongVariable`,
+  and a 2-character `名前` is now reported by `ShortVariable` (#256).
+
 ### Changed
 - New package `internal/model/controlflow` unrolls Go's
   `if / else if / else` chains into an `IfChain` of ordered clauses plus an

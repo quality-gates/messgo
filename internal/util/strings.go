@@ -5,6 +5,7 @@ package util
 import (
 	"slices"
 	"strings"
+	"unicode/utf8"
 )
 
 // SplitToList splits a comma-separated property value, trimming entries and
@@ -20,20 +21,20 @@ func SplitToList(s string) []string {
 	return out
 }
 
-// LengthWithoutPrefixesAndSuffixes returns the length of name after removing
-// the first matching suffix and first matching prefix
+// LengthWithoutPrefixesAndSuffixes returns the length of name, in characters,
+// after removing the first matching suffix and first matching prefix
 // (PHPMD\Utility\Strings::lengthWithoutPrefixesAndSuffixes).
 func LengthWithoutPrefixesAndSuffixes(name string, prefixes, suffixes []string) int {
-	length := len(name)
+	length := utf8.RuneCountInString(name)
 	for _, suffix := range suffixes {
 		if suffix != "" && strings.HasSuffix(name, suffix) {
-			length -= len(suffix)
+			length -= utf8.RuneCountInString(suffix)
 			break
 		}
 	}
 	for _, prefix := range prefixes {
 		if prefix != "" && strings.HasPrefix(name, prefix) {
-			length -= len(prefix)
+			length -= utf8.RuneCountInString(prefix)
 			break
 		}
 	}

@@ -4,6 +4,7 @@ package naming
 import (
 	"regexp"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/quality-gates/messgo/internal/model"
 	"github.com/quality-gates/messgo/internal/rule"
@@ -40,7 +41,7 @@ func (r *ShortClassName) Configure(props rule.Properties) error {
 }
 
 func (r *ShortClassName) check(c *rule.Context, name string, line, end int) {
-	if len(name) >= r.minimum {
+	if utf8.RuneCountInString(name) >= r.minimum {
 		return
 	}
 	if util.Contains(r.exceptions, name) {
@@ -107,7 +108,7 @@ func (r *ShortVariable) Configure(props rule.Properties) error {
 }
 
 func (r *ShortVariable) checkName(c *rule.Context, name string, line int) {
-	if name == "_" || len(name) >= r.minimum {
+	if name == "_" || utf8.RuneCountInString(name) >= r.minimum {
 		return
 	}
 	if util.Contains(r.exceptions, name) {
@@ -203,7 +204,7 @@ func (r *ShortMethodName) check(c *rule.Context, fn *model.Function) {
 	if !fn.IsMethod() {
 		return
 	}
-	if len(fn.Name) >= r.minimum {
+	if utf8.RuneCountInString(fn.Name) >= r.minimum {
 		return
 	}
 	if util.Contains(r.exceptions, fn.Name) {

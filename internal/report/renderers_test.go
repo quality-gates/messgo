@@ -220,6 +220,44 @@ func TestSARIFErrorOutputOmitsRegion(t *testing.T) {
 	}
 }
 
+func TestSARIFHelpURIOnlyEmitsAbsoluteURIs(t *testing.T) {
+	cases := map[string]string{
+		"https://phpmd.org/rules/naming.html#shortvariable": "https://phpmd.org/rules/naming.html#shortvariable",
+		"#":              "",
+		"":               "",
+		"rules/a.html":   "",
+		"/rules/a.html":  "",
+		"http://[bad":    "",
+		"https://x/a b":  "",
+		"//example.test": "",
+	}
+	for raw, want := range cases {
+		var buf bytes.Buffer
+		r := &rule.Base{RuleName: "Stub", RuleURL: raw}
+		rep := &Report{Violations: []*rule.Violation{{File: "a.go", BeginLine: 1, Rule: r, Description: "found"}}}
+		if err := (SARIFRenderer{}).Render(&buf, rep); err != nil {
+			t.Fatal(err)
+		}
+		var doc map[string]any
+		if err := json.Unmarshal(buf.Bytes(), &doc); err != nil {
+			t.Fatal(err)
+		}
+		run := doc["runs"].([]any)[0].(map[string]any)
+		driver := run["tool"].(map[string]any)["driver"].(map[string]any)
+		descriptor := driver["rules"].([]any)[0].(map[string]any)
+		got, present := descriptor["helpUri"]
+		if want == "" && present {
+			t.Errorf("externalInfoUrl %q emitted helpUri %v, want it omitted", raw, got)
+		}
+		if want != "" && got != want {
+			t.Errorf("externalInfoUrl %q emitted helpUri %v, want %q", raw, got, want)
+		}
+		if n := len(run["results"].([]any)); n != 1 {
+			t.Errorf("externalInfoUrl %q produced %d results, want 1", raw, n)
+		}
+	}
+}
+
 func TestGitHubEscapesWorkflowCommands(t *testing.T) {
 	r := &rule.Base{RuleName: "Stub"}
 	var buf bytes.Buffer

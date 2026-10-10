@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"net/url"
 	"strings"
 	"time"
 
@@ -448,7 +449,7 @@ func (SARIFRenderer) Render(w io.Writer, r *Report) error {
 			var dr sarifDriverRule
 			dr.ID = id
 			dr.Name = id
-			dr.HelpURI = v.Rule.ExternalURL()
+			dr.HelpURI = sarifHelpURI(v.Rule.ExternalURL())
 			dr.ShortDescription.Text = strings.TrimSpace(v.Rule.Description())
 			rules = append(rules, dr)
 		}
@@ -490,6 +491,20 @@ func (SARIFRenderer) Render(w io.Writer, r *Report) error {
 		return err
 	}
 	return out.err
+}
+
+// sarifHelpURI returns raw when it is an absolute URL, as SARIF's helpUri
+// ("format": "uri") requires, and "" otherwise so the field is omitted rather
+// than invalidating the report (e.g. a placeholder externalInfoUrl="#").
+func sarifHelpURI(raw string) string {
+	if strings.ContainsAny(raw, " \t\r\n") {
+		return ""
+	}
+	u, err := url.Parse(raw)
+	if err != nil || !u.IsAbs() || u.Host == "" {
+		return ""
+	}
+	return raw
 }
 
 func sarifLevel(priority int) string {

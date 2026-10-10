@@ -99,3 +99,7 @@ go build -o messgo ./cmd/messgo
 
 Formats: `text`, `xml`, `json`, `html`, `ansi`, `github`, `gitlab`,
 `checkstyle`, `sarif`. Use `--reportfile` to write the full report to disk.
+
+Exploratory testing feedback on report content (escaping, `class` context,
+SARIF schema validity) is in
+[`exploratory-testing/2026-10-10-naming-and-report-context.md`](exploratory-testing/2026-10-10-naming-and-report-context.md).

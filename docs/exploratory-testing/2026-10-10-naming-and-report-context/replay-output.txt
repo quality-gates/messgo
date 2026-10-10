@@ -1,0 +1,23 @@
+### Bug 1: naming length rules count UTF-8 bytes, not characters
+überÄnderungsgrößen chars 19 bytes 23
+名前 chars 2 bytes 6
+ab chars 2 bytes 2
+names.go:3  LongVariable   Avoid excessively long variable names like überÄnderungsgrößen. Keep variable name length under 20.
+names.go:5  ShortVariable  Avoid variables with short names like ab. Configured minimum length is 3.
+exit=2
+
+### Bug 2: class-level naming rules leave the class field empty
+{"rule":"ShortClassName","beginLine":3,"class":""}
+{"rule":"TooManyFields","beginLine":3,"class":"Fo"}
+{"rule":"LongClassName","beginLine":5,"class":""}
+{"rule":"CamelCaseClassName","beginLine":5,"class":""}
+{"rule":"TooManyFields","beginLine":5,"class":"bad_name"}
+xml violations / with class attribute:
+5
+2
+
+### Bug 3: controversial rules emit helpUri "#" which is not a SARIF uri
+exit=2
+{"id":"CamelCaseClassName","helpUri":"#"}
+ERROR ['runs', 0, 'tool', 'driver', 'rules', 0, 'helpUri'] '#' is not a 'uri'
+errors: 1

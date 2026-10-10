@@ -1227,6 +1227,27 @@ func consume(_ int) {}
 	mustNotHave(t, hits, "ShortVariable")
 }
 
+// Name lengths count characters, not UTF-8 bytes (#256).
+func TestNamingLengthCountsCharactersNotBytes(t *testing.T) {
+	hits := analyze(t, `
+func Rechnen(überÄnderungsgrößen int) int {
+	名前 := 2
+	return 名前 + überÄnderungsgrößen
+}
+`, "naming")
+	mustNotHave(t, hits, "LongVariable")
+	mustHaveCount(t, hits, "ShortVariable", 1)
+
+	hits = analyze(t, "type 型型 struct{}\n", "naming")
+	mustHave(t, hits, "ShortClassName")
+
+	hits = analyze(t, "type T"+strings.Repeat("Ä", 39)+" struct{}\n", "naming")
+	mustNotHave(t, hits, "LongClassName")
+
+	hits = analyze(t, "type Thing struct{}\n\nfunc (Thing) 名前() {}\n", "naming")
+	mustHave(t, hits, "ShortMethodName")
+}
+
 func TestEmptyCatchBlockIgnoresEqualityNilCheck(t *testing.T) {
 	hits := analyze(t, `
 func f(pointer *int) {

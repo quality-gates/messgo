@@ -6,6 +6,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 
 ## [Unreleased]
 
+## [0.5.10] - 2026-10-11
+
 ### Fixed
 - `ShortVariable`, `LongVariable`, `ShortClassName`, `LongClassName` and
   `ShortMethodName` now measure identifier length in characters, not UTF-8

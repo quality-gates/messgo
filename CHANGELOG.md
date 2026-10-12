@@ -6,6 +6,9 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 
 ## [Unreleased]
 
+### Fixed
+- Length metrics, artifact spans, and report locations now use physical lines in the scanned file. A `//line` directive can no longer shrink ordinary LOC below effective LOC, or place a finding on a line that is not in the reported file (#264).
+
 ## [0.5.10] - 2026-10-11
 
 ### Fixed

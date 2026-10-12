@@ -17,14 +17,14 @@ func collectConstants(f *File) []Constant {
 	ast.Inspect(f.Syntax, func(n ast.Node) bool {
 		gen, ok := n.(*ast.GenDecl)
 		if ok && gen.Tok == token.CONST {
-			out = appendConstSpecs(out, gen, topLevel[gen], f.Fset)
+			out = appendConstSpecs(out, gen, topLevel[gen], f)
 		}
 		return true
 	})
 	return out
 }
 
-func appendConstSpecs(out []Constant, gen *ast.GenDecl, packageLevel bool, fset *token.FileSet) []Constant {
+func appendConstSpecs(out []Constant, gen *ast.GenDecl, packageLevel bool, file *File) []Constant {
 	for _, spec := range gen.Specs {
 		vs, ok := spec.(*ast.ValueSpec)
 		if !ok {
@@ -34,7 +34,7 @@ func appendConstSpecs(out []Constant, gen *ast.GenDecl, packageLevel bool, fset 
 			if id.Name == "_" {
 				continue
 			}
-			out = append(out, Constant{Name: id.Name, Line: fset.Position(id.Pos()).Line, PackageLevel: packageLevel})
+			out = append(out, Constant{Name: id.Name, Line: PhysicalSpan(file, id.Pos(), id.Pos()).Line, PackageLevel: packageLevel})
 		}
 	}
 	return out

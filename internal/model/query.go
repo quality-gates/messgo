@@ -78,7 +78,7 @@ func Calls(f *Function) []Call {
 }
 
 func callDetails(file *File, ce *ast.CallExpr) Call {
-	call := Call{Name: calleeName(ce.Fun), Line: file.Fset.Position(ce.Pos()).Line}
+	call := Call{Name: calleeName(ce.Fun), Line: PhysicalSpan(file, ce.Pos(), ce.Pos()).Line}
 	if selector, ok := calledSelector(ce.Fun); ok {
 		call.Selector = selector.Sel.Name
 		call.PackagePath = ImportedPackagePath(file, packageQualifier(selector.X))
@@ -144,7 +144,7 @@ func LoopConditionCalls(f *Function, names map[string]bool) []Call {
 			}
 			name := calleeName(ce.Fun)
 			if names[name] {
-				out = append(out, Call{Name: name, Line: f.File.Fset.Position(fs.Pos()).Line})
+				out = append(out, Call{Name: name, Line: PhysicalSpan(f.File, fs.Pos(), fs.Pos()).Line})
 			}
 			return true
 		})
@@ -166,7 +166,7 @@ func EmptyNilCheckBlockLines(f *Function) []int {
 			return true
 		}
 		if conditionChecksNil(ifs.Cond) {
-			lines = append(lines, f.File.Fset.Position(ifs.Pos()).Line)
+			lines = append(lines, PhysicalSpan(f.File, ifs.Pos(), ifs.Pos()).Line)
 		}
 		return true
 	})
@@ -182,7 +182,7 @@ func ElseBlockLines(f *Function) []int {
 	var lines []int
 	for _, chain := range controlflow.IfChains(f.Body) {
 		if chain.Else != nil {
-			lines = append(lines, f.File.Fset.Position(chain.ElsePos).Line)
+			lines = append(lines, PhysicalSpan(f.File, chain.ElsePos, chain.ElsePos).Line)
 		}
 	}
 	return lines
@@ -202,7 +202,7 @@ func IfAssignmentInitPositions(f *Function) []SourcePosition {
 		}
 		assign, ok := ifs.Init.(*ast.AssignStmt)
 		if ok && assign.Tok == token.ASSIGN {
-			pos := f.File.Fset.Position(assign.Pos())
+			pos := PhysicalSpan(f.File, assign.Pos(), assign.Pos())
 			positions = append(positions, SourcePosition{Line: pos.Line, Column: pos.Column})
 		}
 		return true
@@ -215,7 +215,7 @@ func DuplicateLiteralKeys(f *Function) []DuplicateLiteralKey {
 	if f == nil || f.Body == nil {
 		return nil
 	}
-	return duplicateLiteralKeys(f.Body, f.File.Fset)
+	return duplicateLiteralKeys(f.Body, f.File.physicalSpan)
 }
 
 // PackageDuplicateLiteralKeys returns duplicate constant keys in package-level
@@ -227,25 +227,25 @@ func (f *File) PackageDuplicateLiteralKeys() []DuplicateLiteralKey {
 		if !ok {
 			continue
 		}
-		out = append(out, duplicateLiteralKeys(gd, f.Fset)...)
+		out = append(out, duplicateLiteralKeys(gd, f.physicalSpan)...)
 	}
 	return out
 }
 
-func duplicateLiteralKeys(root ast.Node, fset *token.FileSet) []DuplicateLiteralKey {
+func duplicateLiteralKeys(root ast.Node, span physicalSpanFunc) []DuplicateLiteralKey {
 	var out []DuplicateLiteralKey
 	ast.Inspect(root, func(n ast.Node) bool {
 		cl, ok := n.(*ast.CompositeLit)
 		if !ok {
 			return true
 		}
-		out = append(out, duplicateKeysInLiteral(cl, fset)...)
+		out = append(out, duplicateKeysInLiteral(cl, span)...)
 		return true
 	})
 	return out
 }
 
-func duplicateKeysInLiteral(cl *ast.CompositeLit, fset *token.FileSet) []DuplicateLiteralKey {
+func duplicateKeysInLiteral(cl *ast.CompositeLit, span physicalSpanFunc) []DuplicateLiteralKey {
 	var out []DuplicateLiteralKey
 	seen := map[string]int{}
 	for _, elt := range cl.Elts {
@@ -257,7 +257,7 @@ func duplicateKeysInLiteral(cl *ast.CompositeLit, fset *token.FileSet) []Duplica
 		if !ok {
 			continue
 		}
-		line := fset.Position(kv.Key.Pos()).Line
+		line, _, _ := span(kv.Key.Pos(), kv.Key.Pos())
 		if first, dup := seen[key]; dup {
 			out = append(out, DuplicateLiteralKey{
 				Display:   displayKey(kv.Key),
@@ -289,7 +289,8 @@ func (f *File) PackageVars() []PackageVar {
 				if name.Name == "_" {
 					continue
 				}
-				out = append(out, PackageVar{Name: name.Name, Line: f.Fset.Position(name.Pos()).Line})
+				line, _, _ := f.physicalSpan(name.Pos(), name.Pos())
+				out = append(out, PackageVar{Name: name.Name, Line: line})
 			}
 		}
 	}

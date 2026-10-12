@@ -42,13 +42,12 @@ func (r *UncheckedTypeAssertion) ApplyFunc(c *rule.Context, fn *model.Function) 
 		return
 	}
 	safe := collectSafeTypeAssertions(fn.Body)
-	fset := c.File.Fset
 	ast.Inspect(fn.Body, func(n ast.Node) bool {
 		ta, ok := n.(*ast.TypeAssertExpr)
 		if !ok || ta.Type == nil || safe[ta] {
 			return true
 		}
-		line := fset.Position(ta.Pos()).Line
+		line := model.PhysicalSpan(fn.File, ta.Pos(), ta.Pos()).Line
 		c.ReportFuncAt(fn, line, line, string(fn.NodeType()), fn.Name)
 		return true
 	})
@@ -152,7 +151,7 @@ func (r *IdenticalBranches) checkBranches(c *rule.Context, fn *model.Function, b
 				continue
 			}
 			reported[j] = true
-			line := fset.Position(branches[j].pos).Line
+			line := model.PhysicalSpan(fn.File, branches[j].pos, branches[j].pos).Line
 			c.ReportFuncAt(fn, line, line, string(fn.NodeType()), fn.Name)
 		}
 	}

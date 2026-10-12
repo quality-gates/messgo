@@ -12,6 +12,7 @@ import (
 	"sync"
 
 	"github.com/quality-gates/messgo/internal/metrics"
+	"github.com/quality-gates/messgo/internal/util"
 )
 
 // NodeType identifies the kind of artifact, used for rule message rendering
@@ -272,6 +273,30 @@ func canonicalType(s string) string {
 	})
 }
 
+// SourceSpan is an inclusive location in the scanned file.
+// A line directive does not adjust Line, EndLine, or Column.
+type SourceSpan struct {
+	Line    int
+	EndLine int
+	Column  int
+}
+
+// PhysicalSpan returns the physical source span of file from start through end.
+// Reports pair the result with file.Path. A line directive does not adjust the result.
+func PhysicalSpan(file *File, start, end token.Pos) SourceSpan {
+	line, endLine, column := file.physicalSpan(start, end)
+	return SourceSpan{Line: line, EndLine: endLine, Column: column}
+}
+
+// physicalSpanFunc is File.physicalSpan, passed into scans that report lines.
+type physicalSpanFunc func(start, end token.Pos) (line, endLine, column int)
+
+func (f *File) physicalSpan(start, end token.Pos) (line, endLine, column int) {
+	startPos := util.PhysicalPosition(f.Fset, start)
+	endPos := util.PhysicalPosition(f.Fset, end)
+	return startPos.Line, endPos.Line, startPos.Column
+}
+
 // EffectiveLinesOfCode returns the number of code-bearing physical source
 // lines in the requested span. The source is indexed at most once per file.
 func (f *File) EffectiveLinesOfCode(start, end token.Pos) int {
@@ -320,8 +345,8 @@ type Function struct {
 	RecvName   string // receiver variable name, e.g. "f" in (f *Foo)
 	Params     []*Parameter
 	Results    []*Parameter
-	Line       int
-	EndLine    int
+	Line       int // physical line in File.Path
+	EndLine    int // physical end line in File.Path
 	Exported   bool
 	Decl       *ast.FuncDecl
 	Body       *ast.BlockStmt
@@ -359,8 +384,8 @@ func (f *Function) NodeType() NodeType {
 // receiver T are attached.
 type Class struct {
 	Name       string
-	Line       int
-	EndLine    int
+	Line       int // physical line in File.Path
+	EndLine    int // physical end line in File.Path
 	Exported   bool
 	Fields     []*Field
 	Methods    []*Function
@@ -377,8 +402,8 @@ func (c *Class) NodeType() NodeType { return TypeClass }
 // Interface is a named interface type (analog of a PHP interface).
 type Interface struct {
 	Name       string
-	Line       int
-	EndLine    int
+	Line       int // physical line in File.Path
+	EndLine    int // physical end line in File.Path
 	Exported   bool
 	Methods    []*Function
 	File       *File

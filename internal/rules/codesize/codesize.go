@@ -31,6 +31,8 @@ func init() {
 
 type ignoreWhitespaceOption = bool
 
+// funcLOC measures fn's physical span. Effective LOC uses that same span
+// and skips blank and comment-only lines.
 func funcLOC(fn *model.Function, ignoreWhitespace ignoreWhitespaceOption) int {
 	if fn.Decl == nil || fn.Body == nil {
 		return fn.EndLine - fn.Line + 1

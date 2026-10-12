@@ -155,19 +155,22 @@ func TestNPathArithmeticSaturatesAndPreservesNormalValues(t *testing.T) {
 
 func TestEffectiveLinesOfCodeIgnoresLineDirectives(t *testing.T) {
 	cases := []struct {
-		name string
-		src  string
-		want int
+		name      string
+		src       string
+		ordinary  int
+		effective int
 	}{
 		{
-			name: "directive before function",
-			src:  "package p\n//line generated.go:100\nfunc f() {\n\tx := 1\n}\n",
-			want: 3,
+			name:      "directive before function",
+			src:       "package p\n//line generated.go:100\nfunc f() {\n\tx := 1\n}\n",
+			ordinary:  3,
+			effective: 3,
 		},
 		{
-			name: "directive shrinks logical end",
-			src:  "package p\nfunc f() {\n\tx := 1\n\ty := 2\n//line gen.go:1\n\tz := 3\n}\n",
-			want: 5,
+			name:      "directive shrinks logical end",
+			src:       "package p\nfunc f() {\n\tx := 1\n\ty := 2\n//line gen.go:1\n\tz := 3\n}\n",
+			ordinary:  6,
+			effective: 5,
 		},
 	}
 	for _, tc := range cases {
@@ -179,8 +182,11 @@ func TestEffectiveLinesOfCodeIgnoresLineDirectives(t *testing.T) {
 				t.Fatal(err)
 			}
 			fd := f.Decls[0]
-			if got := EffectiveLinesOfCode(fset, fd.Pos(), fd.End(), src); got != tc.want {
-				t.Fatalf("EffectiveLinesOfCode = %d, want %d", got, tc.want)
+			if got := LinesOfCode(fset, fd.Pos(), fd.End()); got != tc.ordinary {
+				t.Fatalf("LinesOfCode = %d, want %d", got, tc.ordinary)
+			}
+			if got := EffectiveLinesOfCode(fset, fd.Pos(), fd.End(), src); got != tc.effective {
+				t.Fatalf("EffectiveLinesOfCode = %d, want %d", got, tc.effective)
 			}
 		})
 	}

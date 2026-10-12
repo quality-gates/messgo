@@ -8,7 +8,7 @@ import (
 // LocalVariable describes a variable declared inside a function body.
 type LocalVariable struct {
 	Name   string
-	Line   int
+	Line   int  // physical line in the scanned file
 	IsLoop bool // declared as a for-init or range loop variable
 
 	ident *ast.Ident
@@ -24,7 +24,7 @@ func Locals(f *Function) []LocalVariable {
 		return nil
 	}
 	lc := &localCollector{
-		fset: f.File.Fset,
+		file: f.File,
 		loop: collectLoopIdents(f.Body),
 		seen: map[*ast.Ident]bool{},
 	}
@@ -72,7 +72,7 @@ func bindingRead(f *Function, target *ast.Ident) bool {
 }
 
 type localCollector struct {
-	fset *token.FileSet
+	file *File
 	loop map[*ast.Ident]bool
 	seen map[*ast.Ident]bool
 	out  []LocalVariable
@@ -85,7 +85,7 @@ func (lc *localCollector) add(id *ast.Ident) {
 	lc.seen[id] = true
 	lc.out = append(lc.out, LocalVariable{
 		Name:   id.Name,
-		Line:   lc.fset.Position(id.Pos()).Line,
+		Line:   PhysicalSpan(lc.file, id.Pos(), id.Pos()).Line,
 		IsLoop: lc.loop[id],
 		ident:  id,
 	})

@@ -24,7 +24,7 @@ func writePackage(t *testing.T, files map[string]string) string {
 	return dir
 }
 
-var explicitnessDetail = regexp.MustCompile(`has an implicit (?:input|output): (.*)\. (?:Pass|Return) `)
+var explicitnessDetail = regexp.MustCompile(`has an (?:implicit (?:input|output)|unknown effect): (.*)\. (?:Pass|Return|Analyze) `)
 
 // runExplicitness runs the real CLI with a JSON report over the package and
 // returns the exit code plus one "file:line Rule func: detail" entry for each
@@ -233,6 +233,7 @@ func Pure(s string) string {
 		"a.go:29 ImplicitOutput Fail: os.Exit",
 		"a.go:34 ImplicitOutput Must: panic",
 		"a.go:40 ImplicitInput Safe: recover",
+		"a.go:40 ImplicitInput <lambda>: recover",
 	)
 }
 
@@ -305,6 +306,7 @@ func (s *server) Run(n int) {
 		"a.go:29 ImplicitInput Pipe: receive from in",
 		"a.go:42 ImplicitOutput Dump: write to w",
 		"a.go:43 ImplicitInput Dump: read from r",
+		"a.go:52 UnknownEffect server.Run: receiver excluded by policy",
 	)
 }
 
@@ -535,6 +537,7 @@ func (q queue) Load(src []int) { copy(q.items[:], src) }
 		"a.go:9 ImplicitInput Fill: package variable arr",
 		"a.go:9 ImplicitOutput Fill: package variable arr",
 		"a.go:11 ImplicitOutput Tail: write through parameter s",
+		"a.go:13 UnknownEffect queue.Load: receiver excluded by policy",
 	)
 	_, got = runExplicitness(t, "explicitness-strict", map[string]string{"a.go": src})
 	if !slices.Contains(got, "a.go:13 ImplicitOutput queue.Load: receiver field items") {
@@ -609,12 +612,19 @@ func (c *cart) clear() { c.total = 0 }
 func (c cart) Tag(i int, item string) { c.items[i] = item }
 `
 
-func TestExplicitnessAllowsReceiverByDefault(t *testing.T) {
+func TestExplicitnessKeepsReceiverUncertaintyByDefault(t *testing.T) {
 	code, got := runExplicitness(t, "explicitness", map[string]string{"a.go": cartSource})
-	if code != ExitSuccess {
-		t.Errorf("exit = %d, want %d", code, ExitSuccess)
+	if code != ExitViolation {
+		t.Errorf("exit = %d, want %d", code, ExitViolation)
 	}
-	assertFindings(t, got)
+	assertFindings(t, got,
+		"a.go:8 UnknownEffect cart.Add: receiver excluded by policy",
+		"a.go:12 UnknownEffect cart.Count: receiver excluded by policy",
+		"a.go:16 UnknownEffect cart.Reset: receiver excluded by policy",
+		"a.go:20 UnknownEffect cart.With: receiver excluded by policy",
+		"a.go:25 UnknownEffect cart.clear: receiver excluded by policy",
+		"a.go:27 UnknownEffect cart.Tag: receiver excluded by policy",
+	)
 }
 
 func TestExplicitnessStrictReportsReceiverData(t *testing.T) {
@@ -627,6 +637,7 @@ func TestExplicitnessStrictReportsReceiverData(t *testing.T) {
 		"a.go:9 ImplicitOutput cart.Add: receiver field items",
 		"a.go:13 ImplicitInput cart.Count: receiver field items",
 		"a.go:17 ImplicitInput cart.Reset: receiver c",
+		"a.go:17 ImplicitOutput cart.Reset: receiver field total",
 		"a.go:21 ImplicitInput cart.With: receiver field items",
 		"a.go:22 ImplicitInput cart.With: receiver c",
 		"a.go:25 ImplicitOutput cart.clear: receiver field total",
@@ -666,4 +677,128 @@ func write(w interface{ Write([]byte) (int, error) }) {
 	if !slices.ContainsFunc(got, receiverWrite) {
 		t.Errorf("strict findings missing receiver write: %q", got)
 	}
+}
+
+func TestExplicitnessTracksAliasesAndFreshReplacement(t *testing.T) {
+	_, got := runExplicitness(t, "explicitness", map[string]string{"a.go": `package p
+import "slices"
+func Alias(values []int) { alias := values; alias[0] = 1 }
+func Copy(values []int) []int { values = slices.Clone(values); slices.Sort(values); return values }
+func Conditional(values []int, copy bool) { if copy { values = slices.Clone(values) }; values[0] = 1 }
+`})
+	assertFindings(t, got,
+		"a.go:3 ImplicitOutput Alias: write through parameter alias",
+		"a.go:5 ImplicitOutput Conditional: write through parameter values",
+	)
+}
+
+func TestExplicitnessSeparatesAnActionClosureFromItsFactory(t *testing.T) {
+	_, got := runExplicitness(t, "explicitness", map[string]string{"a.go": `package p
+import "fmt"
+func Build() func() { return func() { fmt.Println(1) } }
+`})
+	assertFindings(t, got, "a.go:3 ImplicitOutput <lambda>: fmt.Println")
+}
+
+func TestExplicitnessPropagatesRecursiveTransitiveAndUnknownEffects(t *testing.T) {
+	_, got := runExplicitness(t, "explicitness", map[string]string{"a.go": `package p
+import "fmt"
+func Leaf(value int) { fmt.Println(value) }
+func Middle(value int) { Leaf(value) }
+func Top(value int) { Middle(value) }
+func First(value int) { Second(value) }
+func Second(value int) { fmt.Println(value); First(value) }
+func Opaque(value int, notify func(int)) { notify(value) }
+func UnknownTop(value int, notify func(int)) { Opaque(value, notify) }
+`})
+	assertFindings(t, got,
+		"a.go:3 ImplicitOutput Leaf: fmt.Println",
+		"a.go:4 ImplicitOutput Middle: fmt.Println",
+		"a.go:5 ImplicitOutput Top: fmt.Println",
+		"a.go:6 ImplicitOutput First: fmt.Println",
+		"a.go:7 ImplicitOutput Second: fmt.Println",
+		"a.go:8 UnknownEffect Opaque: unresolved call",
+		"a.go:9 UnknownEffect UnknownTop: unresolved call",
+	)
+}
+
+func TestExplicitnessKeepsLexicalCallableShadowingUnknown(t *testing.T) {
+	_, got := runExplicitness(t, "explicitness", map[string]string{"a.go": `package p
+func Helper(value int) int { return value + 1 }
+func Send(value int, Helper func(int) int) int { return Helper(value) }
+`})
+	assertFindings(t, got, "a.go:3 UnknownEffect Send: unresolved call")
+}
+
+func TestExplicitnessKeepsPrivateLocalMutationClean(t *testing.T) {
+	code, got := runExplicitness(t, "explicitness", map[string]string{"a.go": `package p
+func Change() int {
+	values := []int{1}
+	values[0] = 2
+	return values[0]
+}
+`})
+	if code != ExitSuccess {
+		t.Errorf("exit = %d, want %d", code, ExitSuccess)
+	}
+	assertFindings(t, got)
+}
+
+func TestExplicitnessTracksShallowCopiesAndReboundAliases(t *testing.T) {
+	_, got := runExplicitness(t, "explicitness", map[string]string{"a.go": `package p
+import "slices"
+func Shallow(values []*int) { next := slices.Clone(values); *next[0] = 1 }
+func Rebind(values []int) { alias := values; values = slices.Clone(values); alias[0] = 1; values[0] = 2 }
+`})
+	assertFindings(t, got,
+		"a.go:3 ImplicitOutput Shallow: write through parameter next",
+		"a.go:4 ImplicitOutput Rebind: write through parameter alias",
+	)
+}
+
+func TestExplicitnessKeepsPureCallbackFactoriesClean(t *testing.T) {
+	code, got := runExplicitness(t, "explicitness", map[string]string{"a.go": `package p
+func MakeAdder(start int) func(int) int {
+	return func(value int) int { return start + value }
+}
+`})
+	if code != ExitSuccess {
+		t.Errorf("exit = %d, want %d", code, ExitSuccess)
+	}
+	assertFindings(t, got)
+}
+
+func TestExplicitnessPropagatesInvokedFactoryCallbackEffects(t *testing.T) {
+	_, got := runExplicitness(t, "explicitness", map[string]string{"a.go": `package p
+import "fmt"
+func Build(value int) func() { return func() { fmt.Println(value) } }
+func Invoke(value int) { next := Build(value); next() }
+`})
+	assertFindings(t, got,
+		"a.go:3 ImplicitOutput <lambda>: fmt.Println",
+		"a.go:4 ImplicitOutput Invoke: fmt.Println",
+	)
+}
+
+func TestExplicitnessInstantiatesKnownCallbackArguments(t *testing.T) {
+	_, got := runExplicitness(t, "explicitness", map[string]string{"a.go": `package p
+func Apply(value int, calculate func(int) int) int { return calculate(value) }
+func Pure(value int) int { return value + 1 }
+func Wrapper(value int) int { return Apply(value, Pure) }
+`})
+	assertFindings(t, got, "a.go:2 UnknownEffect Apply: unresolved call")
+}
+
+func TestExplicitnessIgnoresEffectsInLiteralFalseBranches(t *testing.T) {
+	_, got := runExplicitness(t, "explicitness", map[string]string{"a.go": `package p
+import "fmt"
+func DeadOutput(value int) int { if false { fmt.Println(value) }; return value }
+func DeadUnknown(value int, notify func(int)) int { if false { notify(value) }; return value }
+func LiveElse(value int) { if false { return } else { fmt.Println(value) } }
+func LiveTrue(value int) { if true { fmt.Println(value) } else { notify(value) } }
+`})
+	assertFindings(t, got,
+		"a.go:5 ImplicitOutput LiveElse: fmt.Println",
+		"a.go:6 ImplicitOutput LiveTrue: fmt.Println",
+	)
 }

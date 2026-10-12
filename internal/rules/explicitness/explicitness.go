@@ -16,6 +16,7 @@ import (
 func init() {
 	rule.Register("messgo\\Rule\\ImplicitInput", newImplicitInput)
 	rule.Register("messgo\\Rule\\ImplicitOutput", newImplicitOutput)
+	rule.Register("messgo\\Rule\\UnknownEffect", newUnknownEffect)
 }
 
 // receiverProperty makes the rules also report the receiver of a method.
@@ -36,7 +37,7 @@ func (r *ImplicitInput) Configure(props rule.Properties) error {
 }
 
 func (r *ImplicitInput) ApplyFunc(c *rule.Context, fn *model.Function) {
-	report(c, fn, scan(c, fn, r.includeReceiver).inputs)
+	reportFunctions(c, fn, r.includeReceiver, true)
 }
 
 // ImplicitOutput flags data that comes out of a function by a path that is not
@@ -54,19 +55,24 @@ func (r *ImplicitOutput) Configure(props rule.Properties) error {
 }
 
 func (r *ImplicitOutput) ApplyFunc(c *rule.Context, fn *model.Function) {
-	report(c, fn, scan(c, fn, r.includeReceiver).outputs)
+	reportFunctions(c, fn, r.includeReceiver, false)
 }
 
 // effect is one implicit input or output at a source line.
 type effect struct {
-	line int
-	what string
+	line         int
+	what         string
+	binding      *ast.Object
+	deep         bool
+	callable     bool
+	callableArgs []ast.Expr
 }
 
 // result holds the implicit inputs and outputs of one function.
 type result struct {
 	inputs  []effect
 	outputs []effect
+	unknown []effect
 }
 
 // report records one violation for each different effect, at its first line.
@@ -83,17 +89,84 @@ func report(c *rule.Context, fn *model.Function, effects []effect) {
 	}
 }
 
+func reportFunctions(c *rule.Context, fn *model.Function, strict, input bool) {
+	graph := analyze(c, fn, strict)
+	for _, callable := range graph.owned(fn) {
+		effects := graph.nodes[callable].facts.outputs
+		if input {
+			effects = graph.nodes[callable].facts.inputs
+		}
+		report(c, callable, reportableEffects(graph, callable, effects, !strict))
+	}
+}
+
+func inspectExecuted(body *ast.BlockStmt, visit func(ast.Node) bool) {
+	inspectReachable(body, false, visit)
+}
+
+func inspectExecutedCallables(body *ast.BlockStmt, visit func(ast.Node) bool) {
+	inspectReachable(body, true, visit)
+}
+
+func inspectReachable(node ast.Node, callables bool, visit func(ast.Node) bool) {
+	if node == nil {
+		return
+	}
+	ast.Inspect(node, func(n ast.Node) bool {
+		switch n := n.(type) {
+		case nil:
+			return true
+		case *ast.FuncLit:
+			if callables {
+				visit(n)
+			}
+			return false
+		case *ast.IfStmt:
+			if !visit(n) {
+				return false
+			}
+			inspectReachable(n.Init, callables, visit)
+			inspectReachable(n.Cond, callables, visit)
+			switch value, known := literalBool(n.Cond); {
+			case !known:
+				inspectReachable(n.Body, callables, visit)
+				inspectReachable(n.Else, callables, visit)
+			case value:
+				inspectReachable(n.Body, callables, visit)
+			default:
+				inspectReachable(n.Else, callables, visit)
+			}
+			return false
+		}
+		return visit(n)
+	})
+}
+
+func literalBool(expr ast.Expr) (bool, bool) {
+	id, ok := ast.Unparen(expr).(*ast.Ident)
+	if !ok || id.Obj != nil {
+		return false, false
+	}
+	switch id.Name {
+	case "true":
+		return true, true
+	case "false":
+		return false, true
+	}
+	return false, false
+}
+
 // scan finds the effects of the function body. Each visitor finds a different
 // kind of effect. The write visitor runs first, because the read visitor must
 // know which identifiers are only written.
-func scan(c *rule.Context, fn *model.Function, strict bool) *result {
+func scanScope(s *scope) *result {
+	fn := s.fn
 	res := &result{}
 	if fn.Body == nil {
 		return res
 	}
-	s := newScope(c, fn, strict)
 	writes := &writeVisitor{scope: s, result: res, roots: map[*ast.Ident]bool{}}
-	ast.Inspect(fn.Body, writes.visit)
+	inspectExecuted(fn.Body, writes.visit)
 	reads := &readVisitor{
 		scope:      s,
 		result:     res,
@@ -101,8 +174,8 @@ func scan(c *rule.Context, fn *model.Function, strict bool) *result {
 		fields:     map[*ast.Ident]string{},
 		calls:      map[*ast.SelectorExpr]bool{},
 	}
-	ast.Inspect(fn.Body, reads.visit)
-	ast.Inspect(fn.Body, (&flowVisitor{scope: s, result: res}).visit)
+	inspectExecuted(fn.Body, reads.visit)
+	inspectExecuted(fn.Body, (&flowVisitor{scope: s, result: res}).visit)
 	return res
 }
 
@@ -112,6 +185,8 @@ type scope struct {
 	fn         *model.Function
 	mutated    map[string]bool
 	params     paramTypes
+	ownership  []ownershipSnapshot
+	captures   map[*ast.Object]storage
 	recv       *ast.Object
 	pointerRcv bool
 	// strict is true when the receiver is not exempt. Then a read of the
@@ -123,7 +198,7 @@ type scope struct {
 func newScope(c *rule.Context, fn *model.Function, strict bool) *scope {
 	s := &scope{
 		fn:      fn,
-		mutated: c.File.MutatedPackageGlobals(),
+		mutated: fn.File.MutatedPackageGlobals(),
 		params:  paramTypes{},
 		strict:  strict,
 	}
@@ -133,6 +208,9 @@ func newScope(c *rule.Context, fn *model.Function, strict bool) *scope {
 		}
 	}
 	s.recv, s.pointerRcv = receiverObject(fn.Decl)
+	if fn.Body != nil {
+		s.trackOwnership()
+	}
 	return s
 }
 
@@ -157,38 +235,11 @@ func (s *scope) isGlobal(id *ast.Ident) bool {
 		return false
 	}
 	pos := id.Obj.Pos()
-	return pos < s.fn.Decl.Pos() || pos >= s.fn.Decl.End()
+	return (pos < s.fn.Decl.Pos() || pos >= s.fn.Decl.End()) && s.fn.File.Syntax.Scope.Lookup(id.Name) == id.Obj
 }
 
 // paramTypes maps each named parameter to its type expression.
 type paramTypes map[*ast.Object]ast.Expr
-
-// isReference reports whether id is a parameter that refers to data of the
-// caller: a pointer, a slice, a map or a variadic parameter.
-func (p paramTypes) isReference(id *ast.Ident) bool {
-	if id.Obj == nil {
-		return false
-	}
-	switch t := p[id.Obj].(type) {
-	case *ast.StarExpr, *ast.MapType, *ast.Ellipsis:
-		return true
-	case *ast.ArrayType:
-		return t.Len == nil
-	}
-	return false
-}
-
-// canShare reports whether id is a parameter that can refer to data of the
-// caller through an element or a field. Only a fixed-size array is a full
-// copy.
-func (p paramTypes) canShare(id *ast.Ident) bool {
-	if id.Obj == nil {
-		return false
-	}
-	t, ok := p[id.Obj]
-	array, fixed := t.(*ast.ArrayType)
-	return ok && !(fixed && array.Len != nil)
-}
 
 // isChan reports whether id is a channel parameter.
 func (p paramTypes) isChan(id *ast.Ident) bool {

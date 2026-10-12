@@ -6,8 +6,20 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 
 ## [Unreleased]
 
+### Added
+- Added native explicitness effect summaries for Go. Resolved same-package
+  calls now propagate `ImplicitInput`, `ImplicitOutput`, and `UnknownEffect`
+  to a fixed point; function literals keep their own execution owner; shallow
+  copies retain shared reachable storage; and unresolved callbacks or opaque
+  calls remain unknown.
+
 ### Fixed
 - Length metrics, artifact spans, and report locations now use physical lines in the scanned file. A `//line` directive can no longer shrink ordinary LOC below effective LOC, or place a finding on a line that is not in the reported file (#264).
+- Fixed JSON reports escaping callback names such as `<lambda>`, so normalized
+  report consumers can match function metadata and descriptions directly.
+- Fixed explicitness analysis walking effects inside literal `if false` branches.
+  Dead standard-library actions and unresolved callback calls no longer make a
+  function look impure.
 
 ## [0.5.10] - 2026-10-11
 

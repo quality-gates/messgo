@@ -24,11 +24,6 @@ func (w *writeVisitor) visit(n ast.Node) bool {
 		w.visitAssign(n)
 	case *ast.IncDecStmt:
 		w.write(n.X, false, false)
-	case *ast.UnaryExpr:
-		// &x is a write, because the pointer lets other code change x.
-		if n.Op == token.AND {
-			w.write(n.X, true, false)
-		}
 	case *ast.RangeStmt:
 		w.visitRange(n)
 	case *ast.CallExpr:
@@ -86,7 +81,19 @@ func (w *writeVisitor) write(target ast.Expr, only, shared bool) {
 		w.roots[id] = true
 	}
 	if what := w.describe(target, id, shared || reachesShared(target)); what != "" {
-		w.outputs = append(w.outputs, w.effect(id, what))
+		e := w.effect(id, what)
+		e.deep = deepWrite(target)
+		fact := w.storageAt(target.Pos())[id.Obj]
+		if len(fact.origins) == 0 {
+			if w.captured(id) {
+				e.binding = id.Obj
+			}
+			w.outputs = append(w.outputs, e)
+		}
+		for origin := range fact.origins {
+			e.binding = origin
+			w.outputs = append(w.outputs, e)
+		}
 	}
 }
 
@@ -95,15 +102,43 @@ func (w *writeVisitor) write(target ast.Expr, only, shared bool) {
 // a copy of the root still refers to the data that it changes.
 func (w *writeVisitor) describe(target ast.Expr, id *ast.Ident, shared bool) string {
 	direct := target == ast.Expr(id)
+	fact := w.storageAt(target.Pos())[id.Obj]
 	switch {
 	case w.isGlobal(id):
 		return "package variable " + id.Name
-	case w.params.isReference(id) && !direct, shared && w.params.canShare(id):
-		return "write through parameter " + id.Name
 	case w.strict && w.isReceiver(id) && w.receiverWrite(direct, shared):
 		return receiverPart(id, receiverField(target, id))
+	case sharedWrite(w.scope, target, direct, shared, fact):
+		return "write through parameter " + id.Name
+	case direct && w.captured(id):
+		return "captured variable " + id.Name
 	}
 	return ""
+}
+
+func (s *scope) captured(id *ast.Ident) bool {
+	if id.Name == "_" || id.Obj == nil || id.Obj.Kind != ast.Var {
+		return false
+	}
+	pos := id.Obj.Pos()
+	owned := pos >= s.fn.Decl.Type.Pos() && pos < s.fn.Body.End()
+	return !owned && s.external(id) && !s.isReceiver(id) && !s.isGlobal(id)
+}
+
+func sharedWrite(s *scope, target ast.Expr, direct, shared bool, fact storage) bool {
+	return !direct && fact.outer || deepWrite(target) && fact.reachable || shared && storageOf(s, target, s.storageAt(target.Pos())).outer
+}
+
+func deepWrite(target ast.Expr) bool {
+	depth := 0
+	ast.Inspect(target, func(node ast.Node) bool {
+		switch node.(type) {
+		case *ast.IndexExpr, *ast.StarExpr, *ast.SelectorExpr:
+			depth++
+		}
+		return true
+	})
+	return depth > 1
 }
 
 // receiverWrite reports whether a write to the receiver changes data of the
@@ -241,7 +276,33 @@ func (r *readVisitor) read(id *ast.Ident) {
 		r.inputs = append(r.inputs, r.effect(id, "package variable "+id.Name))
 	case r.strict && r.isReceiver(id):
 		r.inputs = append(r.inputs, r.effect(id, receiverPart(id, r.fields[id])))
+	case r.captured(id) && objectMutated(r.fn.File.Syntax, id.Obj):
+		e := r.effect(id, "captured variable "+id.Name)
+		e.binding = id.Obj
+		r.inputs = append(r.inputs, e)
 	}
+}
+
+func objectMutated(tree ast.Node, object *ast.Object) bool {
+	mutated := false
+	ast.Inspect(tree, func(node ast.Node) bool {
+		var targets []ast.Expr
+		switch statement := node.(type) {
+		case *ast.AssignStmt:
+			if statement.Tok != token.DEFINE {
+				targets = statement.Lhs
+			}
+		case *ast.IncDecStmt:
+			targets = []ast.Expr{statement.X}
+		}
+		for _, target := range targets {
+			if id := util.RootIdent(target); id != nil && id.Obj == object {
+				mutated = true
+			}
+		}
+		return true
+	})
+	return mutated
 }
 
 // flowVisitor finds data that goes through channels, streams, panics and the
@@ -301,6 +362,8 @@ func (f *flowVisitor) visitBuiltin(fun *ast.Ident, call *ast.CallExpr) {
 		f.outputs = append(f.outputs, f.effect(call, "panic"))
 	case fun.Name == "recover":
 		f.inputs = append(f.inputs, f.effect(call, "recover"))
+	case fun.Name == "print" || fun.Name == "println":
+		f.outputs = append(f.outputs, f.effect(call, fun.Name))
 	}
 }
 
@@ -325,6 +388,10 @@ func (f *flowVisitor) flow(list *[]effect, e ast.Expr, prefix string) {
 	}
 	id := util.RootIdent(e)
 	if id != nil && f.external(id) {
+		if f.isReceiver(id) {
+			*list = append(*list, f.effect(e, receiverPart(id, "")))
+			return
+		}
 		*list = append(*list, f.effect(e, prefix+id.Name))
 	}
 }

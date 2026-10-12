@@ -228,7 +228,7 @@ func (JSONRenderer) Render(w io.Writer, r *Report) error {
 		rep.Errors = append(rep.Errors, jsonError{FileName: e.File, Message: e.Message})
 	}
 	enc := json.NewEncoder(out)
-	enc.SetEscapeHTML(true)
+	enc.SetEscapeHTML(false)
 	enc.SetIndent("", "    ")
 	if err := enc.Encode(rep); err != nil {
 		return err

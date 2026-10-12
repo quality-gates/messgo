@@ -142,7 +142,7 @@ func TestOpinionatedRulesNotInDefaultGo(t *testing.T) {
 }
 
 func TestExplicitnessRulesetsAreOptIn(t *testing.T) {
-	names := []string{"ImplicitInput", "ImplicitOutput"}
+	names := []string{"ImplicitInput", "ImplicitOutput", "UnknownEffect"}
 	goSet := loadOne(t, "go")
 	for _, name := range names {
 		if ruleByName(goSet, name) != nil {

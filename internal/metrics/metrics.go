@@ -9,6 +9,7 @@ import (
 	"slices"
 
 	"github.com/quality-gates/messgo/internal/model/controlflow"
+	"github.com/quality-gates/messgo/internal/util"
 )
 
 func ccnIncrement(n ast.Node) int {
@@ -674,9 +675,16 @@ func expressionComplexity(e ast.Expr) int {
 }
 
 // LinesOfCode returns the number of source lines spanned by a node, inclusive
-// of the start and end lines — PHPMD's `loc` metric.
+// of the start and end lines — PHPMD's `loc` metric. The count uses physical
+// lines in the scanned file, so a //line directive cannot change it.
 func LinesOfCode(fset *token.FileSet, start, end token.Pos) int {
-	return fset.Position(end).Line - fset.Position(start).Line + 1
+	return physicalLine(fset, end) - physicalLine(fset, start) + 1
+}
+
+// physicalLine returns the scanned-file line of p. Line directives do not
+// adjust the result.
+func physicalLine(fset *token.FileSet, p token.Pos) int {
+	return util.PhysicalPosition(fset, p).Line
 }
 
 // EffectiveLinesOfCode counts only lines that carry code within the span,
@@ -713,9 +721,9 @@ func (index *EffectiveLOCIndex) LinesOfCode(fset *token.FileSet, start, end toke
 	if index == nil {
 		return 0
 	}
-	first := max(fset.PositionFor(start, false).Line, 1)
+	first := max(physicalLine(fset, start), 1)
 	lineCount := len(index.prefix) - 1
-	last := min(fset.PositionFor(end, false).Line, lineCount)
+	last := min(physicalLine(fset, end), lineCount)
 	if last < first {
 		return 0
 	}

@@ -51,7 +51,7 @@ type fileBuilder struct {
 	aliases map[string]string
 }
 
-func (b *fileBuilder) line(p token.Pos) int { return b.f.Fset.Position(p).Line }
+func (b *fileBuilder) line(p token.Pos) int { return PhysicalSpan(b.f, p, p).Line }
 
 func (b *fileBuilder) build() {
 	b.aliases = util.TypeAliasNames([]*ast.File{b.f.Syntax})

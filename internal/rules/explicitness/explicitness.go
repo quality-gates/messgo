@@ -231,7 +231,7 @@ func (s *scope) qualified(sel *ast.SelectorExpr) string {
 }
 
 func (s *scope) effect(n ast.Node, what string) effect {
-	return effect{line: s.fn.File.Fset.Position(n.Pos()).Line, what: what}
+	return effect{line: model.PhysicalSpan(s.fn.File, n.Pos(), n.Pos()).Line, what: what}
 }
 
 // receiverPart describes the receiver, or the receiver field if field is not

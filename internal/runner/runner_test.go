@@ -103,6 +103,39 @@ func MakeRecord() record { return record{n: 1} }
 	}
 }
 
+func TestExplicitnessTracksSharedStorageAcrossFiles(t *testing.T) {
+	dir := t.TempDir()
+	files := map[string]string{
+		"state.go":  "package p\n\nvar values = []int{1}\nvar fixed = []int{1}\n",
+		"writer.go": "package p\n\nfunc Change() { values[0] = 2 }\n",
+		"reader.go": "package p\n\nfunc Read() int { return values[0] }\nfunc Quiet() int { return fixed[0] }\n",
+	}
+	for name, source := range files {
+		if err := os.WriteFile(filepath.Join(dir, name), []byte(source), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	sets, err := (&ruleset.Loader{}).Load("explicitness")
+	if err != nil {
+		t.Fatal(err)
+	}
+	rep, err := Run(Options{Paths: []string{dir}, RuleSets: sets})
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := map[string][]string{}
+	for _, violation := range rep.Violations {
+		if violation.BeginLine != 3 {
+			t.Fatalf("effect location = %s:%d, want operation line 3", violation.File, violation.BeginLine)
+		}
+		got[violation.Function] = append(got[violation.Function], violation.Rule.Name())
+	}
+	want := map[string][]string{"Read": {"ImplicitInput"}, "Change": {"ImplicitOutput"}}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("effects = %v, want %v", got, want)
+	}
+}
+
 func TestImplicitInputReadsCrossFileGenericAndAliasedMapLiteralKeys(t *testing.T) {
 	dir := t.TempDir()
 	files := map[string]string{

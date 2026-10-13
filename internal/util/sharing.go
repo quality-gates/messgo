@@ -294,6 +294,9 @@ func (r *globalTypeResolver) fieldType(container ast.Expr, name string, seen map
 		return nil
 	}
 	for _, field := range structure.Fields.List {
+		if len(field.Names) == 0 && embeddedFieldName(field.Type) == name {
+			return field.Type
+		}
 		for _, candidate := range field.Names {
 			if candidate.Name == name {
 				return field.Type
@@ -301,6 +304,20 @@ func (r *globalTypeResolver) fieldType(container ast.Expr, name string, seen map
 		}
 	}
 	return nil
+}
+
+func embeddedFieldName(typ ast.Expr) string {
+	typ = ast.Unparen(typ)
+	if pointer, ok := typ.(*ast.StarExpr); ok {
+		typ = ast.Unparen(pointer.X)
+	}
+	switch value := typ.(type) {
+	case *ast.Ident:
+		return value.Name
+	case *ast.SelectorExpr:
+		return value.Sel.Name
+	}
+	return ""
 }
 
 func (r *globalTypeResolver) typeShape(typ ast.Expr) ast.Expr {

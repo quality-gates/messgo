@@ -141,6 +141,26 @@ func Copy() {
 	}
 }
 
+func TestExplicitnessInfersEmbeddedPackageValueSelection(t *testing.T) {
+	_, got := runExplicitness(t, "explicitness", map[string]string{
+		"embedded.go": `package p
+type Holder struct { Count int; Items []int }
+type Outer struct { Holder }
+var outer = Outer{Holder: Holder{Items: []int{1}}}
+var shared = outer.Holder
+func Copy() {
+ value := shared
+ value.Count++
+ value.Items[0]++
+}
+`,
+	})
+	assertFindings(t, got,
+		"embedded.go:7 ImplicitInput Copy: package variable shared",
+		"embedded.go:9 ImplicitOutput Copy: write through parameter value",
+	)
+}
+
 func TestExplicitnessKeepsCopiedStructScalarsPrivateAndSliceFieldsShared(t *testing.T) {
 	_, got := runExplicitness(t, "explicitness", map[string]string{
 		"state.go": `package p

@@ -191,6 +191,13 @@ func valueStorage(s *scope, expression ast.Expr, current state) storage {
 
 func identStorage(s *scope, id *ast.Ident, current state) storage {
 	if s.isGlobal(id) {
+		sharing, known := s.fn.File.PackageGlobalSharings[id.Name]
+		if !known && s.fn.File.PackageGlobalSharings == nil {
+			sharing, known = util.GlobalSharings([]*ast.File{s.fn.File.Syntax}, s.fn.File.PackageTypeDefs)[id.Name]
+		}
+		if known {
+			return storage{outer: sharing.Outer, reachable: sharing.Reachable, ambient: true}
+		}
 		return ambientStorage
 	}
 	if id.Obj == nil || id.Obj.Kind != ast.Var {

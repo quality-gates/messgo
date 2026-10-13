@@ -101,7 +101,7 @@ func namedSharing(id *ast.Ident, seen map[ast.Expr]bool, definitions map[string]
 // a result, where code can change it.
 func SharedGlobalNames(files []*ast.File, definitions map[string]ast.Expr) map[string]bool {
 	out := MutatedGlobalNames(files)
-	globals := globalSharings(files, definitions)
+	globals := GlobalSharings(files, definitions)
 	for name := range globals {
 		if ast.IsExported(name) {
 			out[name] = true
@@ -121,8 +121,28 @@ func SharedGlobalNames(files []*ast.File, definitions map[string]ast.Expr) map[s
 	return out
 }
 
-func globalSharings(files []*ast.File, definitions map[string]ast.Expr) map[string]Sharing {
-	out := map[string]Sharing{}
+// GlobalSharings describes the value semantics of package variables. A
+// struct can have private outer storage while still holding shared fields.
+func GlobalSharings(files []*ast.File, definitions map[string]ast.Expr) map[string]Sharing {
+	resolver := globalSharingResolver{
+		definitions:  definitions,
+		results:      packageFunctionResults(files),
+		declarations: globalDeclarations(files),
+		resolved:     map[string]Sharing{},
+	}
+	for name := range resolver.declarations {
+		resolver.resolve(name, map[string]bool{})
+	}
+	return resolver.resolved
+}
+
+type globalDeclaration struct {
+	spec  *ast.ValueSpec
+	index int
+}
+
+func globalDeclarations(files []*ast.File) map[string]globalDeclaration {
+	declarations := map[string]globalDeclaration{}
 	for _, f := range files {
 		for _, decl := range f.Decls {
 			gen, ok := decl.(*ast.GenDecl)
@@ -132,28 +152,93 @@ func globalSharings(files []*ast.File, definitions map[string]ast.Expr) map[stri
 			for _, spec := range gen.Specs {
 				value := spec.(*ast.ValueSpec)
 				for i, name := range value.Names {
-					out[name.Name] = specSharing(value, i, definitions)
+					declarations[name.Name] = globalDeclaration{value, i}
 				}
 			}
 		}
 	}
-	return out
+	return declarations
 }
 
-func specSharing(spec *ast.ValueSpec, index int, definitions map[string]ast.Expr) Sharing {
+type globalSharingResolver struct {
+	definitions  map[string]ast.Expr
+	results      map[string]ast.Expr
+	declarations map[string]globalDeclaration
+	resolved     map[string]Sharing
+}
+
+func (r *globalSharingResolver) resolve(name string, seen map[string]bool) Sharing {
+	if result, known := r.resolved[name]; known {
+		return result
+	}
+	decl, known := r.declarations[name]
+	if !known || seen[name] {
+		return shared
+	}
+	seen[name] = true
+	result := specSharing(decl.spec, decl.index, r.definitions, r.results, func(alias string) Sharing {
+		return r.resolve(alias, seen)
+	})
+	delete(seen, name)
+	r.resolved[name] = result
+	return result
+}
+
+func packageFunctionResults(files []*ast.File) map[string]ast.Expr {
+	results := map[string]ast.Expr{}
+	for _, file := range files {
+		for _, decl := range file.Decls {
+			fn, ok := decl.(*ast.FuncDecl)
+			if !ok || fn.Recv != nil || fn.Type.Results == nil || len(fn.Type.Results.List) != 1 {
+				continue
+			}
+			field := fn.Type.Results.List[0]
+			if len(field.Names) <= 1 {
+				results[fn.Name.Name] = field.Type
+			}
+		}
+	}
+	return results
+}
+
+func specSharing(spec *ast.ValueSpec, index int, definitions map[string]ast.Expr, results map[string]ast.Expr, alias func(string) Sharing) Sharing {
 	if spec.Type != nil {
 		return TypeSharing(spec.Type, definitions)
 	}
 	if len(spec.Values) != len(spec.Names) {
 		return shared
 	}
-	switch value := ast.Unparen(spec.Values[index]).(type) {
+	return expressionSharing(spec.Values[index], definitions, results, alias)
+}
+
+func expressionSharing(expression ast.Expr, definitions map[string]ast.Expr, results map[string]ast.Expr, alias func(string) Sharing) Sharing {
+	switch value := ast.Unparen(expression).(type) {
 	case *ast.CompositeLit:
 		if value.Type != nil {
 			return TypeSharing(value.Type, definitions)
 		}
 	case *ast.BasicLit:
 		return Sharing{}
+	case *ast.Ident:
+		return identifierSharing(value, alias)
+	case *ast.CallExpr:
+		return callResultSharing(value, definitions, results)
+	}
+	return shared
+}
+
+func identifierSharing(value *ast.Ident, alias func(string) Sharing) Sharing {
+	if value.Name == "true" || value.Name == "false" || value.Name == "nil" {
+		return Sharing{}
+	}
+	return alias(value.Name)
+}
+
+func callResultSharing(call *ast.CallExpr, definitions map[string]ast.Expr, results map[string]ast.Expr) Sharing {
+	if fun, ok := ast.Unparen(call.Fun).(*ast.Ident); ok {
+		if typ := results[fun.Name]; typ != nil {
+			return TypeSharing(typ, definitions)
+		}
 	}
 	return shared
 }

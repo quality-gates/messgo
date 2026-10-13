@@ -17,6 +17,10 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
   separate `<lambda>` owners.
 
 ### Fixed
+- Fixed explicitness ownership for value copies of package structs, including
+  constructor-initialized values and package aliases. Scalar fields of a copy
+  stay private, while slice and other reference-bearing fields retain shared
+  storage and report writes at the actual mutation line.
 - Length metrics, artifact spans, and report locations now use physical lines in the scanned file. A `//line` directive can no longer shrink ordinary LOC below effective LOC, or place a finding on a line that is not in the reported file (#264).
 - Fixed JSON reports escaping callback names such as `<lambda>`, so normalized
   report consumers can match function metadata and descriptions directly.

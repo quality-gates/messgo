@@ -2,6 +2,77 @@ package cli
 
 import "testing"
 
+func TestExplicitnessKeepsCopiedStructScalarsPrivateAndSliceFieldsShared(t *testing.T) {
+	_, got := runExplicitness(t, "explicitness", map[string]string{
+		"state.go": `package p
+type Holder struct { Count int; Items []int }
+var shared = Holder{Items: []int{1}}
+func Get() Holder { return shared }
+`,
+		"use.go": `package p
+func Direct() {
+ copy := shared
+ copy.Count++
+ copy.Items[0]++
+}
+func ViaGetter() {
+ copy := Get()
+ copy.Count++
+ copy.Items[0]++
+}
+`,
+	})
+	assertFindings(t, got,
+		"state.go:4 ImplicitInput Get: package variable shared",
+		"use.go:3 ImplicitInput Direct: package variable shared",
+		"use.go:5 ImplicitOutput Direct: write through parameter copy",
+		"use.go:8 ImplicitInput ViaGetter: package variable shared",
+		"use.go:10 ImplicitOutput ViaGetter: write through parameter copy",
+	)
+}
+
+func TestExplicitnessKeepsCopiedConstructorGlobalScalarsPrivate(t *testing.T) {
+	_, got := runExplicitness(t, "explicitness", map[string]string{
+		"state.go": `package p
+type Holder struct { Count int; Items []int }
+func Build() Holder { return Holder{Items: []int{1}} }
+var shared = Build()
+`,
+		"use.go": `package p
+func Copy() {
+ value := shared
+ value.Count++
+ value.Items[0]++
+}
+`,
+	})
+	assertFindings(t, got,
+		"use.go:3 ImplicitInput Copy: package variable shared",
+		"use.go:5 ImplicitOutput Copy: write through parameter value",
+	)
+}
+
+func TestExplicitnessKeepsCopiedPackageAliasScalarsPrivate(t *testing.T) {
+	_, got := runExplicitness(t, "explicitness", map[string]string{
+		"state.go": `package p
+type Holder struct { Count int; Items []int }
+var shared = Holder{Items: []int{1}}
+var alias = shared
+`,
+		"use.go": `package p
+func Copy() {
+ value := alias
+ value.Count++
+ value.Items[0]++
+}
+`,
+	})
+	assertFindings(t, got,
+		"use.go:3 ImplicitInput Copy: package variable alias",
+		"use.go:5 ImplicitOutput Copy: write through parameter value",
+	)
+}
+
 func TestExplicitnessSharesLateStorageAcrossExistingAliases(t *testing.T) {
 	tests := []struct {
 		name, source, finding string

@@ -136,6 +136,44 @@ func TestExplicitnessTracksSharedStorageAcrossFiles(t *testing.T) {
 	}
 }
 
+func TestExplicitnessKeepsCopiedCrossFileStructFieldPrivate(t *testing.T) {
+	dir := t.TempDir()
+	files := map[string]string{
+		"state.go": `package p
+type Holder struct { Count int; Items []int }
+var shared = Holder{Items: []int{1}}
+`,
+		"use.go": `package p
+func Copy() {
+ value := shared
+ value.Count++
+ value.Items[0]++
+}
+`,
+	}
+	for name, source := range files {
+		if err := os.WriteFile(filepath.Join(dir, name), []byte(source), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	sets, err := (&ruleset.Loader{}).Load("explicitness")
+	if err != nil {
+		t.Fatal(err)
+	}
+	rep, err := Run(Options{Paths: []string{dir}, RuleSets: sets})
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := map[string]int{}
+	for _, violation := range rep.Violations {
+		got[violation.Rule.Name()] = violation.BeginLine
+	}
+	want := map[string]int{"ImplicitInput": 3, "ImplicitOutput": 5}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("Copy effects = %v, want %v", got, want)
+	}
+}
+
 func TestImplicitInputReadsCrossFileGenericAndAliasedMapLiteralKeys(t *testing.T) {
 	dir := t.TempDir()
 	files := map[string]string{

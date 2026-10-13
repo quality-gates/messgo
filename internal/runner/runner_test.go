@@ -174,6 +174,55 @@ func Copy() {
 	}
 }
 
+func TestExplicitnessTracksCopiedArrayAndSliceFieldsAcrossFiles(t *testing.T) {
+	dir := t.TempDir()
+	files := map[string]string{
+		"state.go": `package p
+type Holder struct { Counts [2]int; Items []int }
+var original = &Holder{Items: []int{1}}
+var shared = *original
+`,
+		"use.go": `package p
+func Parameter(h Holder) {
+ h.Counts[0]++
+ h.Items[0]++
+}
+func Copy() {
+ value := shared
+ value.Counts[0]++
+ value.Items[0]++
+}
+`,
+	}
+	for name, source := range files {
+		if err := os.WriteFile(filepath.Join(dir, name), []byte(source), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	sets, err := (&ruleset.Loader{}).Load("explicitness")
+	if err != nil {
+		t.Fatal(err)
+	}
+	rep, err := Run(Options{Paths: []string{dir}, RuleSets: sets})
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := map[string]map[string]int{}
+	for _, violation := range rep.Violations {
+		if got[violation.Function] == nil {
+			got[violation.Function] = map[string]int{}
+		}
+		got[violation.Function][violation.Rule.Name()] = violation.BeginLine
+	}
+	want := map[string]map[string]int{
+		"Parameter": {"ImplicitOutput": 4},
+		"Copy":      {"ImplicitInput": 7, "ImplicitOutput": 9},
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("effects = %v, want %v", got, want)
+	}
+}
+
 func TestImplicitInputReadsCrossFileGenericAndAliasedMapLiteralKeys(t *testing.T) {
 	dir := t.TempDir()
 	files := map[string]string{

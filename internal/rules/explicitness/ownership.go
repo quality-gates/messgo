@@ -192,11 +192,13 @@ func valueStorage(s *scope, expression ast.Expr, current state) storage {
 func identStorage(s *scope, id *ast.Ident, current state) storage {
 	if s.isGlobal(id) {
 		sharing, known := s.fn.File.PackageGlobalSharings[id.Name]
+		typ := s.fn.File.PackageGlobalTypes[id.Name]
 		if !known && s.fn.File.PackageGlobalSharings == nil {
 			sharing, known = util.GlobalSharings([]*ast.File{s.fn.File.Syntax}, s.fn.File.PackageTypeDefs)[id.Name]
+			typ = util.GlobalValueTypes([]*ast.File{s.fn.File.Syntax})[id.Name]
 		}
 		if known {
-			return storage{outer: sharing.Outer, reachable: sharing.Reachable, ambient: true}
+			return storage{typ: typ, outer: sharing.Outer, reachable: sharing.Reachable, ambient: true}
 		}
 		return ambientStorage
 	}
@@ -228,11 +230,52 @@ func selectedStorage(s *scope, expression ast.Expr, current state) storage {
 		if s.qualified(value) != "" {
 			return ambientStorage
 		}
-		return selectedCell(valueStorage(s, value.X, current), "."+value.Sel.Name, current, false)
+		parent := valueStorage(s, value.X, current)
+		return typedSelection(s, parent, "."+value.Sel.Name, current, false)
 	case *ast.IndexExpr:
-		return selectedCell(valueStorage(s, value.X, current), indexCell(value.Index), current, true)
+		parent := valueStorage(s, value.X, current)
+		return typedSelection(s, parent, indexCell(value.Index), current, true)
 	}
 	return ambientStorage
+}
+
+func typedSelection(s *scope, parent storage, key string, current state, index bool) storage {
+	selected := selectedCell(parent, key, current, index)
+	if _, known := readCell(cellsOf(parent, current), key); known {
+		return selected
+	}
+	typ := selectedType(s, parent.typ, key, index)
+	if typ == nil {
+		return selected
+	}
+	selected.typ = typ
+	if !parent.outer {
+		sharing := typeStorage(typ, s.fn.File.PackageTypeDefs)
+		selected.outer, selected.reachable = sharing.outer, sharing.reachable
+	}
+	return selected
+}
+
+func selectedType(s *scope, typ ast.Expr, key string, index bool) ast.Expr {
+	resolved := resolvedType(s, typ)
+	if index {
+		if array, ok := resolved.(*ast.ArrayType); ok && array.Len != nil {
+			return array.Elt
+		}
+		return nil
+	}
+	structure, ok := resolved.(*ast.StructType)
+	if !ok {
+		return nil
+	}
+	for _, field := range structure.Fields.List {
+		for _, name := range field.Names {
+			if key == "."+name.Name {
+				return field.Type
+			}
+		}
+	}
+	return nil
 }
 
 func compositeStorage(s *scope, value *ast.CompositeLit, current state) storage {

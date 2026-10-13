@@ -17,6 +17,10 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
   separate `<lambda>` owners.
 
 ### Fixed
+- Fixed value-parameter and copied package-struct ownership for array fields.
+  Array elements remain private after a value copy, while slice-backed fields
+  retain shared writes. Package initializers that dereference a typed pointer
+  preserve the resulting struct's value semantics.
 - Fixed explicitness ownership for value copies of package structs, including
   constructor-initialized values and package aliases. Scalar fields of a copy
   stay private, while slice and other reference-bearing fields retain shared

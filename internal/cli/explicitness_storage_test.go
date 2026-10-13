@@ -2,6 +2,70 @@ package cli
 
 import "testing"
 
+func TestExplicitnessDistinguishesArrayAndSliceFieldsOfValueParameter(t *testing.T) {
+	_, got := runExplicitness(t, "explicitness", map[string]string{"a.go": `package p
+type Holder struct { Counts [2]int; Items []int }
+func Scalar(h Holder) {
+ h.Counts[0]++
+}
+func Shared(h Holder) {
+ h.Items[0]++
+}
+`})
+	assertFindings(t, got, "a.go:7 ImplicitOutput Shared: write through parameter h")
+}
+
+func TestExplicitnessDistinguishesNestedArrayAndSliceStructElements(t *testing.T) {
+	_, got := runExplicitness(t, "explicitness", map[string]string{"a.go": `package p
+type Inner struct { Count int; Items []int }
+type Holder struct { Boxes [2]Inner; Rows []Inner }
+func Scalar(h Holder) {
+ h.Boxes[0].Count++
+}
+func SharedArrayMember(h Holder) {
+ h.Boxes[0].Items[0]++
+}
+func SharedSliceElement(h Holder) {
+ h.Rows[0].Count++
+}
+`})
+	assertFindings(t, got,
+		"a.go:8 ImplicitOutput SharedArrayMember: write through parameter h",
+		"a.go:11 ImplicitOutput SharedSliceElement: write through parameter h",
+	)
+}
+
+func TestExplicitnessCopiesDereferencedPackageStructWithoutSharingScalars(t *testing.T) {
+	_, got := runExplicitness(t, "explicitness", map[string]string{
+		"state.go": `package p
+type Holder struct { Count int; Counts [2]int; Items []int }
+var original = &Holder{Items: []int{1}}
+var shared = *original
+var literal = *(&Holder{Items: []int{1}})
+`,
+		"use.go": `package p
+func FromName() {
+ value := shared
+ value.Count++
+ value.Counts[0]++
+ value.Items[0]++
+}
+func FromLiteral() {
+ value := literal
+ value.Count++
+ value.Counts[0]++
+ value.Items[0]++
+}
+`,
+	})
+	assertFindings(t, got,
+		"use.go:3 ImplicitInput FromName: package variable shared",
+		"use.go:6 ImplicitOutput FromName: write through parameter value",
+		"use.go:9 ImplicitInput FromLiteral: package variable literal",
+		"use.go:12 ImplicitOutput FromLiteral: write through parameter value",
+	)
+}
+
 func TestExplicitnessKeepsCopiedStructScalarsPrivateAndSliceFieldsShared(t *testing.T) {
 	_, got := runExplicitness(t, "explicitness", map[string]string{
 		"state.go": `package p

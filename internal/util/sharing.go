@@ -128,6 +128,7 @@ func GlobalSharings(files []*ast.File, definitions map[string]ast.Expr) map[stri
 		definitions:  definitions,
 		results:      packageFunctionResults(files),
 		declarations: globalDeclarations(files),
+		types:        GlobalValueTypes(files),
 		resolved:     map[string]Sharing{},
 	}
 	for name := range resolver.declarations {
@@ -164,6 +165,7 @@ type globalSharingResolver struct {
 	definitions  map[string]ast.Expr
 	results      map[string]ast.Expr
 	declarations map[string]globalDeclaration
+	types        map[string]ast.Expr
 	resolved     map[string]Sharing
 }
 
@@ -176,12 +178,90 @@ func (r *globalSharingResolver) resolve(name string, seen map[string]bool) Shari
 		return shared
 	}
 	seen[name] = true
-	result := specSharing(decl.spec, decl.index, r.definitions, r.results, func(alias string) Sharing {
-		return r.resolve(alias, seen)
-	})
+	var result Sharing
+	if typ := r.types[name]; typ != nil {
+		result = TypeSharing(typ, r.definitions)
+	} else {
+		result = specSharing(decl.spec, decl.index, r.definitions, r.results, func(alias string) Sharing {
+			return r.resolve(alias, seen)
+		})
+	}
 	delete(seen, name)
 	r.resolved[name] = result
 	return result
+}
+
+// GlobalValueTypes follows declarations whose value type is known from
+// syntax, including aliases and dereferences of package pointers.
+func GlobalValueTypes(files []*ast.File) map[string]ast.Expr {
+	resolver := globalTypeResolver{
+		declarations: globalDeclarations(files),
+		results:      packageFunctionResults(files),
+		resolved:     map[string]ast.Expr{},
+	}
+	for name := range resolver.declarations {
+		resolver.resolve(name, map[string]bool{})
+	}
+	return resolver.resolved
+}
+
+type globalTypeResolver struct {
+	declarations map[string]globalDeclaration
+	results      map[string]ast.Expr
+	resolved     map[string]ast.Expr
+}
+
+func (r *globalTypeResolver) resolve(name string, seen map[string]bool) ast.Expr {
+	if typ := r.resolved[name]; typ != nil {
+		return typ
+	}
+	decl, known := r.declarations[name]
+	if !known || seen[name] {
+		return nil
+	}
+	seen[name] = true
+	typ := decl.spec.Type
+	if typ == nil && len(decl.spec.Values) == len(decl.spec.Names) {
+		typ = r.expressionType(decl.spec.Values[decl.index], seen)
+	}
+	delete(seen, name)
+	if typ != nil {
+		r.resolved[name] = typ
+	}
+	return typ
+}
+
+func (r *globalTypeResolver) expressionType(expression ast.Expr, seen map[string]bool) ast.Expr {
+	switch value := ast.Unparen(expression).(type) {
+	case *ast.CompositeLit:
+		return value.Type
+	case *ast.Ident:
+		return r.resolve(value.Name, seen)
+	case *ast.UnaryExpr:
+		if value.Op == token.AND {
+			if typ := r.expressionType(value.X, seen); typ != nil {
+				return &ast.StarExpr{X: typ}
+			}
+		}
+	case *ast.StarExpr:
+		if pointer, ok := r.expressionType(value.X, seen).(*ast.StarExpr); ok {
+			return pointer.X
+		}
+	case *ast.CallExpr:
+		return r.callType(value)
+	}
+	return nil
+}
+
+func (r *globalTypeResolver) callType(value *ast.CallExpr) ast.Expr {
+	name, ok := ast.Unparen(value.Fun).(*ast.Ident)
+	if !ok {
+		return nil
+	}
+	if name.Name == "new" && len(value.Args) == 1 {
+		return &ast.StarExpr{X: value.Args[0]}
+	}
+	return r.results[name.Name]
 }
 
 func packageFunctionResults(files []*ast.File) map[string]ast.Expr {

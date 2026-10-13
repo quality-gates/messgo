@@ -73,6 +73,8 @@ type PackageScope struct {
 	// PackageGlobalSharings retains the value semantics of package variables
 	// across files, including structs with reference-bearing fields.
 	PackageGlobalSharings map[string]util.Sharing
+	// PackageGlobalTypes preserves types inferred from package initializers.
+	PackageGlobalTypes map[string]ast.Expr
 	// PackageClasses holds all structs from every file in this file's package.
 	// It is populated by the runner after parsing, enabling cross-file embedding
 	// analysis. When nil (file analyzed in isolation), rules fall back to

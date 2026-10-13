@@ -6,9 +6,6 @@ import (
 	"maps"
 )
 
-// trackOwnership walks the function body in execution order and records the
-// storage of each variable after each statement. Branches join their states.
-// A loop repeats its body until the states at its start stop changing.
 func trackOwnership(s *scope) {
 	w := &ownershipFlow{s: s, current: initialState(s), labels: map[string]state{}}
 	w.escaped, w.stored = closureTargets(s, w.current)
@@ -44,20 +41,13 @@ func sameLabels(a, b map[string]state) bool {
 	return true
 }
 
-// ownershipFlow holds the state of one function traversal.
 type ownershipFlow struct {
 	s       *scope
 	current state
-	// escaped holds variables that a pointer or a closure can change at any
-	// time.
 	escaped map[*ast.Object]bool
-	// stored holds the data that a closure can store in a variable.
-	stored map[*ast.Object]storage
-	// labels holds the joined states at the goto statements of each label.
-	labels map[string]state
-	// jumps collects the states at branch statements of each enclosing
-	// statement that a branch can leave.
-	jumps []*[]state
+	stored  map[*ast.Object]storage
+	labels  map[string]state
+	jumps   []*[]state
 }
 
 func recordSnapshot(w *ownershipFlow, position token.Pos) {
@@ -188,8 +178,6 @@ func walkTypeSwitch(w *ownershipFlow, n *ast.TypeSwitchStmt) {
 	recordSnapshot(w, n.End())
 }
 
-// switchObjects returns the variables that a type switch declares. The parser
-// declares one variable for each clause.
 func switchObjects(body *ast.BlockStmt, assign *ast.AssignStmt) []*ast.Object {
 	var out []*ast.Object
 	seen := map[*ast.Object]bool{}
@@ -204,9 +192,6 @@ func switchObjects(body *ast.BlockStmt, assign *ast.AssignStmt) []*ast.Object {
 	return out
 }
 
-// walkClauses walks the clauses of a switch. Each clause starts from the state
-// before the switch, or also from the previous clause if that falls through.
-// Without a default clause, the switch can also run no clause.
 func walkClauses(w *ownershipFlow, body *ast.BlockStmt) {
 	pre := maps.Clone(w.current)
 	exits := []state{}
@@ -291,8 +276,6 @@ func walkRange(w *ownershipFlow, n *ast.RangeStmt) {
 	recordSnapshot(w, n.End())
 }
 
-// rangeStorage returns the storage of an element of a range. A range over a
-// function gets its elements from code that the walker does not see.
 func rangeStorage(w *ownershipFlow, x ast.Expr) storage {
 	if iterator(w.s, x) {
 		return ambientStorage
@@ -310,10 +293,6 @@ func iterator(s *scope, x ast.Expr) bool {
 	return false
 }
 
-// walkLoop walks a loop body until the state at its start is a fixed point. The
-// state at the start joins the state before the loop, the state at the end of
-// the body, and the states at its branch statements. Only the snapshots of
-// the last pass remain.
 func walkLoop(w *ownershipFlow, start token.Pos, iterate func()) {
 	entry := maps.Clone(w.current)
 	mark := len(w.s.ownership)

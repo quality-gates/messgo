@@ -165,7 +165,6 @@ func Scale(p point, factor int) (point, error) {
 	if code != ExitViolation {
 		t.Errorf("exit = %d, want %d", code, ExitViolation)
 	}
-	// ErrEmpty is exported, so other packages can assign it while Scale runs.
 	assertFindings(t, got,
 		"a.go:13 ImplicitInput bump: package variable y",
 		"a.go:13 ImplicitOutput bump: package variable y",
@@ -618,9 +617,6 @@ func (c *cart) clear() { c.total = 0 }
 func (c cart) Tag(i int, item string) { c.items[i] = item }
 `
 
-// By default the receiver is a parameter: a read of it is explicit input, and
-// a write is an output only if the caller sees it. A value receiver is a copy,
-// thus With is a calculation, but Tag writes the array that the copy shares.
 func TestExplicitnessTreatsReceiverAsParameterByDefault(t *testing.T) {
 	code, got := runExplicitness(t, "explicitness", map[string]string{"a.go": cartSource})
 	if code != ExitViolation {

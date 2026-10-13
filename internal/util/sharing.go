@@ -18,7 +18,6 @@ func (s Sharing) any() bool { return s.Outer || s.Reachable }
 
 var shared = Sharing{Outer: true, Reachable: true}
 
-// basicTypes are the predeclared types whose values hold no references.
 var basicTypes = map[string]bool{
 	"bool": true, "string": true, "int": true, "int8": true, "int16": true, "int32": true, "int64": true,
 	"uint": true, "uint8": true, "uint16": true, "uint32": true, "uint64": true, "uintptr": true,
@@ -122,8 +121,6 @@ func SharedGlobalNames(files []*ast.File, definitions map[string]ast.Expr) map[s
 	return out
 }
 
-// globalSharings returns the sharing of each package variable, from its type
-// or from the literal that initializes it.
 func globalSharings(files []*ast.File, definitions map[string]ast.Expr) map[string]Sharing {
 	out := map[string]Sharing{}
 	for _, f := range files {
@@ -161,9 +158,6 @@ func specSharing(spec *ast.ValueSpec, index int, definitions map[string]ast.Expr
 	return shared
 }
 
-// use is an expression whose value other code gets. deep is true if the
-// other code gets the elements of the value. receiver is true if the other
-// code is a method, which can also get the address of the value.
 type use struct {
 	expr     ast.Expr
 	deep     bool
@@ -211,8 +205,6 @@ func elementUses(elements []ast.Expr) []use {
 	return out
 }
 
-// callUses returns the arguments of a call, and the receiver of a method.
-// len and cap only read the size of their argument.
 func callUses(call *ast.CallExpr) []use {
 	if name, ok := ast.Unparen(call.Fun).(*ast.Ident); ok && name.Obj == nil && (name.Name == "len" || name.Name == "cap") {
 		return nil
@@ -224,9 +216,6 @@ func callUses(call *ast.CallExpr) []use {
 	return out
 }
 
-// aliasedGlobal returns the name of the package variable that u lets other
-// code change, or "". A use of an element or a field of a variable shares
-// data only if the elements or the fields refer to shared storage.
 func aliasedGlobal(u use, globals map[string]Sharing, specs map[any]bool) string {
 	deep := u.deep
 	expr := u.expr

@@ -8,12 +8,8 @@ import (
 	"github.com/quality-gates/messgo/internal/rule"
 )
 
-// moduleName is the owner of the code that runs when a package loads: the
-// package variable initializers and the init functions of a file.
 const moduleName = "<module>"
 
-// moduleOwner returns the owner that the rules report for fn. An init
-// function runs when the package loads, thus its owner is the module.
 func moduleOwner(fn *model.Function) *model.Function {
 	if fn.Name != "init" || fn.IsMethod() || fn.Decl == nil || fn.Decl.Recv != nil {
 		return fn
@@ -22,11 +18,7 @@ func moduleOwner(fn *model.Function) *model.Function {
 		EndLine: fn.EndLine, Decl: fn.Decl, Body: fn.Body, File: fn.File}
 }
 
-// moduleFunction returns a function whose body evaluates the package variable
-// initializers of file, or nil if file has none. The body has no position, so
-// no identifier is local to it. The parser resolves each package variable
-// itself, not its initializer, thus the body holds only the values.
-func moduleFunction(file *model.File) *model.Function {
+func moduleInitializerFunction(file *model.File) *model.Function {
 	if file == nil || file.Syntax == nil {
 		return nil
 	}
@@ -49,9 +41,8 @@ func moduleFunction(file *model.File) *model.Function {
 	return &model.Function{Name: moduleName, Decl: decl, Body: body, File: file}
 }
 
-// applyModule runs apply for the package variable initializers of the file.
 func applyModule(c *rule.Context, apply func(*rule.Context, *model.Function)) {
-	if fn := moduleFunction(c.File); fn != nil {
+	if fn := moduleInitializerFunction(c.File); fn != nil {
 		apply(c, fn)
 	}
 }

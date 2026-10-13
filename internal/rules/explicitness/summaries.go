@@ -10,15 +10,11 @@ import (
 	"github.com/quality-gates/messgo/internal/util"
 )
 
-// callEdge is a call from one callable to another. A range body edge is a
-// range over a function: the loop body is the yield callback of the callee.
 type callEdge struct {
 	call      *ast.CallExpr
 	callee    *model.Function
 	rangeBody bool
-	// factory is the call that returned the callee, if the callee is a
-	// literal of that function. The literal captures the factory parameters.
-	factory *callEdge
+	factory   *callEdge
 }
 
 type callableSummary struct {
@@ -29,12 +25,10 @@ type callableSummary struct {
 }
 
 type effectGraph struct {
-	ctx      *rule.Context
-	nodes    map[*model.Function]*callableSummary
-	order    []*model.Function
-	literals map[*ast.FuncLit]*model.Function
-	// returning holds the functions whose returned callable is being
-	// resolved, so a recursive function does not resolve itself forever.
+	ctx       *rule.Context
+	nodes     map[*model.Function]*callableSummary
+	order     []*model.Function
+	literals  map[*ast.FuncLit]*model.Function
 	returning map[*model.Function]bool
 	returns   *returnSummaries
 	strict    bool
@@ -106,7 +100,6 @@ func literalFunction(file *model.File, literal *ast.FuncLit) *model.Function {
 	return child
 }
 
-// owned returns fn and the literals that it owns.
 func (g *effectGraph) owned(fn *model.Function) []*model.Function {
 	out := []*model.Function{fn}
 	for _, child := range g.order {
@@ -146,10 +139,6 @@ func (g *effectGraph) collectCall(c *rule.Context, node *callableSummary, call *
 	g.callbackEdges(node, call)
 }
 
-// collectRange records a range over a function. A range over a function that
-// the graph resolves calls that function with the loop body as its yield
-// callback. A range over a function that the graph cannot resolve has an
-// unknown effect.
 func (g *effectGraph) collectRange(c *rule.Context, node *callableSummary, loop *ast.RangeStmt, strict bool) {
 	if callee := g.resolveCallee(node.scope.fn, loop.X); callee != nil {
 		g.add(c, callee, nil, strict)
@@ -162,8 +151,6 @@ func (g *effectGraph) collectRange(c *rule.Context, node *callableSummary, loop 
 	}
 }
 
-// factoryEdge returns the call of the factory that returned callee, if callee
-// is a literal of that factory.
 func (g *effectGraph) factoryEdge(fn *model.Function, expression ast.Expr, callee *model.Function) *callEdge {
 	call := factoryCall(fn, expression, map[*ast.Object]bool{})
 	if call == nil {
@@ -190,8 +177,6 @@ func factoryCall(fn *model.Function, expression ast.Expr, seen map[*ast.Object]b
 	return nil
 }
 
-// rangesOverFunction reports whether x is a variable of a function type, for
-// example an iter.Seq parameter.
 func rangesOverFunction(s *scope, x ast.Expr) bool {
 	id, ok := ast.Unparen(x).(*ast.Ident)
 	if !ok || id.Obj == nil {
@@ -249,21 +234,14 @@ func (g *effectGraph) resolve(fn *model.Function, expression ast.Expr) *model.Fu
 	return g.resolveBinding(fn, expression, map[*ast.Object]bool{})
 }
 
-// resolveCallee resolves the function that a call or a range calls. Only
-// there a method selector is a call of the method with its operand as the
-// receiver.
 func (g *effectGraph) resolveCallee(fn *model.Function, expression ast.Expr) *model.Function {
-	if methodValue(fn, expression) {
+	if boundReceiverSelection(fn, expression) {
 		return model.ResolveCall(fn, &ast.CallExpr{Fun: util.UnwrapTypeInstance(ast.Unparen(expression))})
 	}
 	return g.resolve(fn, expression)
 }
 
-// methodValue reports whether expression selects a method or a field of a
-// value, not a member of an imported package. A method value that a variable
-// holds, or that a call gets as an argument, binds its receiver at the
-// selection, which the graph does not track.
-func methodValue(fn *model.Function, expression ast.Expr) bool {
+func boundReceiverSelection(fn *model.Function, expression ast.Expr) bool {
 	sel, ok := util.UnwrapTypeInstance(ast.Unparen(expression)).(*ast.SelectorExpr)
 	if !ok {
 		return false
@@ -287,14 +265,12 @@ func (g *effectGraph) resolveBinding(fn *model.Function, expression ast.Expr, se
 		seen[id.Obj] = true
 		return g.resolveBinding(fn, bindingExpression(id.Obj), seen)
 	}
-	if methodValue(fn, expression) {
+	if boundReceiverSelection(fn, expression) {
 		return nil
 	}
 	return model.ResolveCall(fn, &ast.CallExpr{Fun: expression})
 }
 
-// returnedFunction resolves the callable that a call returns. Every return
-// must resolve to the same callable, otherwise the result is unknown.
 func returnedFunction(g *effectGraph, fn *model.Function, call *ast.CallExpr) *model.Function {
 	callee := model.ResolveCall(fn, call)
 	if callee == nil || callee.Body == nil || g.returning[callee] {
@@ -357,9 +333,6 @@ func bindingExpression(object *ast.Object) ast.Expr {
 	return nil
 }
 
-// singleBinding reports whether object is bound exactly once. Taking the
-// address of the variable lets a pointer rebind it, thus it counts as a
-// binding.
 func singleBinding(file *model.File, object *ast.Object) bool {
 	count := 0
 	ast.Inspect(file.Syntax, func(n ast.Node) bool {
@@ -389,9 +362,6 @@ func bindingsIn(node ast.Node, object *ast.Object) int {
 	return count
 }
 
-// callbackEdges adds an edge for each callback that a known standard library
-// function calls at once. The callback gets elements of the collections that
-// the call gets.
 func (g *effectGraph) callbackEdges(node *callableSummary, call *ast.CallExpr) {
 	selector, ok := ast.Unparen(call.Fun).(*ast.SelectorExpr)
 	if !ok {
@@ -411,9 +381,6 @@ func (g *effectGraph) callbackEdges(node *callableSummary, call *ast.CallExpr) {
 	}
 }
 
-// elementCall returns a call of a callback with an element of a collection
-// argument for each callback parameter. The callback parameter i gets an
-// element of the argument i, or of the last argument before the callback.
 func elementCall(call *ast.CallExpr, index, params int) *ast.CallExpr {
 	invocation := &ast.CallExpr{Fun: call.Fun, Lparen: call.Lparen, Rparen: call.Rparen}
 	for i := 0; i < params && index > 0; i++ {
@@ -449,10 +416,6 @@ func addTranslatedFacts(s *scope, edge callEdge, target *[]effect, facts []effec
 	return changed
 }
 
-// propagateUnknown moves an unknown effect of the callee to the caller. A call
-// of a callback parameter becomes the effects of the callback that the caller
-// passes, if the graph resolves it. The yield callback of a range over a
-// function is the loop body, which the caller already analyzes.
 func propagateUnknown(g *effectGraph, s *scope, edge callEdge, fact effect) bool {
 	index := paramIndex(edge.callee, fact.binding)
 	if fact.callable && edge.rangeBody && index == 0 {
@@ -497,10 +460,6 @@ func addTranslatedEffects(effects *[]effect, translated []effect) bool {
 	return changed
 }
 
-// translateEffect turns an effect of the callee into the effects of the
-// caller at the call. A fact bound to a parameter becomes a fact of the
-// argument. A fact bound to a variable of the caller becomes a fact of the
-// data that the variable refers to at the call.
 func translateEffect(s *scope, edge callEdge, fact effect) []effect {
 	fact.line = s.effect(edge.call, "").line
 	switch {
@@ -508,7 +467,7 @@ func translateEffect(s *scope, edge callEdge, fact effect) []effect {
 		return []effect{callableEffect(s, edge, fact)}
 	case fact.binding == nil:
 		return []effect{fact}
-	case fact.variable:
+	case fact.bindingAccess:
 		return variableEffects(s, fact)
 	}
 	if index := paramIndex(edge.callee, fact.binding); index >= 0 {
@@ -535,15 +494,9 @@ func capturedEffects(s *scope, edge callEdge, fact effect) []effect {
 	if owns(s, fact.binding) {
 		return nil
 	}
-	// A deferred closure's captured binding belongs to its lexical environment.
 	return []effect{fact}
 }
 
-// receiverEffects maps a fact of the receiver of the callee to the operand of
-// the method selector. A pointer method of an addressable value changes that
-// value, thus the storage of the operand decides as for an argument. If the
-// operand may not have the receiver type, the method may be promoted from an
-// embedded field, which the operand can reach through a pointer.
 func receiverEffects(s *scope, edge callEdge, fact effect) []effect {
 	sel, ok := util.UnwrapTypeInstance(ast.Unparen(edge.call.Fun)).(*ast.SelectorExpr)
 	if !ok {
@@ -556,8 +509,6 @@ func receiverEffects(s *scope, edge callEdge, fact effect) []effect {
 	return argumentEffects(s, sel.X, fact)
 }
 
-// receiverTyped reports whether the declared type of x is the receiver type
-// of method, or a pointer to it.
 func receiverTyped(s *scope, x ast.Expr, method *model.Function) bool {
 	typ := storageOf(s, x, s.ownership.stateAt(x.Pos())).typ
 	if star, ok := typ.(*ast.StarExpr); ok {
@@ -567,8 +518,6 @@ func receiverTyped(s *scope, x ast.Expr, method *model.Function) bool {
 	return ok && id.Name == method.Receiver
 }
 
-// variableEffects keeps a read or a write of a captured variable only if the
-// caller does not own that variable.
 func variableEffects(s *scope, fact effect) []effect {
 	if owns(s, fact.binding) {
 		return nil
@@ -576,8 +525,6 @@ func variableEffects(s *scope, fact effect) []effect {
 	return []effect{fact}
 }
 
-// owns reports whether object is a parameter or a variable that the function
-// declares.
 func owns(s *scope, object *ast.Object) bool {
 	pos := object.Pos()
 	return pos >= s.fn.Decl.Type.Pos() && pos < s.fn.Body.End()
@@ -595,9 +542,6 @@ func paramIndex(fn *model.Function, object *ast.Object) int {
 	return -1
 }
 
-// parameterEffects maps a fact of a parameter to the arguments. The variadic
-// parameter gets a new slice of the extra arguments, thus only a write
-// through an element reaches an argument.
 func parameterEffects(s *scope, edge callEdge, index int, fact effect) []effect {
 	args, variadic := parameterArguments(edge, index)
 	if !variadic {
@@ -617,8 +561,6 @@ func parameterEffects(s *scope, edge callEdge, index int, fact effect) []effect 
 	return out
 }
 
-// parameterArguments returns the arguments of the parameter at index, and
-// whether they are the extra arguments of a variadic parameter.
 func parameterArguments(edge callEdge, index int) ([]ast.Expr, bool) {
 	params := edge.callee.Params
 	_, ellipsis := params[index].Field.Type.(*ast.Ellipsis)
@@ -634,10 +576,6 @@ func parameterArguments(edge callEdge, index int) ([]ast.Expr, bool) {
 	return edge.call.Args[index : index+1], false
 }
 
-// callableEffect moves a call of a callable variable to the caller. The
-// callable stays bound if the caller can still resolve it: the argument is a
-// variable, and each argument of the call is an expression of the caller.
-// Otherwise the effect becomes a plain unknown effect.
 func callableEffect(s *scope, edge callEdge, fact effect) effect {
 	binding := fact.binding
 	if index := paramIndex(edge.callee, binding); index >= 0 {
@@ -665,7 +603,6 @@ func argumentObject(edge callEdge, index int) *ast.Object {
 	return id.Obj
 }
 
-// visible reports whether object is a variable of the function at position.
 func visible(s *scope, object *ast.Object, position token.Pos) bool {
 	if _, tracked := s.ownership.stateAt(position)[object]; tracked {
 		return true
@@ -673,9 +610,6 @@ func visible(s *scope, object *ast.Object, position token.Pos) bool {
 	return owns(s, object)
 }
 
-// substituteArguments rewrites the arguments of a callback call from the
-// callee into the caller. A parameter of the callee becomes the argument of
-// the call. Any other variable must be a variable of the caller.
 func substituteArguments(s *scope, edge callEdge, args []ast.Expr) ([]ast.Expr, bool) {
 	out := make([]ast.Expr, 0, len(args))
 	for _, arg := range args {
@@ -745,9 +679,6 @@ func argumentEffects(s *scope, argument ast.Expr, fact effect) []effect {
 	return originEffects(fact, storage)
 }
 
-// argumentPart describes the data of the caller that an argument refers to.
-// In strict mode a receiver keeps the description of the callee, for example
-// "receiver field total".
 func argumentPart(s *scope, id *ast.Ident, what string) string {
 	if prefix := flowPrefix(what); prefix != "" {
 		return prefix + id.Name
@@ -763,9 +694,6 @@ func argumentPart(s *scope, id *ast.Ident, what string) string {
 	return "write through parameter " + id.Name
 }
 
-// originEffects binds a copy of fact to each origin of the storage. The fact
-// stays unbound, and thus reaches every caller, if the storage has no origin
-// or may also be other data.
 func originEffects(fact effect, storage storage) []effect {
 	var out []effect
 	for origin := range storage.origins {
@@ -792,7 +720,7 @@ func reportableEffects(fn *model.Function, effects []effect, skipReceiver bool) 
 
 func addEffect(effects *[]effect, next effect) bool {
 	for _, prior := range *effects {
-		if prior.what == next.what && prior.binding == next.binding && prior.deep == next.deep && prior.callable == next.callable && prior.variable == next.variable {
+		if prior.what == next.what && prior.binding == next.binding && prior.deep == next.deep && prior.callable == next.callable && prior.bindingAccess == next.bindingAccess {
 			return false
 		}
 	}
@@ -887,8 +815,6 @@ func knownReceiverOperation(s *scope, selector *ast.SelectorExpr) bool {
 	return ok && model.ImportedPackagePath(s.fn.File, pkg) == "context"
 }
 
-// flowPrefix returns the prefix of a description of data that goes through a
-// channel or a stream, or "".
 func flowPrefix(what string) string {
 	for _, prefix := range flowPrefixes {
 		if strings.HasPrefix(what, prefix) {

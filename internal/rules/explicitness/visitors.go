@@ -102,17 +102,13 @@ func (w *writeVisitor) write(target ast.Expr, only, shared bool) {
 	e := w.effect(id, what)
 	e.deep = deepWrite(target)
 	if captured(w.scope, id) {
-		// The caller decides at the call what the captured variable refers to.
-		e.binding, e.variable = id.Obj, target == ast.Expr(id)
+		e.binding, e.bindingAccess = id.Obj, target == ast.Expr(id)
 		w.outputs = append(w.outputs, e)
 		return
 	}
 	w.outputs = append(w.outputs, originEffects(e, w.ownership.stateAt(target.Pos())[id.Obj])...)
 }
 
-// writeCallResult records a write through the result of a call, as in
-// alias(values)[0] = 1. The write changes data outside the function if the
-// result shares it.
 func (w *writeVisitor) writeCallResult(target ast.Expr, shared bool) {
 	call := callRoot(target)
 	if call == nil || (target == ast.Expr(call) && !shared) {
@@ -128,7 +124,6 @@ func (w *writeVisitor) writeCallResult(target ast.Expr, shared bool) {
 	w.outputs = append(w.outputs, originEffects(e, fact)...)
 }
 
-// callRoot returns the call at the root of target, or nil.
 func callRoot(target ast.Expr) *ast.CallExpr {
 	for {
 		switch t := target.(type) {
@@ -150,9 +145,6 @@ func callRoot(target ast.Expr) *ast.CallExpr {
 	}
 }
 
-// describe returns the data outside the function that a write to target
-// changes, or "" if the write changes only local data. A builtin write, as
-// delete(m, k), changes the data that target refers to.
 func (w *writeVisitor) describe(target ast.Expr, id *ast.Ident, builtin bool) string {
 	direct := target == ast.Expr(id)
 	shared := builtin || reachesShared(target)
@@ -186,9 +178,6 @@ func sharedWrite(s *scope, target, container ast.Expr, direct, shared bool, fact
 	return !direct && fact.outer || deepWrite(target) && fact.reachable || shared && storageOf(s, container, s.ownership.stateAt(target.Pos())).outer
 }
 
-// writtenContainer returns the expression whose storage a write to target
-// changes. A builtin changes the data that target refers to. An assignment
-// changes the operand of an element, a field or an indirection.
 func writtenContainer(target ast.Expr, builtin bool) ast.Expr {
 	if builtin {
 		return target
@@ -353,7 +342,7 @@ func (r *readVisitor) read(id *ast.Ident) {
 		r.inputs = append(r.inputs, r.effect(id, receiverPart(id, r.fields[id])))
 	case captured(r.scope, id) && objectMutated(r.fn.File.Syntax, id.Obj):
 		e := r.effect(id, "captured variable "+id.Name)
-		e.binding, e.variable = id.Obj, true
+		e.binding, e.bindingAccess = id.Obj, true
 		r.inputs = append(r.inputs, e)
 	}
 }
@@ -454,11 +443,6 @@ func (f *flowVisitor) visitSelector(sel *ast.SelectorExpr) {
 	}
 }
 
-// flow records data that goes through the channel or stream at the root of e,
-// unless e is private storage of the function. If e is a call, the root of the
-// called function is used, as for <-ctx.Done(). A captured channel is bound to
-// its variable, and an argument channel to its origins, so a caller that owns
-// the channel can tell that the data stays inside it.
 func (f *flowVisitor) flow(list *[]effect, e ast.Expr, prefix string) {
 	if call, ok := e.(*ast.CallExpr); ok {
 		e = call.Fun
@@ -487,15 +471,12 @@ func flowRoot(s *scope, expression ast.Expr) *ast.Ident {
 	return id
 }
 
-// storedFlow records data that goes through the channel or stream e of the
-// function, if e may refer to data of a caller.
 func (f *flowVisitor) storedFlow(e ast.Expr, what string) []effect {
 	storage := storageOf(f.scope, e, f.ownership.stateAt(e.Pos()))
 	if !storage.outer && !storage.reachable {
 		return nil
 	}
 	fact := f.effect(e, what)
-	// A channel or a stream refers to its data, as a pointer does.
 	fact.deep = true
 	return originEffects(fact, storage)
 }

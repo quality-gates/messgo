@@ -9,21 +9,15 @@ import (
 	"github.com/quality-gates/messgo/internal/util"
 )
 
-// storage separates an allocation from the objects reachable through it.
 type storage struct {
 	typ              ast.Expr
 	outer, reachable bool
-	// ambient is true if the storage may come from data that no origin
-	// describes, as a package variable or a variable that a pointer or a
-	// closure can change.
-	ambient bool
-	origins map[*ast.Object]bool
+	ambient          bool
+	origins          map[*ast.Object]bool
 }
 
-// ambientStorage is storage that may be shared with any data.
 var ambientStorage = storage{outer: true, reachable: true, ambient: true}
 
-// state maps each tracked variable to its storage at one point.
 type state map[*ast.Object]storage
 
 type ownershipSnapshot struct {
@@ -62,7 +56,6 @@ func inherit(s *scope, parent *scope, position token.Pos) {
 	s.captures = maps.Clone(parent.ownership.stateAt(position))
 }
 
-// stateAt returns the state of the last snapshot at or before position.
 func (snapshots ownershipSnapshots) stateAt(position token.Pos) state {
 	var values state
 	best := token.NoPos
@@ -123,13 +116,10 @@ func joinStorage(a, b storage) storage {
 	return a
 }
 
-// contained returns the storage of a container that holds data of storage
-// fact: the container itself is not shared, the data in it is.
 func contained(fact storage) storage {
 	return storage{reachable: fact.outer || fact.reachable, ambient: fact.ambient, origins: fact.origins}
 }
 
-// elementOf returns the storage of an element of data of storage fact.
 func elementOf(fact storage) storage {
 	if !fact.reachable {
 		return storage{}
@@ -220,8 +210,6 @@ func typeStorage(typ ast.Expr, definitions map[string]ast.Expr) storage {
 	return storage{typ: typ, outer: sharing.Outer, reachable: sharing.Reachable}
 }
 
-// returnSummaries holds the storage that each function returns, relative to
-// its parameters.
 type returnSummaries struct {
 	done   map[*model.Function]storage
 	active map[*model.Function]bool
@@ -233,9 +221,6 @@ func newReturnSummaries() *returnSummaries {
 
 var builtinFunctions = setOf("append", "cap", "clear", "close", "complex", "copy", "delete", "imag", "len", "make", "max", "min", "new", "panic", "print", "println", "real", "recover")
 
-// callStorage returns the storage of the result of call. A resolved callee
-// maps its returned storage to the arguments. A callback, or a function that
-// the analysis cannot resolve, may return any data.
 func callStorage(s *scope, call *ast.CallExpr, current state) storage {
 	if fact, known := libraryStorage(s, call, current); known {
 		return fact
@@ -268,8 +253,6 @@ func libraryStorage(s *scope, call *ast.CallExpr, current state) (storage, bool)
 	return storage{}, false
 }
 
-// appendStorage returns the storage of an append. The result may share the
-// array of the first argument, and holds the other arguments.
 func appendStorage(s *scope, call *ast.CallExpr, current state) storage {
 	fact := storageOf(s, call.Args[0], current)
 	for _, arg := range call.Args[1:] {
@@ -290,8 +273,6 @@ func argumentsStorage(s *scope, args []ast.Expr, current state) storage {
 	return fact
 }
 
-// conversion reports whether fun is a type, so a call of fun converts its
-// argument.
 func conversion(s *scope, fun ast.Expr) bool {
 	switch value := util.UnwrapTypeInstance(ast.Unparen(fun)).(type) {
 	case *ast.ArrayType, *ast.MapType, *ast.ChanType, *ast.FuncType, *ast.InterfaceType, *ast.StructType:
@@ -307,10 +288,6 @@ func conversion(s *scope, fun ast.Expr) bool {
 	return false
 }
 
-// unresolvedStorage returns the storage of a call that the analysis cannot
-// resolve. A function of another package returns data that its arguments
-// refer to, or fresh data. A method returns data that its receiver or its
-// arguments refer to. Any other call may return any data.
 func unresolvedStorage(s *scope, call *ast.CallExpr, current state) storage {
 	selector, ok := ast.Unparen(call.Fun).(*ast.SelectorExpr)
 	if !ok {
@@ -323,8 +300,6 @@ func unresolvedStorage(s *scope, call *ast.CallExpr, current state) storage {
 	return joinStorage(fact, storageOf(s, selector.X, current))
 }
 
-// returnedStorage returns the storage that callee returns, relative to its
-// parameters. A recursive call returns any data.
 func returnedStorage(s *scope, callee *model.Function) storage {
 	summaries := s.returns
 	if fact, done := summaries.done[callee]; done {
@@ -373,9 +348,6 @@ func resultStorage(s *scope, ret *ast.ReturnStmt) storage {
 	return out
 }
 
-// mappedStorage maps the returned storage of a callee to the caller. An origin
-// that is a parameter becomes the storage of its argument. Any other origin
-// may be any data.
 func mappedStorage(s *scope, edge callEdge, summary storage, current state) storage {
 	if len(summary.origins) == 0 {
 		return storage{outer: summary.outer, reachable: summary.reachable, ambient: summary.ambient}

@@ -128,7 +128,7 @@ func GlobalSharings(files []*ast.File, definitions map[string]ast.Expr) map[stri
 		definitions:  definitions,
 		results:      packageFunctionResults(files),
 		declarations: globalDeclarations(files),
-		types:        GlobalValueTypes(files),
+		types:        GlobalValueTypes(files, definitions),
 		resolved:     map[string]Sharing{},
 	}
 	for name := range resolver.declarations {
@@ -193,10 +193,11 @@ func (r *globalSharingResolver) resolve(name string, seen map[string]bool) Shari
 
 // GlobalValueTypes follows declarations whose value type is known from
 // syntax, including aliases and dereferences of package pointers.
-func GlobalValueTypes(files []*ast.File) map[string]ast.Expr {
+func GlobalValueTypes(files []*ast.File, definitions map[string]ast.Expr) map[string]ast.Expr {
 	resolver := globalTypeResolver{
 		declarations: globalDeclarations(files),
 		results:      packageFunctionResults(files),
+		definitions:  definitions,
 		resolved:     map[string]ast.Expr{},
 	}
 	for name := range resolver.declarations {
@@ -208,6 +209,7 @@ func GlobalValueTypes(files []*ast.File) map[string]ast.Expr {
 type globalTypeResolver struct {
 	declarations map[string]globalDeclaration
 	results      map[string]ast.Expr
+	definitions  map[string]ast.Expr
 	resolved     map[string]ast.Expr
 }
 
@@ -238,19 +240,86 @@ func (r *globalTypeResolver) expressionType(expression ast.Expr, seen map[string
 	case *ast.Ident:
 		return r.resolve(value.Name, seen)
 	case *ast.UnaryExpr:
-		if value.Op == token.AND {
-			if typ := r.expressionType(value.X, seen); typ != nil {
-				return &ast.StarExpr{X: typ}
-			}
-		}
+		return r.addressType(value, seen)
 	case *ast.StarExpr:
-		if pointer, ok := r.expressionType(value.X, seen).(*ast.StarExpr); ok {
-			return pointer.X
-		}
+		return r.dereferenceType(value, seen)
 	case *ast.CallExpr:
 		return r.callType(value)
+	case *ast.IndexExpr:
+		return r.indexType(value.X, seen)
+	case *ast.SelectorExpr:
+		return r.fieldType(value.X, value.Sel.Name, seen)
 	}
 	return nil
+}
+
+func (r *globalTypeResolver) addressType(value *ast.UnaryExpr, seen map[string]bool) ast.Expr {
+	if value.Op != token.AND {
+		return nil
+	}
+	if typ := r.expressionType(value.X, seen); typ != nil {
+		return &ast.StarExpr{X: typ}
+	}
+	return nil
+}
+
+func (r *globalTypeResolver) dereferenceType(value *ast.StarExpr, seen map[string]bool) ast.Expr {
+	if pointer, ok := r.expressionType(value.X, seen).(*ast.StarExpr); ok {
+		return pointer.X
+	}
+	return nil
+}
+
+func (r *globalTypeResolver) indexType(container ast.Expr, seen map[string]bool) ast.Expr {
+	typ := r.typeShape(r.expressionType(container, seen))
+	if pointer, ok := typ.(*ast.StarExpr); ok {
+		typ = r.typeShape(pointer.X)
+	}
+	switch value := typ.(type) {
+	case *ast.ArrayType:
+		return value.Elt
+	case *ast.MapType:
+		return value.Value
+	}
+	return nil
+}
+
+func (r *globalTypeResolver) fieldType(container ast.Expr, name string, seen map[string]bool) ast.Expr {
+	typ := r.typeShape(r.expressionType(container, seen))
+	if pointer, ok := typ.(*ast.StarExpr); ok {
+		typ = r.typeShape(pointer.X)
+	}
+	structure, ok := typ.(*ast.StructType)
+	if !ok {
+		return nil
+	}
+	for _, field := range structure.Fields.List {
+		for _, candidate := range field.Names {
+			if candidate.Name == name {
+				return field.Type
+			}
+		}
+	}
+	return nil
+}
+
+func (r *globalTypeResolver) typeShape(typ ast.Expr) ast.Expr {
+	seen := map[ast.Expr]bool{}
+	for typ != nil && !seen[typ] {
+		seen[typ] = true
+		id, named := UnwrapTypeInstance(ast.Unparen(typ)).(*ast.Ident)
+		if !named {
+			return typ
+		}
+		if id.Obj != nil {
+			if spec, ok := id.Obj.Decl.(*ast.TypeSpec); ok {
+				typ = spec.Type
+				continue
+			}
+		}
+		typ = r.definitions[id.Name]
+	}
+	return typ
 }
 
 func (r *globalTypeResolver) callType(value *ast.CallExpr) ast.Expr {

@@ -66,6 +66,81 @@ func FromLiteral() {
 	)
 }
 
+func TestExplicitnessInfersCopiedPackageGlobalSelectionTypes(t *testing.T) {
+	_, got := runExplicitness(t, "explicitness", map[string]string{
+		"state.go": `package p
+type Holder struct { Count int; Items []int }
+var array = [1]Holder{{Items: []int{1}}}
+var fromArray = array[0]
+type Wrapper struct { Value Holder }
+var wrapper = Wrapper{Value: Holder{Items: []int{1}}}
+var fromField = wrapper.Value
+var pointers = [1]*Holder{&Holder{Items: []int{1}}}
+var fromPointerArray = *pointers[0]
+var typed Holder = array[0]
+`,
+		"use.go": `package p
+func FromArray() {
+ value := fromArray
+ value.Count++
+ value.Items[0]++
+}
+func FromField() {
+ value := fromField
+ value.Count++
+ value.Items[0]++
+}
+func FromPointerArray() {
+ value := fromPointerArray
+ value.Count++
+ value.Items[0]++
+}
+func FromTyped() {
+ value := typed
+ value.Count++
+ value.Items[0]++
+}
+`,
+	})
+	assertFindings(t, got,
+		"use.go:3 ImplicitInput FromArray: package variable fromArray",
+		"use.go:5 ImplicitOutput FromArray: write through parameter value",
+		"use.go:8 ImplicitInput FromField: package variable fromField",
+		"use.go:10 ImplicitOutput FromField: write through parameter value",
+		"use.go:13 ImplicitInput FromPointerArray: package variable fromPointerArray",
+		"use.go:15 ImplicitOutput FromPointerArray: write through parameter value",
+		"use.go:18 ImplicitInput FromTyped: package variable typed",
+		"use.go:20 ImplicitOutput FromTyped: write through parameter value",
+	)
+}
+
+func TestExplicitnessInfersNestedPackageValueSelections(t *testing.T) {
+	for _, selection := range []string{"wrapper.Values[0]", "pointer.Value", "slice[0]", `entries["one"]`} {
+		t.Run(selection, func(t *testing.T) {
+			source := `package p
+type Holder struct { Count int; Items []int }
+type Wrapper struct { Value Holder; Values [1]Holder }
+var fixed = [1]Holder{{Items: []int{1}}}
+var slice = []Holder{{Items: []int{1}}}
+var entries = map[string]Holder{"one": {Items: []int{1}}}
+var wrapper = Wrapper{Value: fixed[0], Values: fixed}
+var pointer = &wrapper
+var shared = ` + selection + `
+func Copy() {
+ value := shared
+ value.Count++
+ value.Items[0]++
+}
+`
+			_, got := runExplicitness(t, "explicitness", map[string]string{"a.go": source})
+			assertFindings(t, got,
+				"a.go:11 ImplicitInput Copy: package variable shared",
+				"a.go:13 ImplicitOutput Copy: write through parameter value",
+			)
+		})
+	}
+}
+
 func TestExplicitnessKeepsCopiedStructScalarsPrivateAndSliceFieldsShared(t *testing.T) {
 	_, got := runExplicitness(t, "explicitness", map[string]string{
 		"state.go": `package p

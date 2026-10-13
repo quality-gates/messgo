@@ -181,6 +181,8 @@ func TestExplicitnessTracksCopiedArrayAndSliceFieldsAcrossFiles(t *testing.T) {
 type Holder struct { Counts [2]int; Items []int }
 var original = &Holder{Items: []int{1}}
 var shared = *original
+var array = [1]Holder{{Items: []int{1}}}
+var selected = array[0]
 `,
 		"use.go": `package p
 func Parameter(h Holder) {
@@ -189,6 +191,11 @@ func Parameter(h Holder) {
 }
 func Copy() {
  value := shared
+ value.Counts[0]++
+ value.Items[0]++
+}
+func CopySelected() {
+ value := selected
  value.Counts[0]++
  value.Items[0]++
 }
@@ -215,8 +222,9 @@ func Copy() {
 		got[violation.Function][violation.Rule.Name()] = violation.BeginLine
 	}
 	want := map[string]map[string]int{
-		"Parameter": {"ImplicitOutput": 4},
-		"Copy":      {"ImplicitInput": 7, "ImplicitOutput": 9},
+		"Parameter":    {"ImplicitOutput": 4},
+		"Copy":         {"ImplicitInput": 7, "ImplicitOutput": 9},
+		"CopySelected": {"ImplicitInput": 12, "ImplicitOutput": 14},
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("effects = %v, want %v", got, want)

@@ -195,7 +195,7 @@ func identStorage(s *scope, id *ast.Ident, current state) storage {
 		typ := s.fn.File.PackageGlobalTypes[id.Name]
 		if !known && s.fn.File.PackageGlobalSharings == nil {
 			sharing, known = util.GlobalSharings([]*ast.File{s.fn.File.Syntax}, s.fn.File.PackageTypeDefs)[id.Name]
-			typ = util.GlobalValueTypes([]*ast.File{s.fn.File.Syntax})[id.Name]
+			typ = util.GlobalValueTypes([]*ast.File{s.fn.File.Syntax}, s.fn.File.PackageTypeDefs)[id.Name]
 		}
 		if known {
 			return storage{typ: typ, outer: sharing.Outer, reachable: sharing.Reachable, ambient: true}

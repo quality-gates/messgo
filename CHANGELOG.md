@@ -17,6 +17,9 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
   separate `<lambda>` owners.
 
 ### Fixed
+- Fixed inferred package-global value types through array, slice, and map
+  indexing and struct field selection. Copied structs keep private scalar
+  fields even when their initializer selects another value.
 - Fixed value-parameter and copied package-struct ownership for array fields.
   Array elements remain private after a value copy, while slice-backed fields
   retain shared writes. Package initializers that dereference a typed pointer

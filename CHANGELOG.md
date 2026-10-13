@@ -27,6 +27,9 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
   Later field and element inserts expose caller storage, while private
   replacements remove the old origins. Returned aliases retain their storage
   identity, and separate factory calls keep separate private allocations.
+- Fixed field and element addresses retaining their connection to the
+  containing storage. Pointer writes and direct writes now share the same
+  slots; private replacements and sibling slots stay separate.
 - Fixed reads of mutable captured storage, including writes through an alias
   and standard-library in-place mutations. Uncalled literals no longer change
   their definer's storage, literal-false loops stay quiet, and transferred

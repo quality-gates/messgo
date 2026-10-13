@@ -23,7 +23,9 @@ func bindingAddress(s *scope, expression *ast.UnaryExpr, object *ast.Object, fac
 	references := current.addresses[object]
 	if len(references) == 0 {
 		site, _ := object.Decl.(ast.Node)
-		references = map[allocation]bool{{site: site, binding: object, invocation: s.invocation, context: s.context}: true}
+		ref := newReference(s, site)
+		ref.binding = object
+		references = map[reference]bool{ref: true}
 	}
 	return storage{typ: &ast.StarExpr{Star: expression.OpPos, X: fact.typ}, references: references, cells: map[string]storage{addressCell: fact}}
 }
@@ -34,15 +36,16 @@ func recordAddress(w *ownershipFlow, node ast.Node) {
 	}
 }
 
-func registerAddress(current state, reference allocation) state {
-	if reference.binding == nil {
+func registerAddress(current state, ref reference) state {
+	if ref.binding == nil {
 		return current
 	}
+	ref.path = ""
 	current.addresses = maps.Clone(current.addresses)
 	if current.addresses == nil {
-		current.addresses = map[*ast.Object]map[allocation]bool{}
+		current.addresses = map[*ast.Object]map[reference]bool{}
 	}
-	current.addresses[reference.binding] = joinedReferences(current.addresses[reference.binding], map[allocation]bool{reference: true})
+	current.addresses[ref.binding] = joinedReferences(current.addresses[ref.binding], map[reference]bool{ref: true})
 	return current
 }
 
@@ -64,7 +67,7 @@ func dereferenceStorage(fact storage, current state) storage {
 func writeBindingCell(current state, object *ast.Object, fact storage) state {
 	for reference := range current.addresses[object] {
 		current.heap = maps.Clone(current.heap)
-		current.heap[reference] = updatedCells(current.heap[reference], addressCell, fact, true)
+		current.heap[reference.allocation] = updatedCells(current.heap[reference.allocation], addressCell, fact, true)
 	}
 	return current
 }
@@ -79,7 +82,7 @@ func writeAddressField(w *ownershipFlow, fact storage, key string, incoming stor
 	return true
 }
 
-func publishAddress(current state, reference allocation, key string, fact storage) state {
+func publishAddress(current state, reference reference, key string, fact storage) state {
 	if key == addressCell && current.addresses[reference.binding][reference] {
 		current.bindings = maps.Clone(current.bindings)
 		current.bindings[reference.binding] = fact
@@ -87,10 +90,10 @@ func publishAddress(current state, reference allocation, key string, fact storag
 	return current
 }
 
-func joinAddresses(a, b map[*ast.Object]map[allocation]bool) map[*ast.Object]map[allocation]bool {
+func joinAddresses(a, b map[*ast.Object]map[reference]bool) map[*ast.Object]map[reference]bool {
 	out := maps.Clone(a)
 	if out == nil {
-		out = map[*ast.Object]map[allocation]bool{}
+		out = map[*ast.Object]map[reference]bool{}
 	}
 	for object, references := range b {
 		out[object] = joinedReferences(out[object], references)
@@ -98,7 +101,7 @@ func joinAddresses(a, b map[*ast.Object]map[allocation]bool) map[*ast.Object]map
 	return out
 }
 
-func sameAddresses(a, b map[*ast.Object]map[allocation]bool) bool {
+func sameAddresses(a, b map[*ast.Object]map[reference]bool) bool {
 	if len(a) != len(b) {
 		return false
 	}

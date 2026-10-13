@@ -8,10 +8,10 @@ import (
 	"github.com/quality-gates/messgo/internal/util"
 )
 
-func joinedReferences(a, b map[allocation]bool) map[allocation]bool {
+func joinedReferences(a, b map[reference]bool) map[reference]bool {
 	out := maps.Clone(a)
 	if out == nil {
-		out = map[allocation]bool{}
+		out = map[reference]bool{}
 	}
 	maps.Copy(out, b)
 	return out
@@ -74,12 +74,12 @@ func sameHeaps(a, b map[allocation]map[string]storage) bool {
 
 func registerStorage(current state, fact storage) state {
 	for reference := range fact.references {
-		if _, found := current.heap[reference]; !found {
+		if _, found := current.heap[reference.allocation]; !found {
 			current.heap = maps.Clone(current.heap)
 			if current.heap == nil {
 				current.heap = map[allocation]map[string]storage{}
 			}
-			current.heap[reference] = fact.cells
+			current.heap[reference.allocation] = fact.cells
 		}
 		current = registerAddress(current, reference)
 	}
@@ -95,20 +95,16 @@ func cellsOf(fact storage, current state) map[string]storage {
 	}
 	var out map[string]storage
 	for reference := range fact.references {
-		cells, found := current.heap[reference]
-		if !found {
-			cells = fact.cells
-		}
-		out = joinCells(out, cells)
+		out = joinCells(out, referenceCells(fact, reference, current))
 	}
 	return out
 }
 
 func resolveStorage(fact storage, current state) storage {
-	return resolveReferences(fact, current, map[allocation]bool{})
+	return resolveReferences(fact, current, map[reference]bool{})
 }
 
-func resolveReferences(fact storage, current state, seen map[allocation]bool) storage {
+func resolveReferences(fact storage, current state, seen map[reference]bool) storage {
 	cells := cellsOf(fact, current)
 	for reference := range fact.references {
 		if seen[reference] {
@@ -123,10 +119,10 @@ func resolveReferences(fact storage, current state, seen map[allocation]bool) st
 }
 
 func frozenStorage(fact storage, current state) storage {
-	return freezeReferences(fact, current, map[allocation]bool{})
+	return freezeReferences(fact, current, map[reference]bool{})
 }
 
-func freezeReferences(fact storage, current state, seen map[allocation]bool) storage {
+func freezeReferences(fact storage, current state, seen map[reference]bool) storage {
 	for reference := range fact.references {
 		if seen[reference] {
 			return fact

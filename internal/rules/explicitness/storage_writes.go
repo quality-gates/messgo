@@ -53,13 +53,8 @@ func writeReferences(w *ownershipFlow, fact storage, key string, incoming storag
 	next := registerStorage(cloneState(w.current), incoming)
 	next.heap = maps.Clone(next.heap)
 	for reference := range fact.references {
-		cells, found := next.heap[reference]
-		if !found {
-			cells = fact.cells
-		}
 		strong := len(fact.references) == 1 && key != "*"
-		next.heap[reference] = updatedCells(cells, key, incoming, strong)
-		next = publishAddress(next, reference, key, incoming)
+		next = writeReference(next, fact, reference, key, incoming, strong)
 	}
 	w.current = next
 }
@@ -101,7 +96,7 @@ func markStorageMutation(w *ownershipFlow, target ast.Expr) {
 		w.s.mutations.mutatedContents[id.Obj] = true
 	}
 	for reference := range fact.references {
-		w.s.mutations.mutatedAllocations[reference] = true
+		w.s.mutations.mutatedAllocations[reference.allocation] = true
 		if reference.binding != nil {
 			w.s.mutations.mutatedObjects[reference.binding] = true
 		}
@@ -124,7 +119,7 @@ func markNodeMutation(w *ownershipFlow, node ast.Node) {
 func markCallMutation(w *ownershipFlow, call *ast.CallExpr) {
 	if target := mutationArgument(w.s, call); target != nil {
 		for reference := range valueStorage(w.s, target, w.current).references {
-			w.s.mutations.mutatedAllocations[reference] = true
+			w.s.mutations.mutatedAllocations[reference.allocation] = true
 		}
 	}
 }
@@ -163,12 +158,12 @@ func capturedMutable(s *scope, id *ast.Ident, contents bool) bool {
 	if resolved.outer || resolved.reachable || resolved.ambient {
 		return true
 	}
-	return mutatedStorage(s, fact, current, map[allocation]bool{})
+	return mutatedStorage(s, fact, current, map[reference]bool{})
 }
 
-func mutatedStorage(s *scope, fact storage, current state, seen map[allocation]bool) bool {
+func mutatedStorage(s *scope, fact storage, current state, seen map[reference]bool) bool {
 	for reference := range fact.references {
-		if s.mutations.mutatedAllocations[reference] {
+		if s.mutations.mutatedAllocations[reference.allocation] {
 			return true
 		}
 		if seen[reference] {

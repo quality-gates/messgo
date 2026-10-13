@@ -14,7 +14,7 @@ type storage struct {
 	outer, reachable bool
 	ambient          bool
 	origins          map[*ast.Object]bool
-	references       map[allocation]bool
+	references       map[reference]bool
 	cells            map[string]storage
 	targets          map[*ast.BlockStmt]*model.Function
 }
@@ -28,11 +28,16 @@ type allocation struct {
 	context    string
 }
 
+type reference struct {
+	allocation
+	path string
+}
+
 type state struct {
 	bindings  map[*ast.Object]storage
 	heap      map[allocation]map[string]storage
 	calls     map[*ast.CallExpr]storage
-	addresses map[*ast.Object]map[allocation]bool
+	addresses map[*ast.Object]map[reference]bool
 }
 
 func cloneState(current state) state {
@@ -203,12 +208,7 @@ func unaryStorage(s *scope, value *ast.UnaryExpr, current state) storage {
 		return elementOf(fact)
 	}
 	if value.Op == token.AND {
-		if id, named := ast.Unparen(value.X).(*ast.Ident); named && id.Obj != nil && !s.isGlobal(id) {
-			return bindingAddress(s, value, id.Obj, fact, current)
-		}
-	}
-	if value.Op == token.AND && len(fact.references) == 0 {
-		fact.references = map[allocation]bool{{site: value, invocation: s.invocation, context: s.context}: true}
+		return addressStorage(s, value, current)
 	}
 	return fact
 }
@@ -239,7 +239,7 @@ func compositeStorage(s *scope, value *ast.CompositeLit, current state) storage 
 		fact.cells[key] = valueStorage(s, element, current)
 	}
 	if typeStorage(value.Type, s.fn.File.PackageTypeDefs).outer {
-		fact.references = map[allocation]bool{{site: value, invocation: s.invocation, context: s.context}: true}
+		fact.references = map[reference]bool{newReference(s, value): true}
 	}
 	return fact
 }
@@ -288,7 +288,7 @@ func libraryStorage(s *scope, call *ast.CallExpr, current state) (storage, bool)
 			fact := frozenStorage(valueStorage(s, call.Args[0], current), current)
 			fact.reachable = resolveStorage(fact, current).reachable
 			fact.outer = false
-			fact.references = map[allocation]bool{{site: call, invocation: s.invocation, context: s.context}: true}
+			fact.references = map[reference]bool{newReference(s, call): true}
 			return fact, true
 		}
 	}
@@ -305,14 +305,14 @@ func libraryStorage(s *scope, call *ast.CallExpr, current state) (storage, bool)
 func builtinStorage(s *scope, call *ast.CallExpr) storage {
 	name := builtinName(call)
 	if len(call.Args) > 0 && (name == "make" || name == "new") {
-		return storage{typ: call.Args[0], references: map[allocation]bool{{site: call, invocation: s.invocation, context: s.context}: true}}
+		return storage{typ: call.Args[0], references: map[reference]bool{newReference(s, call): true}}
 	}
 	return storage{}
 }
 
 func appendStorage(s *scope, call *ast.CallExpr, current state) storage {
 	fact := frozenStorage(valueStorage(s, call.Args[0], current), current)
-	fact.references = map[allocation]bool{{site: call, invocation: s.invocation, context: s.context}: true}
+	fact.references = map[reference]bool{newReference(s, call): true}
 	for _, arg := range call.Args[1:] {
 		child := valueStorage(s, arg, current)
 		if call.Ellipsis.IsValid() {

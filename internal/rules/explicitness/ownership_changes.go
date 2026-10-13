@@ -96,12 +96,15 @@ func collectEscapes(w *ownershipFlow, node ast.Node) {
 	arguments := map[ast.Expr]bool{}
 	ast.Inspect(node, func(n ast.Node) bool {
 		markNodeMutation(w, n)
-		recordAddress(w, n)
 		switch n := n.(type) {
 		case *ast.FuncLit:
 			return false
 		case *ast.ReturnStmt:
 			returnedAddresses(n, arguments)
+		case *ast.UnaryExpr:
+			collectEscapes(w, n.X)
+			recordAddress(w, n)
+			return false
 		case *ast.CallExpr:
 			collectEscapes(w, n.Fun)
 			for _, arg := range n.Args {

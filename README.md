@@ -62,6 +62,8 @@ through arguments are explicit inputs; writes to caller-visible storage are
 implicit outputs. The analysis follows aliases, copies, escaped allocations,
 and resolved same-package calls. Field and element writes update shared
 allocation state, so existing aliases see later inserts and replacements.
+Pointers to fields and elements address the same slots, including fields of
+value structs and elements of value arrays.
 Helper calls preserve that state in their stores and return values; separate
 factory calls keep separate private allocations. Function literals have their
 own `<lambda>` owner; invoking one transfers its effects to the caller,

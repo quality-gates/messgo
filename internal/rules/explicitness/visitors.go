@@ -114,7 +114,7 @@ func (w *writeVisitor) writeCallResult(target ast.Expr, shared bool) {
 	if call == nil || (target == ast.Expr(call) && !shared) {
 		return
 	}
-	fact := storageOf(w.scope, writtenContainer(target, shared), w.ownership.stateAt(target.Pos()))
+	fact := storageOf(w.scope, writtenContainer(target, shared), w.ownership.stateAt(call.Pos()))
 	deep := deepWrite(target)
 	if !fact.outer && !(deep && fact.reachable) {
 		return
@@ -134,6 +134,8 @@ func callRoot(target ast.Expr) *ast.CallExpr {
 		case *ast.IndexExpr:
 			target = t.X
 		case *ast.SliceExpr:
+			target = t.X
+		case *ast.UnaryExpr:
 			target = t.X
 		case *ast.StarExpr:
 			target = t.X

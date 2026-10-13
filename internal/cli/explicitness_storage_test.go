@@ -161,6 +161,39 @@ func Copy() {
 	)
 }
 
+func TestExplicitnessInfersGenericEmbeddedPackageValueSelection(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		typeDecl string
+		embed    string
+		init     string
+		copy     string
+	}{
+		{"value", "type Holder[T any] struct { Count int; Items []T }", "Holder[int]", "Holder[int]{Items: []int{1}}", "outer.Holder"},
+		{"pointer", "type Holder[T any] struct { Count int; Items []T }", "*Holder[int]", "&Holder[int]{Items: []int{1}}", "*outer.Holder"},
+		{"two type arguments", "type Holder[T any, U any] struct { Count int; Items []T }", "Holder[int, string]", "Holder[int, string]{Items: []int{1}}", "outer.Holder"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			source := `package p
+` + tc.typeDecl + `
+type Outer struct { ` + tc.embed + ` }
+var outer = Outer{Holder: ` + tc.init + `}
+var shared = ` + tc.copy + `
+func Copy() {
+ value := shared
+ value.Count++
+ value.Items[0]++
+}
+`
+			_, got := runExplicitness(t, "explicitness", map[string]string{"generic.go": source})
+			assertFindings(t, got,
+				"generic.go:7 ImplicitInput Copy: package variable shared",
+				"generic.go:9 ImplicitOutput Copy: write through parameter value",
+			)
+		})
+	}
+}
+
 func TestExplicitnessKeepsCopiedStructScalarsPrivateAndSliceFieldsShared(t *testing.T) {
 	_, got := runExplicitness(t, "explicitness", map[string]string{
 		"state.go": `package p

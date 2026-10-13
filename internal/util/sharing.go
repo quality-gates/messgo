@@ -311,6 +311,7 @@ func embeddedFieldName(typ ast.Expr) string {
 	if pointer, ok := typ.(*ast.StarExpr); ok {
 		typ = ast.Unparen(pointer.X)
 	}
+	typ = UnwrapTypeInstance(typ)
 	switch value := typ.(type) {
 	case *ast.Ident:
 		return value.Name

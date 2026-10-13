@@ -12,6 +12,9 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
   to a fixed point; function literals keep their own execution owner; shallow
   copies retain shared reachable storage; and unresolved callbacks or opaque
   calls remain unknown.
+- Added `<module>` ownership for package initialization and effect transfer
+  from invoked `defer` and `go` function literals while preserving their
+  separate `<lambda>` owners.
 
 ### Fixed
 - Length metrics, artifact spans, and report locations now use physical lines in the scanned file. A `//line` directive can no longer shrink ordinary LOC below effective LOC, or place a finding on a line that is not in the reported file (#264).

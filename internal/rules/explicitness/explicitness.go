@@ -11,6 +11,7 @@ import (
 
 	"github.com/quality-gates/messgo/internal/model"
 	"github.com/quality-gates/messgo/internal/rule"
+	"github.com/quality-gates/messgo/internal/util"
 )
 
 func init() {
@@ -37,8 +38,10 @@ func (r *ImplicitInput) Configure(props rule.Properties) error {
 }
 
 func (r *ImplicitInput) ApplyFunc(c *rule.Context, fn *model.Function) {
-	reportFunctions(c, fn, r.includeReceiver, true)
+	reportFunctions(c, moduleOwner(fn), r.includeReceiver, true)
 }
+
+func (r *ImplicitInput) ApplyFile(c *rule.Context) { applyModule(c, r.ApplyFunc) }
 
 // ImplicitOutput flags data that comes out of a function by a path that is not
 // a return value.
@@ -55,8 +58,10 @@ func (r *ImplicitOutput) Configure(props rule.Properties) error {
 }
 
 func (r *ImplicitOutput) ApplyFunc(c *rule.Context, fn *model.Function) {
-	reportFunctions(c, fn, r.includeReceiver, false)
+	reportFunctions(c, moduleOwner(fn), r.includeReceiver, false)
 }
+
+func (r *ImplicitOutput) ApplyFile(c *rule.Context) { applyModule(c, r.ApplyFunc) }
 
 // effect is one implicit input or output at a source line.
 type effect struct {
@@ -66,6 +71,9 @@ type effect struct {
 	deep         bool
 	callable     bool
 	callableArgs []ast.Expr
+	// variable is true for a read or a write of a captured variable itself,
+	// not of the data that it refers to.
+	variable bool
 }
 
 // result holds the implicit inputs and outputs of one function.
@@ -96,7 +104,7 @@ func reportFunctions(c *rule.Context, fn *model.Function, strict, input bool) {
 		if input {
 			effects = graph.nodes[callable].facts.inputs
 		}
-		report(c, callable, reportableEffects(graph, callable, effects, !strict))
+		report(c, callable, reportableEffects(callable, effects, !strict))
 	}
 }
 
@@ -182,25 +190,30 @@ func scanScope(s *scope) *result {
 // scope tells which identifiers in a function body refer to data outside the
 // function.
 type scope struct {
-	fn         *model.Function
-	mutated    map[string]bool
-	params     paramTypes
-	ownership  []ownershipSnapshot
-	captures   map[*ast.Object]storage
-	recv       *ast.Object
-	pointerRcv bool
+	fn *model.Function
+	// sharedGlobals holds the package variables whose contents can change.
+	sharedGlobals map[string]bool
+	params        paramTypes
+	ownership     ownershipSnapshots
+	captures      map[*ast.Object]storage
+	recv          *ast.Object
+	pointerRcv    bool
+	// returns holds the returned storage of callees, shared by the scopes of
+	// one analysis.
+	returns *returnSummaries
 	// strict is true when the receiver is not exempt. Then a read of the
 	// receiver is an input, and a write through a pointer receiver is an
 	// output.
 	strict bool
 }
 
-func newScope(c *rule.Context, fn *model.Function, strict bool) *scope {
+func newScope(fn *model.Function, strict bool, returns *returnSummaries) *scope {
 	s := &scope{
-		fn:      fn,
-		mutated: fn.File.MutatedPackageGlobals(),
-		params:  paramTypes{},
-		strict:  strict,
+		fn:            fn,
+		sharedGlobals: sharedPackageGlobals(fn.File),
+		params:        paramTypes{},
+		strict:        strict,
+		returns:       returns,
 	}
 	for _, p := range fn.Params {
 		if p.Ident != nil && p.Ident.Obj != nil {
@@ -209,9 +222,19 @@ func newScope(c *rule.Context, fn *model.Function, strict bool) *scope {
 	}
 	s.recv, s.pointerRcv = receiverObject(fn.Decl)
 	if fn.Body != nil {
-		s.trackOwnership()
+		trackOwnership(s)
 	}
 	return s
+}
+
+// sharedPackageGlobals returns the package variable names whose contents can
+// change while a function runs, unless the runner has already populated
+// cross-file data.
+func sharedPackageGlobals(f *model.File) map[string]bool {
+	if f.SharedGlobals != nil {
+		return f.SharedGlobals
+	}
+	return util.SharedGlobalNames([]*ast.File{f.Syntax}, f.PackageTypeDefs)
 }
 
 // receiverObject returns the object of the named receiver of decl, or nil, and
@@ -226,10 +249,11 @@ func receiverObject(decl *ast.FuncDecl) (*ast.Object, bool) {
 }
 
 // isGlobal reports whether id is a package variable. An identifier that the
-// parser cannot resolve is declared in a different file of the package.
+// parser cannot resolve is declared in a different file of the package; it
+// counts only if its contents can change (see util.SharedGlobalNames).
 func (s *scope) isGlobal(id *ast.Ident) bool {
 	if id.Obj == nil {
-		return s.mutated[id.Name]
+		return s.sharedGlobals[id.Name]
 	}
 	if _, ok := id.Obj.Decl.(*ast.ValueSpec); !ok || id.Obj.Kind != ast.Var {
 		return false

@@ -23,6 +23,7 @@ command -v mutago >/dev/null 2>&1 || fail "mutago not found. Install with: go in
 
 echo "pre-push: mutation testing (diff vs origin/main)"
 mutago \
+    --workers=1 \
     --git-diff-lines \
     --git-diff-base origin/main \
     --ignore-msi-with-no-mutations \

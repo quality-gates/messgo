@@ -65,6 +65,11 @@ type PackageScope struct {
 	// when a file is analyzed in isolation (rules then fall back to single-file
 	// analysis).
 	MutatedGlobals map[string]bool
+	// SharedGlobals holds the package-level variable names whose contents
+	// can change while a function runs: mutated, exported, or aliased
+	// variables (see util.SharedGlobalNames). The runner populates it. When
+	// nil, rules fall back to this file alone.
+	SharedGlobals map[string]bool
 	// PackageClasses holds all structs from every file in this file's package.
 	// It is populated by the runner after parsing, enabling cross-file embedding
 	// analysis. When nil (file analyzed in isolation), rules fall back to

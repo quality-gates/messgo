@@ -4,103 +4,104 @@ import (
 	"go/ast"
 	"go/token"
 	"maps"
+
+	"github.com/quality-gates/messgo/internal/model"
+	"github.com/quality-gates/messgo/internal/util"
 )
 
 // storage separates an allocation from the objects reachable through it.
 type storage struct {
 	typ              ast.Expr
 	outer, reachable bool
-	origins          map[*ast.Object]bool
+	// ambient is true if the storage may come from data that no origin
+	// describes, as a package variable or a variable that a pointer or a
+	// closure can change.
+	ambient bool
+	origins map[*ast.Object]bool
 }
+
+// ambientStorage is storage that may be shared with any data.
+var ambientStorage = storage{outer: true, reachable: true, ambient: true}
+
+// state maps each tracked variable to its storage at one point.
+type state map[*ast.Object]storage
 
 type ownershipSnapshot struct {
 	position token.Pos
-	values   map[*ast.Object]storage
+	values   state
 }
 
-func (s *scope) trackOwnership() {
+type ownershipSnapshots []ownershipSnapshot
+
+func initialState(s *scope) state {
 	current := maps.Clone(s.captures)
 	if current == nil {
-		current = map[*ast.Object]storage{}
+		current = state{}
 	}
 	for object, typ := range s.params {
-		fact := typeStorage(typ, map[ast.Expr]bool{}, s.fn.File.PackageTypeDefs)
-		fact.origins = map[*ast.Object]bool{object: true}
-		current[object] = fact
+		current[object] = parameterStorage(s, object, typ)
 	}
 	for _, result := range s.fn.Results {
-		if result.Ident != nil {
-			current[result.Ident.Obj] = storage{}
+		if result.Ident != nil && result.Ident.Obj != nil {
+			current[result.Ident.Obj] = storage{typ: result.Field.Type}
 		}
 	}
-	s.ownership = []ownershipSnapshot{{s.fn.Body.Pos(), maps.Clone(current)}}
-	var stack []ast.Node
-	ast.Inspect(s.fn.Body, func(node ast.Node) bool {
-		if node == nil {
-			stack = stack[:len(stack)-1]
-			return true
-		}
-		if _, nested := node.(*ast.FuncLit); nested {
-			return false
-		}
-		conditional := conditionalParents(stack)
-		stack = append(stack, node)
-		current = updateStorage(s, node, current, conditional)
-		if _, assignment := node.(*ast.AssignStmt); assignment {
-			s.ownership = append(s.ownership, ownershipSnapshot{node.End(), maps.Clone(current)})
-		}
-		if _, declaration := node.(*ast.ValueSpec); declaration {
-			s.ownership = append(s.ownership, ownershipSnapshot{node.End(), maps.Clone(current)})
-		}
-		return true
-	})
-}
-
-func updateStorage(s *scope, node ast.Node, current map[*ast.Object]storage, conditional bool) map[*ast.Object]storage {
-	switch node := node.(type) {
-	case *ast.AssignStmt:
-		return assignmentStorage(s, node, current, conditional)
-	case *ast.ValueSpec:
-		if len(node.Names) == len(node.Values) {
-			for i, name := range node.Names {
-				current[name.Obj] = storageOf(s, node.Values[i], current)
-			}
-		}
+	if s.recv != nil {
+		current[s.recv] = parameterStorage(s, s.recv, s.fn.Decl.Recv.List[0].Type)
 	}
 	return current
 }
 
-func assignmentStorage(s *scope, assignment *ast.AssignStmt, current map[*ast.Object]storage, conditional bool) map[*ast.Object]storage {
-	if len(assignment.Lhs) != len(assignment.Rhs) {
-		return current
-	}
-	next := maps.Clone(current)
-	for i, target := range assignment.Lhs {
-		id, named := target.(*ast.Ident)
-		if !named || id.Obj == nil {
-			continue
-		}
-		fact := storageOf(s, assignment.Rhs[i], current)
-		if conditional {
-			fact = joinStorage(current[id.Obj], fact)
-		}
-		next[id.Obj] = fact
-	}
-	return next
+func parameterStorage(s *scope, object *ast.Object, typ ast.Expr) storage {
+	fact := typeStorage(typ, s.fn.File.PackageTypeDefs)
+	fact.origins = map[*ast.Object]bool{object: true}
+	return fact
 }
 
-func (s *scope) inherit(parent *scope, position token.Pos) {
-	s.captures = maps.Clone(parent.storageAt(position))
+func inherit(s *scope, parent *scope, position token.Pos) {
+	s.captures = maps.Clone(parent.ownership.stateAt(position))
 }
 
-func conditionalParents(stack []ast.Node) bool {
-	for _, parent := range stack {
-		switch parent.(type) {
-		case *ast.IfStmt, *ast.ForStmt, *ast.RangeStmt, *ast.SwitchStmt, *ast.TypeSwitchStmt, *ast.SelectStmt:
-			return true
+// stateAt returns the state of the last snapshot at or before position.
+func (snapshots ownershipSnapshots) stateAt(position token.Pos) state {
+	var values state
+	best := token.NoPos
+	for _, snapshot := range snapshots {
+		if snapshot.position <= position && snapshot.position >= best {
+			values, best = snapshot.values, snapshot.position
 		}
 	}
-	return false
+	return values
+}
+
+func joinStates(states ...state) state {
+	out := state{}
+	for _, values := range states {
+		for object, fact := range values {
+			if prior, ok := out[object]; ok {
+				fact = joinStorage(prior, fact)
+			}
+			out[object] = fact
+		}
+	}
+	return out
+}
+
+func sameStates(a, b state) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for object, fact := range a {
+		other, ok := b[object]
+		if !ok || !sameStorage(fact, other) {
+			return false
+		}
+	}
+	return true
+}
+
+func sameStorage(a, b storage) bool {
+	return a.outer == b.outer && a.reachable == b.reachable && a.ambient == b.ambient && maps.Equal(a.origins, b.origins)
 }
 
 func joinStorage(a, b storage) storage {
@@ -109,6 +110,10 @@ func joinStorage(a, b storage) storage {
 	}
 	a.outer = a.outer || b.outer
 	a.reachable = a.reachable || b.reachable
+	a.ambient = a.ambient || b.ambient
+	if len(b.origins) == 0 {
+		return a
+	}
 	origins := maps.Clone(a.origins)
 	if origins == nil {
 		origins = map[*ast.Object]bool{}
@@ -118,30 +123,69 @@ func joinStorage(a, b storage) storage {
 	return a
 }
 
-func storageOf(s *scope, expression ast.Expr, current map[*ast.Object]storage) storage {
+// contained returns the storage of a container that holds data of storage
+// fact: the container itself is not shared, the data in it is.
+func contained(fact storage) storage {
+	return storage{reachable: fact.outer || fact.reachable, ambient: fact.ambient, origins: fact.origins}
+}
+
+// elementOf returns the storage of an element of data of storage fact.
+func elementOf(fact storage) storage {
+	if !fact.reachable {
+		return storage{}
+	}
+	return storage{outer: true, reachable: true, ambient: fact.ambient, origins: fact.origins}
+}
+
+func storageOf(s *scope, expression ast.Expr, current state) storage {
 	switch value := ast.Unparen(expression).(type) {
 	case *ast.Ident:
-		if s.isGlobal(value) {
-			return storage{outer: true, reachable: true}
-		}
-		return current[value.Obj]
+		return identStorage(s, value, current)
 	case *ast.SliceExpr:
 		return storageOf(s, value.X, current)
 	case *ast.StarExpr:
 		return storageOf(s, value.X, current)
-	case *ast.UnaryExpr:
+	case *ast.TypeAssertExpr:
 		return storageOf(s, value.X, current)
+	case *ast.UnaryExpr:
+		return unaryStorage(s, value, current)
 	case *ast.CallExpr:
 		return callStorage(s, value, current)
 	case *ast.CompositeLit:
 		return compositeStorage(s, value, current)
+	case *ast.BasicLit, *ast.FuncLit, *ast.BinaryExpr:
+		return storage{}
 	}
 	return selectedStorage(s, expression, current)
 }
 
-func selectedStorage(s *scope, expression ast.Expr, current map[*ast.Object]storage) storage {
+func identStorage(s *scope, id *ast.Ident, current state) storage {
+	if s.isGlobal(id) {
+		return ambientStorage
+	}
+	if id.Obj == nil || id.Obj.Kind != ast.Var {
+		return storage{}
+	}
+	if fact, tracked := current[id.Obj]; tracked {
+		return fact
+	}
+	return ambientStorage
+}
+
+func unaryStorage(s *scope, value *ast.UnaryExpr, current state) storage {
+	fact := storageOf(s, value.X, current)
+	if value.Op == token.ARROW {
+		return elementOf(fact)
+	}
+	return fact
+}
+
+func selectedStorage(s *scope, expression ast.Expr, current state) storage {
 	switch value := ast.Unparen(expression).(type) {
 	case *ast.SelectorExpr:
+		if s.qualified(value) != "" {
+			return ambientStorage
+		}
 		fact := storageOf(s, value.X, current)
 		fact.outer = fact.outer || fact.reachable
 		return fact
@@ -150,43 +194,16 @@ func selectedStorage(s *scope, expression ast.Expr, current map[*ast.Object]stor
 		fact.outer = fact.reachable
 		return fact
 	}
-	return storage{}
+	return ambientStorage
 }
 
-func compositeStorage(s *scope, value *ast.CompositeLit, current map[*ast.Object]storage) storage {
+func compositeStorage(s *scope, value *ast.CompositeLit, current state) storage {
 	fact := storage{typ: value.Type}
 	for _, element := range value.Elts {
 		if pair, ok := element.(*ast.KeyValueExpr); ok {
 			element = pair.Value
 		}
-		child := storageOf(s, element, current)
-		fact = joinStorage(fact, storage{reachable: child.outer || child.reachable, origins: child.origins})
-	}
-	return fact
-}
-
-func callStorage(s *scope, call *ast.CallExpr, current map[*ast.Object]storage) storage {
-	if len(call.Args) == 0 {
-		return storage{}
-	}
-	if selector, ok := ast.Unparen(call.Fun).(*ast.SelectorExpr); ok {
-		name := s.qualified(selector)
-		if name == "slices.Clone" || name == "maps.Clone" {
-			fact := storageOf(s, call.Args[0], current)
-			fact.outer = false
-			return fact
-		}
-	}
-	if builtinName(call) == "make" || builtinName(call) == "new" {
-		return storage{}
-	}
-	if builtinName(call) == "append" {
-		return appendStorage(s, call.Args, current)
-	}
-	// Unmodeled results may alias their arguments.
-	fact := storage{}
-	for _, arg := range call.Args {
-		fact = joinStorage(fact, storageOf(s, arg, current))
+		fact = joinStorage(fact, contained(storageOf(s, element, current)))
 	}
 	return fact
 }
@@ -198,75 +215,201 @@ func builtinName(call *ast.CallExpr) string {
 	return ""
 }
 
-func appendStorage(s *scope, args []ast.Expr, current map[*ast.Object]storage) storage {
-	fact := storageOf(s, args[0], current)
-	for _, arg := range args[1:] {
+func typeStorage(typ ast.Expr, definitions map[string]ast.Expr) storage {
+	sharing := util.TypeSharing(typ, definitions)
+	return storage{typ: typ, outer: sharing.Outer, reachable: sharing.Reachable}
+}
+
+// returnSummaries holds the storage that each function returns, relative to
+// its parameters.
+type returnSummaries struct {
+	done   map[*model.Function]storage
+	active map[*model.Function]bool
+}
+
+func newReturnSummaries() *returnSummaries {
+	return &returnSummaries{done: map[*model.Function]storage{}, active: map[*model.Function]bool{}}
+}
+
+var builtinFunctions = setOf("append", "cap", "clear", "close", "complex", "copy", "delete", "imag", "len", "make", "max", "min", "new", "panic", "print", "println", "real", "recover")
+
+// callStorage returns the storage of the result of call. A resolved callee
+// maps its returned storage to the arguments. A callback, or a function that
+// the analysis cannot resolve, may return any data.
+func callStorage(s *scope, call *ast.CallExpr, current state) storage {
+	if fact, known := libraryStorage(s, call, current); known {
+		return fact
+	}
+	if conversion(s, call.Fun) {
+		return argumentsStorage(s, call.Args, current)
+	}
+	if callee := model.ResolveCall(s.fn, call); callee != nil && callee.Body != nil {
+		return mappedStorage(s, callEdge{call: call, callee: callee}, returnedStorage(s, callee), current)
+	}
+	return unresolvedStorage(s, call, current)
+}
+
+func libraryStorage(s *scope, call *ast.CallExpr, current state) (storage, bool) {
+	if selector, ok := ast.Unparen(call.Fun).(*ast.SelectorExpr); ok && len(call.Args) > 0 {
+		switch s.qualified(selector) {
+		case "slices.Clone", "maps.Clone":
+			fact := storageOf(s, call.Args[0], current)
+			fact.outer = false
+			return fact, true
+		}
+	}
+	name := builtinName(call)
+	switch {
+	case name == "append" && len(call.Args) > 0:
+		return appendStorage(s, call, current), true
+	case builtinFunctions[name]:
+		return storage{}, true
+	}
+	return storage{}, false
+}
+
+// appendStorage returns the storage of an append. The result may share the
+// array of the first argument, and holds the other arguments.
+func appendStorage(s *scope, call *ast.CallExpr, current state) storage {
+	fact := storageOf(s, call.Args[0], current)
+	for _, arg := range call.Args[1:] {
 		child := storageOf(s, arg, current)
-		fact = joinStorage(fact, storage{reachable: child.outer || child.reachable, origins: child.origins})
+		if call.Ellipsis.IsValid() {
+			child = elementOf(child)
+		}
+		fact = joinStorage(fact, contained(child))
 	}
 	return fact
 }
 
-func (s *scope) storageAt(position token.Pos) map[*ast.Object]storage {
-	var values map[*ast.Object]storage
-	for _, snapshot := range s.ownership {
-		if snapshot.position <= position {
-			values = snapshot.values
-		}
+func argumentsStorage(s *scope, args []ast.Expr, current state) storage {
+	fact := storage{}
+	for _, arg := range args {
+		fact = joinStorage(fact, storageOf(s, arg, current))
 	}
-	return values
+	return fact
 }
 
-func typeStorage(typ ast.Expr, seen map[ast.Expr]bool, definitions map[string]ast.Expr) storage {
-	if typ == nil {
-		return storage{}
-	}
-	if seen[typ] {
-		return storage{typ: typ, outer: true, reachable: true}
-	}
-	seen[typ] = true
-	fact := storage{typ: typ}
-	switch value := ast.Unparen(typ).(type) {
-	case *ast.ArrayType:
-		fact.outer = value.Len == nil
-		fact.reachable = reachableType(value.Elt, seen, definitions)
-	case *ast.MapType:
-		fact.outer = true
-		fact.reachable = reachableType(value.Value, seen, definitions)
-	case *ast.StarExpr, *ast.Ellipsis, *ast.InterfaceType:
-		fact.outer, fact.reachable = true, true
-	case *ast.ChanType:
-		fact.outer = true
-	case *ast.StructType:
-		fact.reachable = fieldsShare(value.Fields, seen, definitions)
+// conversion reports whether fun is a type, so a call of fun converts its
+// argument.
+func conversion(s *scope, fun ast.Expr) bool {
+	switch value := util.UnwrapTypeInstance(ast.Unparen(fun)).(type) {
+	case *ast.ArrayType, *ast.MapType, *ast.ChanType, *ast.FuncType, *ast.InterfaceType, *ast.StructType:
+		return true
+	case *ast.StarExpr:
+		return conversion(s, value.X)
 	case *ast.Ident:
-		return namedStorage(value, seen, definitions)
-	}
-	return fact
-}
-
-func reachableType(typ ast.Expr, seen map[ast.Expr]bool, definitions map[string]ast.Expr) bool {
-	fact := typeStorage(typ, maps.Clone(seen), definitions)
-	return fact.outer || fact.reachable
-}
-
-func fieldsShare(fields *ast.FieldList, seen map[ast.Expr]bool, definitions map[string]ast.Expr) bool {
-	for _, field := range fields.List {
-		if reachableType(field.Type, seen, definitions) {
-			return true
+		if value.Obj != nil {
+			return value.Obj.Kind == ast.Typ
 		}
+		return util.IsBasicType(value.Name) || value.Name == "any" || value.Name == "error" || s.fn.File.PackageTypeDefs[value.Name] != nil
 	}
 	return false
 }
 
-func namedStorage(id *ast.Ident, seen map[ast.Expr]bool, definitions map[string]ast.Expr) storage {
-	if id.Obj != nil {
-		if spec, ok := id.Obj.Decl.(*ast.TypeSpec); ok {
-			return typeStorage(spec.Type, seen, definitions)
+// unresolvedStorage returns the storage of a call that the analysis cannot
+// resolve. A function of another package returns data that its arguments
+// refer to, or fresh data. A method returns data that its receiver or its
+// arguments refer to. Any other call may return any data.
+func unresolvedStorage(s *scope, call *ast.CallExpr, current state) storage {
+	selector, ok := ast.Unparen(call.Fun).(*ast.SelectorExpr)
+	if !ok {
+		return ambientStorage
+	}
+	fact := argumentsStorage(s, call.Args, current)
+	if s.qualified(selector) != "" {
+		return fact
+	}
+	return joinStorage(fact, storageOf(s, selector.X, current))
+}
+
+// returnedStorage returns the storage that callee returns, relative to its
+// parameters. A recursive call returns any data.
+func returnedStorage(s *scope, callee *model.Function) storage {
+	summaries := s.returns
+	if fact, done := summaries.done[callee]; done {
+		return fact
+	}
+	if summaries.active[callee] {
+		return ambientStorage
+	}
+	summaries.active[callee] = true
+	fact := returnStorage(newScope(callee, true, summaries))
+	delete(summaries.active, callee)
+	summaries.done[callee] = fact
+	return fact
+}
+
+func returnStorage(s *scope) storage {
+	out := storage{}
+	if s.fn.Body == nil {
+		return ambientStorage
+	}
+	ast.Inspect(s.fn.Body, func(n ast.Node) bool {
+		ret, ok := n.(*ast.ReturnStmt)
+		if ok {
+			out = joinStorage(out, resultStorage(s, ret))
+		}
+		_, literal := n.(*ast.FuncLit)
+		return !literal
+	})
+	return out
+}
+
+func resultStorage(s *scope, ret *ast.ReturnStmt) storage {
+	current := s.ownership.stateAt(ret.Pos())
+	out := storage{}
+	for _, result := range ret.Results {
+		out = joinStorage(out, storageOf(s, result, current))
+	}
+	if len(ret.Results) > 0 {
+		return out
+	}
+	for _, result := range s.fn.Results {
+		if result.Ident != nil && result.Ident.Obj != nil {
+			out = joinStorage(out, current[result.Ident.Obj])
 		}
 	}
-	if definition := definitions[id.Name]; definition != nil {
-		return typeStorage(definition, seen, definitions)
+	return out
+}
+
+// mappedStorage maps the returned storage of a callee to the caller. An origin
+// that is a parameter becomes the storage of its argument. Any other origin
+// may be any data.
+func mappedStorage(s *scope, edge callEdge, summary storage, current state) storage {
+	if len(summary.origins) == 0 {
+		return storage{outer: summary.outer, reachable: summary.reachable, ambient: summary.ambient}
 	}
-	return storage{typ: id}
+	out := storage{}
+	if summary.ambient {
+		out = storage{outer: summary.outer, reachable: summary.reachable, ambient: true}
+	}
+	for origin := range summary.origins {
+		actual := originArgument(s, edge, origin, current)
+		if actual.outer || actual.reachable || actual.ambient {
+			out = joinStorage(out, storage{outer: summary.outer, reachable: summary.reachable, ambient: actual.ambient, origins: actual.origins})
+		}
+	}
+	return out
+}
+
+func originArgument(s *scope, edge callEdge, origin *ast.Object, current state) storage {
+	if recv, _ := receiverObject(edge.callee.Decl); recv != nil && recv == origin {
+		if selector, ok := ast.Unparen(edge.call.Fun).(*ast.SelectorExpr); ok {
+			return storageOf(s, selector.X, current)
+		}
+		return ambientStorage
+	}
+	index := paramIndex(edge.callee, origin)
+	if index < 0 {
+		return ambientStorage
+	}
+	args, variadic := parameterArguments(edge, index)
+	if len(args) == 0 && !variadic {
+		return ambientStorage
+	}
+	if variadic {
+		return contained(argumentsStorage(s, args, current))
+	}
+	return storageOf(s, args[0], current)
 }

@@ -165,9 +165,13 @@ func Scale(p point, factor int) (point, error) {
 	if code != ExitViolation {
 		t.Errorf("exit = %d, want %d", code, ExitViolation)
 	}
+	// ErrEmpty is exported, so other packages can assign it while Scale runs.
 	assertFindings(t, got,
 		"a.go:13 ImplicitInput bump: package variable y",
 		"a.go:13 ImplicitOutput bump: package variable y",
+		"a.go:17 ImplicitInput Scale: package variable ErrEmpty",
+		"a.go:26 ImplicitInput <lambda>: captured variable total",
+		"a.go:26 ImplicitOutput <lambda>: captured variable total",
 	)
 }
 
@@ -232,8 +236,9 @@ func Pure(s string) string {
 		"a.go:28 ImplicitOutput Fail: os.Stderr",
 		"a.go:29 ImplicitOutput Fail: os.Exit",
 		"a.go:34 ImplicitOutput Must: panic",
-		"a.go:40 ImplicitInput Safe: recover",
+		"a.go:39 ImplicitInput Safe: recover",
 		"a.go:40 ImplicitInput <lambda>: recover",
+		"a.go:41 ImplicitOutput <lambda>: captured variable err",
 	)
 }
 
@@ -306,7 +311,8 @@ func (s *server) Run(n int) {
 		"a.go:29 ImplicitInput Pipe: receive from in",
 		"a.go:42 ImplicitOutput Dump: write to w",
 		"a.go:43 ImplicitInput Dump: read from r",
-		"a.go:52 UnknownEffect server.Run: receiver excluded by policy",
+		"a.go:53 ImplicitOutput server.Run: send on s",
+		"a.go:54 ImplicitOutput server.Run: write through receiver s",
 	)
 }
 
@@ -415,7 +421,7 @@ func fields() { _ = record{n: "x"} }
 `,
 	})
 	assertFindings(t, got,
-		"a.go:5 ImplicitOutput init: package variable n",
+		"a.go:5 ImplicitOutput <module>: package variable n",
 		"a.go:13 ImplicitInput generic: package variable n",
 		"a.go:15 ImplicitInput aliased: package variable n",
 		"a.go:17 ImplicitInput genericAlias: package variable n",
@@ -537,7 +543,7 @@ func (q queue) Load(src []int) { copy(q.items[:], src) }
 		"a.go:9 ImplicitInput Fill: package variable arr",
 		"a.go:9 ImplicitOutput Fill: package variable arr",
 		"a.go:11 ImplicitOutput Tail: write through parameter s",
-		"a.go:13 UnknownEffect queue.Load: receiver excluded by policy",
+		"a.go:13 ImplicitOutput queue.Load: write through receiver q",
 	)
 	_, got = runExplicitness(t, "explicitness-strict", map[string]string{"a.go": src})
 	if !slices.Contains(got, "a.go:13 ImplicitOutput queue.Load: receiver field items") {
@@ -612,18 +618,19 @@ func (c *cart) clear() { c.total = 0 }
 func (c cart) Tag(i int, item string) { c.items[i] = item }
 `
 
-func TestExplicitnessKeepsReceiverUncertaintyByDefault(t *testing.T) {
+// By default the receiver is a parameter: a read of it is explicit input, and
+// a write is an output only if the caller sees it. A value receiver is a copy,
+// thus With is a calculation, but Tag writes the array that the copy shares.
+func TestExplicitnessTreatsReceiverAsParameterByDefault(t *testing.T) {
 	code, got := runExplicitness(t, "explicitness", map[string]string{"a.go": cartSource})
 	if code != ExitViolation {
 		t.Errorf("exit = %d, want %d", code, ExitViolation)
 	}
 	assertFindings(t, got,
-		"a.go:8 UnknownEffect cart.Add: receiver excluded by policy",
-		"a.go:12 UnknownEffect cart.Count: receiver excluded by policy",
-		"a.go:16 UnknownEffect cart.Reset: receiver excluded by policy",
-		"a.go:20 UnknownEffect cart.With: receiver excluded by policy",
-		"a.go:25 UnknownEffect cart.clear: receiver excluded by policy",
-		"a.go:27 UnknownEffect cart.Tag: receiver excluded by policy",
+		"a.go:9 ImplicitOutput cart.Add: write through receiver c",
+		"a.go:17 ImplicitOutput cart.Reset: write through receiver c",
+		"a.go:25 ImplicitOutput cart.clear: write through receiver c",
+		"a.go:27 ImplicitOutput cart.Tag: write through receiver c",
 	)
 }
 
@@ -667,6 +674,7 @@ func write(w interface{ Write([]byte) (int, error) }) {
 	}
 	_, got := runExplicitness(t, "explicitness", files)
 	assertFindings(t, got,
+		"a.go:7 ImplicitOutput set: write through receiver t",
 		"a.go:10 ImplicitInput drain: receive from ch",
 		"a.go:15 ImplicitOutput write: write to w",
 	)

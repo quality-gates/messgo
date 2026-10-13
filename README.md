@@ -57,14 +57,15 @@ recommended set leaves out. Add `explicitness` (or `explicitness-strict`) to
 find functions with implicit inputs and outputs. Point at a custom XML ruleset
 when thresholds or membership need to live in the repo:
 
-`explicitness` classifies Go code within a documented native subset. It
-propagates same-package function effects through resolved calls, separates
-deferred function literals from invoked callbacks, tracks aliases and shallow
-copies of caller-owned storage, and reports `UnknownEffect` for injected
-callbacks, opaque external calls, interface dispatch, and receiver effects that
-the non-strict policy does not classify directly. A clean explicitness report
-means "calculation within this analyzed subset," not proof about arbitrary
-runtime behavior.
+`explicitness` classifies Go code within a documented native subset. Reads
+through arguments are explicit inputs; writes to caller-visible storage are
+implicit outputs. The analysis follows aliases, copies, escaped allocations,
+and resolved same-package calls. Function literals have their own `<lambda>`
+owner; invoking one transfers its effects to the caller, including `defer` and
+`go` calls. Package initialization uses a `<module>` owner. Injected callbacks,
+opaque external calls, interface dispatch, and receiver effects excluded by
+the non-strict policy produce `UnknownEffect`. A clean report means
+"calculation within this analyzed subset."
 
 ```xml
 <ruleset name="team policy">

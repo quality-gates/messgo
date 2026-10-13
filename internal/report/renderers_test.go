@@ -128,6 +128,38 @@ func TestRenderersPreserveReportContent(t *testing.T) {
 		"<tr><td>4</td><td>Example</td><td>second violation</td></tr>", "</body></html>")
 }
 
+func TestJSONRendererPreservesLambdaOwnerText(t *testing.T) {
+	r := &rule.Base{
+		RuleName: "ImplicitOutput",
+		RulePrio: 2,
+		RuleSet:  "Explicitness",
+		RuleDesc: "reports actions",
+	}
+	rep := &Report{
+		Violations: []*rule.Violation{{
+			Rule:        r,
+			File:        "callback.go",
+			BeginLine:   3,
+			EndLine:     3,
+			Package:     "sample",
+			Function:    "<lambda>",
+			Description: "The function <lambda>() has an implicit output: fmt.Println. Return it instead.",
+			Priority:    2,
+			RuleSetName: "Explicitness",
+		}},
+	}
+
+	var buf bytes.Buffer
+	if err := (JSONRenderer{}).Render(&buf, rep); err != nil {
+		t.Fatal(err)
+	}
+	output := buf.String()
+	requireFragments(t, output, `"function": "<lambda>"`, `"description": "The function <lambda>() has an implicit output: fmt.Println. Return it instead."`)
+	if strings.Contains(output, `\u003clambda\u003e`) {
+		t.Fatalf("JSONRenderer escaped the execution owner text:\n%s", output)
+	}
+}
+
 func TestRenderersPropagateWriterErrors(t *testing.T) {
 	want := errors.New("write failed")
 	for _, format := range Formats() {

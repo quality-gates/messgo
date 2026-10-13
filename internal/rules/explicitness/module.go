@@ -1,0 +1,48 @@
+package explicitness
+
+import (
+	"go/ast"
+	"go/token"
+
+	"github.com/quality-gates/messgo/internal/model"
+	"github.com/quality-gates/messgo/internal/rule"
+)
+
+const moduleName = "<module>"
+
+func moduleOwner(fn *model.Function) *model.Function {
+	if fn.Name != "init" || fn.IsMethod() || fn.Decl == nil || fn.Decl.Recv != nil {
+		return fn
+	}
+	return &model.Function{Name: moduleName, Params: fn.Params, Results: fn.Results, Line: fn.Line,
+		EndLine: fn.EndLine, Decl: fn.Decl, Body: fn.Body, File: fn.File}
+}
+
+func moduleInitializerFunction(file *model.File) *model.Function {
+	if file == nil || file.Syntax == nil {
+		return nil
+	}
+	body := &ast.BlockStmt{}
+	for _, decl := range file.Syntax.Decls {
+		gen, ok := decl.(*ast.GenDecl)
+		if !ok || gen.Tok != token.VAR {
+			continue
+		}
+		for _, spec := range gen.Specs {
+			for _, value := range spec.(*ast.ValueSpec).Values {
+				body.List = append(body.List, &ast.ExprStmt{X: value})
+			}
+		}
+	}
+	if len(body.List) == 0 {
+		return nil
+	}
+	decl := &ast.FuncDecl{Name: ast.NewIdent(moduleName), Type: &ast.FuncType{Params: &ast.FieldList{}}, Body: body}
+	return &model.Function{Name: moduleName, Decl: decl, Body: body, File: file}
+}
+
+func applyModule(c *rule.Context, apply func(*rule.Context, *model.Function)) {
+	if fn := moduleInitializerFunction(c.File); fn != nil {
+		apply(c, fn)
+	}
+}

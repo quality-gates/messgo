@@ -112,10 +112,16 @@ func annotatePackageGroup(group []*model.File) {
 		f.PackageFunctions = pkgFunctions
 	}
 	attachPackageMethods(group, classByName, util.TypeAliasNames(asts))
+	sharedGlobals := util.SharedGlobalNames(asts, pkgTypeDefs)
+	globalSharings := util.GlobalSharings(asts, pkgTypeDefs)
+	globalTypes := util.GlobalValueTypes(asts, pkgTypeDefs)
 	pkgMembers := collectPackageMemberNames(group)
 	pkgMemberSelections := collectPackageMemberSelections(group)
 	for _, f := range group {
 		f.MutatedGlobals = mutated
+		f.SharedGlobals = sharedGlobals
+		f.PackageGlobalSharings = globalSharings
+		f.PackageGlobalTypes = globalTypes
 		f.PackageMembers = pkgMembers
 		f.PackageMemberSelections = pkgMemberSelections
 	}

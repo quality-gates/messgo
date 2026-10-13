@@ -6,8 +6,45 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 
 ## [Unreleased]
 
+### Added
+- Added native explicitness effect summaries for Go. Resolved same-package
+  calls now propagate `ImplicitInput`, `ImplicitOutput`, and `UnknownEffect`
+  to a fixed point; function literals keep their own execution owner; shallow
+  copies retain shared reachable storage; and unresolved callbacks or opaque
+  calls remain unknown.
+- Added `<module>` ownership for package initialization and effect transfer
+  from invoked `defer` and `go` function literals while preserving their
+  separate `<lambda>` owners.
+
 ### Fixed
+- Fixed inferred package-global value types through array, slice, and map
+  indexing and struct field selection. Copied structs keep private scalar
+  fields even when their initializer selects another value.
+- Fixed value-parameter and copied package-struct ownership for array fields.
+  Array elements remain private after a value copy, while slice-backed fields
+  retain shared writes. Package initializers that dereference a typed pointer
+  preserve the resulting struct's value semantics.
+- Fixed explicitness ownership for value copies of package structs, including
+  constructor-initialized values and package aliases. Scalar fields of a copy
+  stay private, while slice and other reference-bearing fields retain shared
+  storage and report writes at the actual mutation line.
 - Length metrics, artifact spans, and report locations now use physical lines in the scanned file. A `//line` directive can no longer shrink ordinary LOC below effective LOC, or place a finding on a line that is not in the reported file (#264).
+- Fixed JSON reports escaping callback names such as `<lambda>`, so normalized
+  report consumers can match function metadata and descriptions directly.
+- Fixed explicitness analysis walking effects inside literal `if false` branches.
+  Dead standard-library actions and unresolved callback calls no longer make a
+  function look impure.
+- Fixed explicitness storage tracking across existing aliases and helper calls.
+  Later field and element inserts expose caller storage, while private
+  replacements remove the old origins. Returned aliases retain their storage
+  identity, and separate factory calls keep separate private allocations.
+- Fixed field and element addresses retaining their connection to the
+  containing storage. Pointer writes and direct writes now share the same
+  slots; private replacements and sibling slots stay separate.
+- Fixed reads of mutable captured storage, including writes through an alias
+  and standard-library in-place mutations. Uncalled literals no longer change
+  their definer's storage, literal-false loops stay quiet, and transferred
+  effects use the earliest source line.
 
 ## [0.5.10] - 2026-10-11
 

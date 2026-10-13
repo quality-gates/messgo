@@ -24,4 +24,9 @@ Run with:  messgo &lt;paths&gt; &lt;format&gt; explicitness-strict
         </properties>
     </rule>
 
+    <rule ref="explicitness/UnknownEffect">
+        <properties>
+            <property name="include-receiver" value="true"/>
+        </properties>
+    </rule>
 </ruleset>

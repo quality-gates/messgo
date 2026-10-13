@@ -13,8 +13,8 @@ phpmd-format ruleset XML file.
 | `design` | ExitExpression, GotoStatement, CountInLoopExpression, DevelopmentCodeFragment, EmptyCatchBlock, CouplingBetweenObjects, GlobalVariable, LackOfCohesionOfMethods |
 | `controversial` | CamelCaseClassName, CamelCaseMethodName, CamelCasePropertyName, CamelCaseParameterName, CamelCaseVariableName |
 | `opinionated` | **Opt-in, not part of idiomatic Go.** Bundles the rules the `go` ruleset deliberately drops because they fight Go conventions: `ElseExpression`, `BooleanArgumentFlag`, `IfStatementAssignment`, `UnusedFormalParameter`, and `GlobalVariable`. Also includes Go-specific opinionated rules: `UncheckedTypeAssertion`, `IdenticalBranches`, `StructEmbeddingDepth`. Run them if you want a stricter, more PHP-flavoured style. |
-| `explicitness` | **Opt-in.** `ImplicitInput` and `ImplicitOutput`: data that goes into a function from a source that is not an argument, or comes out by a path that is not a return value (see "Grokking Simplicity", chapter 3). The receiver of a method is exempt. |
-| `explicitness-strict` | **Opt-in.** The `explicitness` rules with `include-receiver=true`: reads of the receiver are implicit inputs, and writes through a pointer receiver are implicit outputs. |
+| `explicitness` | **Opt-in.** `ImplicitInput`, `ImplicitOutput`, and `UnknownEffect` classify implicit data flow and unresolved behavior. Receiver effects remain unknown. |
+| `explicitness-strict` | **Opt-in.** The `explicitness` rules with `include-receiver=true`: receiver reads are implicit inputs, and caller-visible receiver writes are implicit outputs. |
 
 Rules with a direct Go analog reproduce phpmd's behavior and message templates;
 rules that are intrinsically PHP-specific are adapted to the nearest Go idiom
@@ -106,38 +106,41 @@ chain exceeds `maxdepth` (default 3). Cross-package embeddings are treated as
 depth-0 leaves (the AST alone cannot resolve them); within-package chains are
 followed across files.
 
-`ImplicitInput` and `ImplicitOutput` (explicitness) find the implicit inputs
-and outputs of a function. An argument is an explicit input, and a return value
-is an explicit output. The rules flag:
+`ImplicitInput`, `ImplicitOutput`, and `UnknownEffect` classify a function's
+effects. Arguments and data reached through them are explicit inputs. A return
+value is an explicit output. Local mutation can remain a calculation when its
+storage stays private.
 
-| | Input | Output |
+| Source | Input | Output |
 | :--- | :--- | :--- |
-| Package variable | a read, if the package changes the variable | a write, or `&v` |
-| Parameter | — | a write through a pointer, slice, map or variadic parameter, including `delete`, `clear`, `copy`, in-place sorts and in-place `slices` changes (`slices.Delete`, `DeleteFunc`, `Compact`, `CompactFunc`, `Replace`, `Insert`); a write to an element or pointer target in any other parameter (`p.m[k] = v`, `*p.ptr = v`) |
-| Channel not declared in the function | a receive (`<-ch`, `<-ctx.Done()`), or a range over a channel parameter | a send |
-| Stream | `fmt.Fscan*`, `io.ReadAll`, `io.ReadFull`, `io.ReadAtLeast`, `io.Copy*` | `fmt.Fprint*`, `io.WriteString`, `io.Copy*` |
-| Standard library environment | for example `os.Getenv`, `os.ReadFile`, `time.Now`, `time.After`, `math/rand`, `crypto/rand`, `flag.Args`, `os/exec.Command`, `net.Dial`, `net/http.Get` | for example `fmt.Println`, `log`, `log/slog`, `os.Stdout`, `os.WriteFile`, `os.Exit`, `os.Setenv`, `os/exec.Command`, `net.Dial`, `net/http.Get` |
-| Builtins | `recover()` | `panic()` |
-| Receiver (`include-receiver`) | a read of the receiver or a receiver field, or a call to a receiver method | a write through a pointer receiver; a write to an element or pointer target in a value receiver (`c.m[k] = v`) |
+| Package or captured storage | a read when another operation can change it | a caller-visible write |
+| Parameter | reads are explicit | a write through shared pointers, slices, maps, or nested references |
+| Channel | a receive or iteration over a non-private channel | a send or close of a non-private channel |
+| Stream | modeled reads such as `fmt.Fscan*` and `io.ReadAll` | modeled writes such as `fmt.Fprint*` and `io.WriteString` |
+| Environment | modeled reads such as `os.Getenv`, `os.ReadFile`, and `time.Now` | modeled changes such as `fmt.Println`, `os.WriteFile`, and `os.Setenv` |
+| Builtin | `recover()` | `panic()` |
+| Receiver in strict mode | a receiver read | a caller-visible receiver write |
 
-Each different input or output is reported once per function, at its first
-line. The analysis uses only the syntax tree, thus it does not see:
+Ownership follows aliases and rebinding at each operation. Conditional and
+loop-carried assignments retain every possible shared origin. A shallow clone
+has private outer storage but can still reach shared elements. A copied array
+is private; a copied slice shares its backing storage. Taking an address alone
+does not write storage. Proven fixed, private package variables and captures
+do not introduce implicit inputs.
 
-- effects inside called functions, and effects of methods on values (for
-  example `db.Query` or `w.Write`);
-- writes through an alias (`q := p; q.x = v`), or through a pointer field
-  without `*` (`p.ptr.x = v`);
-- a range over a channel that is not a parameter;
-- a function literal that initialises a package variable
-  (`var f = func() { ... }`);
-- an unaliased `math/rand/v2` import;
-- a read of a package variable in a key of a map literal whose named map type
-  another package declares (`other.Names{n: "x"}`).
+Resolved same-package calls propagate effects to a fixed point, including
+recursive calls and callback arguments. Function literals have separate
+`<lambda>` owners. Defining one does not execute its body; invoking it transfers
+its effects at the call, including calls in `defer` and `go` statements. Package
+initializers and `init` bodies belong to `<module>`. Literal false branches are
+excluded.
 
-For the same reason, a write to an array element in a copied struct
-(`p.arr[0] = v`) is reported as a write to shared data. A parameter that the
-function first replaces with a copy is also still reported
-(`s = slices.Clone(s); slices.Sort(s)`).
+Each distinct effect is reported once per owner at its first operation. The
+analysis does not build or execute the project. An injected callback, opaque
+external call, unresolved interface dispatch, or receiver effect excluded by
+the non-strict policy produces `UnknownEffect`. A clean report certifies a
+calculation within the modeled subset; unknown behavior is not certified as
+pure.
 
 ## Custom rulesets
 

@@ -103,6 +103,134 @@ func MakeRecord() record { return record{n: 1} }
 	}
 }
 
+func TestExplicitnessTracksSharedStorageAcrossFiles(t *testing.T) {
+	dir := t.TempDir()
+	files := map[string]string{
+		"state.go":  "package p\n\nvar values = []int{1}\nvar fixed = []int{1}\n",
+		"writer.go": "package p\n\nfunc Change() { values[0] = 2 }\n",
+		"reader.go": "package p\n\nfunc Read() int { return values[0] }\nfunc Quiet() int { return fixed[0] }\n",
+	}
+	for name, source := range files {
+		if err := os.WriteFile(filepath.Join(dir, name), []byte(source), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	sets, err := (&ruleset.Loader{}).Load("explicitness")
+	if err != nil {
+		t.Fatal(err)
+	}
+	rep, err := Run(Options{Paths: []string{dir}, RuleSets: sets})
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := map[string][]string{}
+	for _, violation := range rep.Violations {
+		if violation.BeginLine != 3 {
+			t.Fatalf("effect location = %s:%d, want operation line 3", violation.File, violation.BeginLine)
+		}
+		got[violation.Function] = append(got[violation.Function], violation.Rule.Name())
+	}
+	want := map[string][]string{"Read": {"ImplicitInput"}, "Change": {"ImplicitOutput"}}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("effects = %v, want %v", got, want)
+	}
+}
+
+func TestExplicitnessKeepsCopiedCrossFileStructFieldPrivate(t *testing.T) {
+	dir := t.TempDir()
+	files := map[string]string{
+		"state.go": `package p
+type Holder struct { Count int; Items []int }
+var shared = Holder{Items: []int{1}}
+`,
+		"use.go": `package p
+func Copy() {
+ value := shared
+ value.Count++
+ value.Items[0]++
+}
+`,
+	}
+	for name, source := range files {
+		if err := os.WriteFile(filepath.Join(dir, name), []byte(source), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	sets, err := (&ruleset.Loader{}).Load("explicitness")
+	if err != nil {
+		t.Fatal(err)
+	}
+	rep, err := Run(Options{Paths: []string{dir}, RuleSets: sets})
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := map[string]int{}
+	for _, violation := range rep.Violations {
+		got[violation.Rule.Name()] = violation.BeginLine
+	}
+	want := map[string]int{"ImplicitInput": 3, "ImplicitOutput": 5}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("Copy effects = %v, want %v", got, want)
+	}
+}
+
+func TestExplicitnessTracksCopiedArrayAndSliceFieldsAcrossFiles(t *testing.T) {
+	dir := t.TempDir()
+	files := map[string]string{
+		"state.go": `package p
+type Holder struct { Counts [2]int; Items []int }
+var original = &Holder{Items: []int{1}}
+var shared = *original
+var array = [1]Holder{{Items: []int{1}}}
+var selected = array[0]
+`,
+		"use.go": `package p
+func Parameter(h Holder) {
+ h.Counts[0]++
+ h.Items[0]++
+}
+func Copy() {
+ value := shared
+ value.Counts[0]++
+ value.Items[0]++
+}
+func CopySelected() {
+ value := selected
+ value.Counts[0]++
+ value.Items[0]++
+}
+`,
+	}
+	for name, source := range files {
+		if err := os.WriteFile(filepath.Join(dir, name), []byte(source), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	sets, err := (&ruleset.Loader{}).Load("explicitness")
+	if err != nil {
+		t.Fatal(err)
+	}
+	rep, err := Run(Options{Paths: []string{dir}, RuleSets: sets})
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := map[string]map[string]int{}
+	for _, violation := range rep.Violations {
+		if got[violation.Function] == nil {
+			got[violation.Function] = map[string]int{}
+		}
+		got[violation.Function][violation.Rule.Name()] = violation.BeginLine
+	}
+	want := map[string]map[string]int{
+		"Parameter":    {"ImplicitOutput": 4},
+		"Copy":         {"ImplicitInput": 7, "ImplicitOutput": 9},
+		"CopySelected": {"ImplicitInput": 12, "ImplicitOutput": 14},
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("effects = %v, want %v", got, want)
+	}
+}
+
 func TestImplicitInputReadsCrossFileGenericAndAliasedMapLiteralKeys(t *testing.T) {
 	dir := t.TempDir()
 	files := map[string]string{

@@ -14,11 +14,30 @@ type storage struct {
 	outer, reachable bool
 	ambient          bool
 	origins          map[*ast.Object]bool
+	references       map[allocation]bool
+	cells            map[string]storage
+	targets          map[*ast.BlockStmt]*model.Function
 }
 
 var ambientStorage = storage{outer: true, reachable: true, ambient: true}
 
-type state map[*ast.Object]storage
+type allocation struct {
+	site       ast.Node
+	binding    *ast.Object
+	invocation *ast.CallExpr
+	context    string
+}
+
+type state struct {
+	bindings  map[*ast.Object]storage
+	heap      map[allocation]map[string]storage
+	calls     map[*ast.CallExpr]storage
+	addresses map[*ast.Object]map[allocation]bool
+}
+
+func cloneState(current state) state {
+	return state{bindings: maps.Clone(current.bindings), heap: maps.Clone(current.heap), calls: maps.Clone(current.calls), addresses: maps.Clone(current.addresses)}
+}
 
 type ownershipSnapshot struct {
 	position token.Pos
@@ -28,20 +47,23 @@ type ownershipSnapshot struct {
 type ownershipSnapshots []ownershipSnapshot
 
 func initialState(s *scope) state {
-	current := maps.Clone(s.captures)
-	if current == nil {
-		current = state{}
+	current := freshScopeState(s)
+	if current.bindings == nil {
+		current.bindings = map[*ast.Object]storage{}
+	}
+	if current.heap == nil {
+		current.heap = map[allocation]map[string]storage{}
 	}
 	for object, typ := range s.params {
-		current[object] = parameterStorage(s, object, typ)
+		current.bindings[object] = parameterStorage(s, object, typ)
 	}
 	for _, result := range s.fn.Results {
 		if result.Ident != nil && result.Ident.Obj != nil {
-			current[result.Ident.Obj] = storage{typ: result.Field.Type}
+			current.bindings[result.Ident.Obj] = storage{typ: result.Field.Type}
 		}
 	}
 	if s.recv != nil {
-		current[s.recv] = parameterStorage(s, s.recv, s.fn.Decl.Recv.List[0].Type)
+		current.bindings[s.recv] = parameterStorage(s, s.recv, s.fn.Decl.Recv.List[0].Type)
 	}
 	return current
 }
@@ -53,7 +75,7 @@ func parameterStorage(s *scope, object *ast.Object, typ ast.Expr) storage {
 }
 
 func inherit(s *scope, parent *scope, position token.Pos) {
-	s.captures = maps.Clone(parent.ownership.stateAt(position))
+	s.captures = cloneState(parent.ownership.stateAt(position))
 }
 
 func (snapshots ownershipSnapshots) stateAt(position token.Pos) state {
@@ -68,24 +90,30 @@ func (snapshots ownershipSnapshots) stateAt(position token.Pos) state {
 }
 
 func joinStates(states ...state) state {
-	out := state{}
+	out := state{bindings: map[*ast.Object]storage{}}
 	for _, values := range states {
-		for object, fact := range values {
-			if prior, ok := out[object]; ok {
+		for object, fact := range values.bindings {
+			if prior, ok := out.bindings[object]; ok {
 				fact = joinStorage(prior, fact)
 			}
-			out[object] = fact
+			out.bindings[object] = fact
 		}
+		out.heap = joinHeaps(out.heap, values.heap)
+		out.calls = joinCalls(out.calls, values.calls)
+		out.addresses = joinAddresses(out.addresses, values.addresses)
+	}
+	for _, fact := range out.bindings {
+		out = registerStorage(out, fact)
 	}
 	return out
 }
 
 func sameStates(a, b state) bool {
-	if len(a) != len(b) {
+	if len(a.bindings) != len(b.bindings) || !sameHeaps(a.heap, b.heap) || !sameCalls(a.calls, b.calls) || !sameAddresses(a.addresses, b.addresses) {
 		return false
 	}
-	for object, fact := range a {
-		other, ok := b[object]
+	for object, fact := range a.bindings {
+		other, ok := b.bindings[object]
 		if !ok || !sameStorage(fact, other) {
 			return false
 		}
@@ -94,7 +122,7 @@ func sameStates(a, b state) bool {
 }
 
 func sameStorage(a, b storage) bool {
-	return a.outer == b.outer && a.reachable == b.reachable && a.ambient == b.ambient && maps.Equal(a.origins, b.origins)
+	return a.outer == b.outer && a.reachable == b.reachable && a.ambient == b.ambient && maps.Equal(a.origins, b.origins) && maps.Equal(a.references, b.references) && sameCells(a.cells, b.cells) && sameTargets(a.targets, b.targets)
 }
 
 func joinStorage(a, b storage) storage {
@@ -104,6 +132,9 @@ func joinStorage(a, b storage) storage {
 	a.outer = a.outer || b.outer
 	a.reachable = a.reachable || b.reachable
 	a.ambient = a.ambient || b.ambient
+	a.references = joinedReferences(a.references, b.references)
+	a.cells = joinCells(a.cells, b.cells)
+	a.targets = joinedTargets(a.targets, b.targets)
 	if len(b.origins) == 0 {
 		return a
 	}
@@ -128,22 +159,26 @@ func elementOf(fact storage) storage {
 }
 
 func storageOf(s *scope, expression ast.Expr, current state) storage {
+	return resolveStorage(valueStorage(s, expression, current), current)
+}
+
+func valueStorage(s *scope, expression ast.Expr, current state) storage {
 	switch value := ast.Unparen(expression).(type) {
 	case *ast.Ident:
 		return identStorage(s, value, current)
 	case *ast.SliceExpr:
-		return storageOf(s, value.X, current)
+		return valueStorage(s, value.X, current)
 	case *ast.StarExpr:
-		return storageOf(s, value.X, current)
+		return dereferenceStorage(valueStorage(s, value.X, current), current)
 	case *ast.TypeAssertExpr:
-		return storageOf(s, value.X, current)
+		return valueStorage(s, value.X, current)
 	case *ast.UnaryExpr:
 		return unaryStorage(s, value, current)
 	case *ast.CallExpr:
 		return callStorage(s, value, current)
 	case *ast.CompositeLit:
 		return compositeStorage(s, value, current)
-	case *ast.BasicLit, *ast.FuncLit, *ast.BinaryExpr:
+	case *ast.BasicLit, *ast.BinaryExpr:
 		return storage{}
 	}
 	return selectedStorage(s, expression, current)
@@ -154,46 +189,57 @@ func identStorage(s *scope, id *ast.Ident, current state) storage {
 		return ambientStorage
 	}
 	if id.Obj == nil || id.Obj.Kind != ast.Var {
-		return storage{}
+		return functionStorage(s, id)
 	}
-	if fact, tracked := current[id.Obj]; tracked {
-		return fact
+	if fact, tracked := current.bindings[id.Obj]; tracked {
+		return addressedBinding(current, id.Obj, fact)
 	}
 	return ambientStorage
 }
 
 func unaryStorage(s *scope, value *ast.UnaryExpr, current state) storage {
-	fact := storageOf(s, value.X, current)
+	fact := valueStorage(s, value.X, current)
 	if value.Op == token.ARROW {
 		return elementOf(fact)
+	}
+	if value.Op == token.AND {
+		if id, named := ast.Unparen(value.X).(*ast.Ident); named && id.Obj != nil && !s.isGlobal(id) {
+			return bindingAddress(s, value, id.Obj, fact, current)
+		}
+	}
+	if value.Op == token.AND && len(fact.references) == 0 {
+		fact.references = map[allocation]bool{{site: value, invocation: s.invocation, context: s.context}: true}
 	}
 	return fact
 }
 
 func selectedStorage(s *scope, expression ast.Expr, current state) storage {
 	switch value := ast.Unparen(expression).(type) {
+	case *ast.FuncLit:
+		return functionStorage(s, value)
 	case *ast.SelectorExpr:
 		if s.qualified(value) != "" {
 			return ambientStorage
 		}
-		fact := storageOf(s, value.X, current)
-		fact.outer = fact.outer || fact.reachable
-		return fact
+		return selectedCell(valueStorage(s, value.X, current), "."+value.Sel.Name, current, false)
 	case *ast.IndexExpr:
-		fact := storageOf(s, value.X, current)
-		fact.outer = fact.reachable
-		return fact
+		return selectedCell(valueStorage(s, value.X, current), indexCell(value.Index), current, true)
 	}
 	return ambientStorage
 }
 
 func compositeStorage(s *scope, value *ast.CompositeLit, current state) storage {
-	fact := storage{typ: value.Type}
-	for _, element := range value.Elts {
+	fact := storage{typ: value.Type, cells: map[string]storage{}}
+	for index, element := range value.Elts {
+		key := compositeCell(s, value.Type, index)
 		if pair, ok := element.(*ast.KeyValueExpr); ok {
+			key = literalCell(pair.Key)
 			element = pair.Value
 		}
-		fact = joinStorage(fact, contained(storageOf(s, element, current)))
+		fact.cells[key] = valueStorage(s, element, current)
+	}
+	if typeStorage(value.Type, s.fn.File.PackageTypeDefs).outer {
+		fact.references = map[allocation]bool{{site: value, invocation: s.invocation, context: s.context}: true}
 	}
 	return fact
 }
@@ -210,13 +256,14 @@ func typeStorage(typ ast.Expr, definitions map[string]ast.Expr) storage {
 	return storage{typ: typ, outer: sharing.Outer, reachable: sharing.Reachable}
 }
 
-type returnSummaries struct {
-	done   map[*model.Function]storage
-	active map[*model.Function]bool
+type storageMutations struct {
+	mutatedObjects     map[*ast.Object]bool
+	mutatedContents    map[*ast.Object]bool
+	mutatedAllocations map[allocation]bool
 }
 
-func newReturnSummaries() *returnSummaries {
-	return &returnSummaries{done: map[*model.Function]storage{}, active: map[*model.Function]bool{}}
+func newStorageMutations() *storageMutations {
+	return &storageMutations{mutatedObjects: map[*ast.Object]bool{}, mutatedContents: map[*ast.Object]bool{}, mutatedAllocations: map[allocation]bool{}}
 }
 
 var builtinFunctions = setOf("append", "cap", "clear", "close", "complex", "copy", "delete", "imag", "len", "make", "max", "min", "new", "panic", "print", "println", "real", "recover")
@@ -228,8 +275,8 @@ func callStorage(s *scope, call *ast.CallExpr, current state) storage {
 	if conversion(s, call.Fun) {
 		return argumentsStorage(s, call.Args, current)
 	}
-	if callee := model.ResolveCall(s.fn, call); callee != nil && callee.Body != nil {
-		return mappedStorage(s, callEdge{call: call, callee: callee}, returnedStorage(s, callee), current)
+	if fact, executed := current.calls[call]; executed {
+		return fact
 	}
 	return unresolvedStorage(s, call, current)
 }
@@ -238,8 +285,10 @@ func libraryStorage(s *scope, call *ast.CallExpr, current state) (storage, bool)
 	if selector, ok := ast.Unparen(call.Fun).(*ast.SelectorExpr); ok && len(call.Args) > 0 {
 		switch s.qualified(selector) {
 		case "slices.Clone", "maps.Clone":
-			fact := storageOf(s, call.Args[0], current)
+			fact := frozenStorage(valueStorage(s, call.Args[0], current), current)
+			fact.reachable = resolveStorage(fact, current).reachable
 			fact.outer = false
+			fact.references = map[allocation]bool{{site: call, invocation: s.invocation, context: s.context}: true}
 			return fact, true
 		}
 	}
@@ -248,19 +297,28 @@ func libraryStorage(s *scope, call *ast.CallExpr, current state) (storage, bool)
 	case name == "append" && len(call.Args) > 0:
 		return appendStorage(s, call, current), true
 	case builtinFunctions[name]:
-		return storage{}, true
+		return builtinStorage(s, call), true
 	}
 	return storage{}, false
 }
 
+func builtinStorage(s *scope, call *ast.CallExpr) storage {
+	name := builtinName(call)
+	if len(call.Args) > 0 && (name == "make" || name == "new") {
+		return storage{typ: call.Args[0], references: map[allocation]bool{{site: call, invocation: s.invocation, context: s.context}: true}}
+	}
+	return storage{}
+}
+
 func appendStorage(s *scope, call *ast.CallExpr, current state) storage {
-	fact := storageOf(s, call.Args[0], current)
+	fact := frozenStorage(valueStorage(s, call.Args[0], current), current)
+	fact.references = map[allocation]bool{{site: call, invocation: s.invocation, context: s.context}: true}
 	for _, arg := range call.Args[1:] {
-		child := storageOf(s, arg, current)
+		child := valueStorage(s, arg, current)
 		if call.Ellipsis.IsValid() {
-			child = elementOf(child)
+			child = selectedCell(child, "*", current, true)
 		}
-		fact = joinStorage(fact, contained(child))
+		fact.cells = joinCells(fact.cells, map[string]storage{"*": child})
 	}
 	return fact
 }
@@ -268,7 +326,7 @@ func appendStorage(s *scope, call *ast.CallExpr, current state) storage {
 func argumentsStorage(s *scope, args []ast.Expr, current state) storage {
 	fact := storage{}
 	for _, arg := range args {
-		fact = joinStorage(fact, storageOf(s, arg, current))
+		fact = joinStorage(fact, valueStorage(s, arg, current))
 	}
 	return fact
 }
@@ -300,66 +358,17 @@ func unresolvedStorage(s *scope, call *ast.CallExpr, current state) storage {
 	return joinStorage(fact, storageOf(s, selector.X, current))
 }
 
-func returnedStorage(s *scope, callee *model.Function) storage {
-	summaries := s.returns
-	if fact, done := summaries.done[callee]; done {
-		return fact
-	}
-	if summaries.active[callee] {
-		return ambientStorage
-	}
-	summaries.active[callee] = true
-	fact := returnStorage(newScope(callee, true, summaries))
-	delete(summaries.active, callee)
-	summaries.done[callee] = fact
-	return fact
-}
-
-func returnStorage(s *scope) storage {
-	out := storage{}
-	if s.fn.Body == nil {
-		return ambientStorage
-	}
-	ast.Inspect(s.fn.Body, func(n ast.Node) bool {
-		ret, ok := n.(*ast.ReturnStmt)
-		if ok {
-			out = joinStorage(out, resultStorage(s, ret))
-		}
-		_, literal := n.(*ast.FuncLit)
-		return !literal
-	})
-	return out
-}
-
-func resultStorage(s *scope, ret *ast.ReturnStmt) storage {
-	current := s.ownership.stateAt(ret.Pos())
+func resultStorage(s *scope, ret *ast.ReturnStmt, current state) storage {
 	out := storage{}
 	for _, result := range ret.Results {
-		out = joinStorage(out, storageOf(s, result, current))
+		out = joinStorage(out, frozenStorage(valueStorage(s, result, current), current))
 	}
 	if len(ret.Results) > 0 {
 		return out
 	}
 	for _, result := range s.fn.Results {
 		if result.Ident != nil && result.Ident.Obj != nil {
-			out = joinStorage(out, current[result.Ident.Obj])
-		}
-	}
-	return out
-}
-
-func mappedStorage(s *scope, edge callEdge, summary storage, current state) storage {
-	if len(summary.origins) == 0 {
-		return storage{outer: summary.outer, reachable: summary.reachable, ambient: summary.ambient}
-	}
-	out := storage{}
-	if summary.ambient {
-		out = storage{outer: summary.outer, reachable: summary.reachable, ambient: true}
-	}
-	for origin := range summary.origins {
-		actual := originArgument(s, edge, origin, current)
-		if actual.outer || actual.reachable || actual.ambient {
-			out = joinStorage(out, storage{outer: summary.outer, reachable: summary.reachable, ambient: actual.ambient, origins: actual.origins})
+			out = joinStorage(out, frozenStorage(current.bindings[result.Ident.Obj], current))
 		}
 	}
 	return out
@@ -368,7 +377,7 @@ func mappedStorage(s *scope, edge callEdge, summary storage, current state) stor
 func originArgument(s *scope, edge callEdge, origin *ast.Object, current state) storage {
 	if recv, _ := receiverObject(edge.callee.Decl); recv != nil && recv == origin {
 		if selector, ok := ast.Unparen(edge.call.Fun).(*ast.SelectorExpr); ok {
-			return storageOf(s, selector.X, current)
+			return valueStorage(s, selector.X, current)
 		}
 		return ambientStorage
 	}
@@ -383,5 +392,5 @@ func originArgument(s *scope, edge callEdge, origin *ast.Object, current state) 
 	if variadic {
 		return contained(argumentsStorage(s, args, current))
 	}
-	return storageOf(s, args[0], current)
+	return valueStorage(s, args[0], current)
 }

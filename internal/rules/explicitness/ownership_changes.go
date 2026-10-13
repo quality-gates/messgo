@@ -3,7 +3,6 @@ package explicitness
 import (
 	"go/ast"
 	"go/token"
-	"maps"
 
 	"github.com/quality-gates/messgo/internal/util"
 )
@@ -14,29 +13,24 @@ type bindingChange struct {
 }
 
 func applyBindingChanges(current state, changes ...bindingChange) state {
-	next := maps.Clone(current)
+	next := cloneState(current)
+	if next.bindings == nil {
+		next.bindings = map[*ast.Object]storage{}
+	}
 	for _, change := range changes {
-		next[change.object] = change.fact
+		next.bindings[change.object] = change.fact
+		next = registerStorage(next, change.fact)
+		next = writeBindingCell(next, change.object, change.fact)
 	}
 	return next
-}
-
-func widenStorage(w *ownershipFlow, object *ast.Object, fact storage) storage {
-	if w.escaped[object] {
-		fact = exposed(fact)
-	}
-	if stored, ok := w.stored[object]; ok {
-		fact = joinStorage(fact, stored)
-	}
-	return fact
 }
 
 func assignBindings(w *ownershipFlow, a *ast.AssignStmt) {
 	facts := make([]storage, len(a.Lhs))
 	for i := range a.Lhs {
-		facts[i] = storageOf(w.s, a.Rhs[min(i, len(a.Rhs)-1)], w.current)
+		facts[i] = valueStorage(w.s, a.Rhs[min(i, len(a.Rhs)-1)], w.current)
 		if len(a.Rhs) != len(a.Lhs) {
-			facts[i] = storageOf(w.s, a.Rhs[0], w.current)
+			facts[i] = valueStorage(w.s, a.Rhs[0], w.current)
 		}
 	}
 	for i, target := range a.Lhs {
@@ -62,9 +56,9 @@ func specStorage(s *scope, spec *ast.ValueSpec, index int, current state) storag
 	fact := storage{}
 	switch {
 	case len(spec.Values) == len(spec.Names):
-		fact = storageOf(s, spec.Values[index], current)
+		fact = valueStorage(s, spec.Values[index], current)
 	case len(spec.Values) == 1:
-		fact = storageOf(s, spec.Values[0], current)
+		fact = valueStorage(s, spec.Values[0], current)
 	}
 	if spec.Type != nil {
 		fact.typ = spec.Type
@@ -81,24 +75,18 @@ func bindTarget(w *ownershipFlow, target ast.Expr, fact storage, tok token.Token
 	if id.Obj == nil || id.Name == "_" || w.s.isGlobal(id) {
 		return
 	}
-	prior, tracked := w.current[id.Obj]
+	prior, tracked := w.current.bindings[id.Obj]
 	if tok != token.ASSIGN && tok != token.DEFINE && tracked {
 		fact = joinStorage(prior, fact)
 	}
 	if fact.typ == nil {
 		fact.typ = prior.typ
 	}
-	w.current = applyBindingChanges(w.current, bindingChange{id.Obj, widenStorage(w, id.Obj, fact)})
+	w.current = applyBindingChanges(w.current, bindingChange{id.Obj, fact})
 }
 
 func storeStorage(w *ownershipFlow, target ast.Expr, fact storage) {
-	root := util.RootIdent(target)
-	if root == nil || root.Obj == nil {
-		return
-	}
-	if prior, tracked := w.current[root.Obj]; tracked {
-		w.current = applyBindingChanges(w.current, bindingChange{root.Obj, joinStorage(prior, contained(fact))})
-	}
+	storeCell(w, target, fact)
 }
 
 func collectEscapes(w *ownershipFlow, node ast.Node) {
@@ -107,17 +95,21 @@ func collectEscapes(w *ownershipFlow, node ast.Node) {
 	}
 	arguments := map[ast.Expr]bool{}
 	ast.Inspect(node, func(n ast.Node) bool {
+		markNodeMutation(w, n)
+		recordAddress(w, n)
 		switch n := n.(type) {
 		case *ast.FuncLit:
 			return false
 		case *ast.ReturnStmt:
 			returnedAddresses(n, arguments)
 		case *ast.CallExpr:
-			collectCallEscapes(w, n, arguments)
-		case *ast.UnaryExpr:
-			if n.Op == token.AND && !arguments[n] {
-				escapeStorage(w, n.X)
+			collectEscapes(w, n.Fun)
+			for _, arg := range n.Args {
+				collectEscapes(w, arg)
 			}
+			collectCallEscapes(w, n, arguments)
+			markCallMutation(w, n)
+			return false
 		}
 		return true
 	})
@@ -133,11 +125,14 @@ func returnedAddresses(ret *ast.ReturnStmt, arguments map[ast.Expr]bool) {
 
 func collectCallEscapes(w *ownershipFlow, call *ast.CallExpr, arguments map[ast.Expr]bool) {
 	if builtinName(call) == "copy" && len(call.Args) == 2 {
-		storeStorage(w, call.Args[0], elementOf(storageOf(w.s, call.Args[1], w.current)))
+		storeElement(w, call.Args[0], selectedCell(valueStorage(w.s, call.Args[1], w.current), "*", w.current, true))
+	}
+	if executeStorageCall(w, call) {
+		return
 	}
 	incoming := argumentsStorage(w.s, call.Args, w.current)
 	if root := calledReceiver(w, call); root != nil {
-		w.current = applyBindingChanges(w.current, bindingChange{root, addressed(w.current[root], incoming)})
+		w.current = applyBindingChanges(w.current, bindingChange{root, addressed(w.current.bindings[root], incoming)})
 	}
 	for _, arg := range call.Args {
 		unary, ok := ast.Unparen(arg).(*ast.UnaryExpr)
@@ -146,7 +141,7 @@ func collectCallEscapes(w *ownershipFlow, call *ast.CallExpr, arguments map[ast.
 		}
 		arguments[unary] = true
 		if root := trackedRoot(w, unary.X); root != nil {
-			w.current = applyBindingChanges(w.current, bindingChange{root, addressed(w.current[root], incoming)})
+			w.current = applyBindingChanges(w.current, bindingChange{root, addressed(w.current.bindings[root], incoming)})
 		}
 	}
 }
@@ -159,19 +154,12 @@ func calledReceiver(w *ownershipFlow, call *ast.CallExpr) *ast.Object {
 	return trackedRoot(w, selector.X)
 }
 
-func escapeStorage(w *ownershipFlow, target ast.Expr) {
-	if root := trackedRoot(w, target); root != nil {
-		w.escaped[root] = true
-		w.current = applyBindingChanges(w.current, bindingChange{root, exposed(w.current[root])})
-	}
-}
-
 func trackedRoot(w *ownershipFlow, target ast.Expr) *ast.Object {
 	root := util.RootIdent(target)
 	if root == nil || root.Obj == nil {
 		return nil
 	}
-	if _, tracked := w.current[root.Obj]; !tracked {
+	if _, tracked := w.current.bindings[root.Obj]; !tracked {
 		return nil
 	}
 	return root.Obj
@@ -184,96 +172,9 @@ func addressed(fact, incoming storage) storage {
 	return joinStorage(fact, incoming)
 }
 
-func exposed(fact storage) storage {
-	return addressed(fact, ambientStorage)
-}
-
 func valueType(typ ast.Expr) bool {
 	if typ == nil {
 		return false
 	}
 	return !typeStorage(typ, nil).outer
-}
-
-func closureTargets(s *scope, current state) (map[*ast.Object]bool, map[*ast.Object]storage) {
-	escaped := map[*ast.Object]bool{}
-	stored := map[*ast.Object]storage{}
-	ast.Inspect(s.fn.Body, func(n ast.Node) bool {
-		literal, ok := n.(*ast.FuncLit)
-		if !ok {
-			return true
-		}
-		ast.Inspect(literal.Body, func(m ast.Node) bool {
-			for _, change := range changes(m) {
-				object := capturedTarget(s, current, literal, change.target)
-				if object == nil {
-					continue
-				}
-				if _, variable := ast.Unparen(change.target).(*ast.Ident); variable || change.value == nil {
-					escaped[object] = true
-					continue
-				}
-				stored[object] = joinStorage(stored[object], contained(storageOf(s, change.value, state{})))
-			}
-			return true
-		})
-		return false
-	})
-	return escaped, stored
-}
-
-func capturedTarget(s *scope, current state, literal *ast.FuncLit, target ast.Expr) *ast.Object {
-	if target == nil {
-		return nil
-	}
-	root := util.RootIdent(target)
-	if root == nil || root.Obj == nil || !outside(literal, root.Obj) {
-		return nil
-	}
-	if owns(s, root.Obj) || hasObject(current, root.Obj) {
-		return root.Obj
-	}
-	return nil
-}
-
-func hasObject(current state, object *ast.Object) bool {
-	_, ok := current[object]
-	return ok
-}
-
-func outside(node ast.Node, object *ast.Object) bool {
-	return object.Pos() < node.Pos() || object.Pos() >= node.End()
-}
-
-type change struct {
-	target, value ast.Expr
-}
-
-func changes(node ast.Node) []change {
-	var out []change
-	switch n := node.(type) {
-	case *ast.AssignStmt:
-		if n.Tok == token.DEFINE {
-			return nil
-		}
-		for i, target := range n.Lhs {
-			out = append(out, change{target, assignedValue(n, i)})
-		}
-	case *ast.RangeStmt:
-		if n.Tok == token.ASSIGN {
-			out = append(out, change{n.Key, nil}, change{n.Value, nil})
-		}
-	case *ast.UnaryExpr:
-		if n.Op == token.AND {
-			out = append(out, change{n.X, nil})
-		}
-	}
-	return out
-}
-
-func assignedValue(a *ast.AssignStmt, index int) ast.Expr {
-	if len(a.Lhs) != len(a.Rhs) {
-		return nil
-	}
-	return a.Rhs[index]
 }

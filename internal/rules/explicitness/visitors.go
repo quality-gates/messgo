@@ -106,7 +106,7 @@ func (w *writeVisitor) write(target ast.Expr, only, shared bool) {
 		w.outputs = append(w.outputs, e)
 		return
 	}
-	w.outputs = append(w.outputs, originEffects(e, w.ownership.stateAt(target.Pos())[id.Obj])...)
+	w.outputs = append(w.outputs, originEffects(e, storageOf(w.scope, writtenContainer(target, shared), w.ownership.stateAt(target.Pos())))...)
 }
 
 func (w *writeVisitor) writeCallResult(target ast.Expr, shared bool) {
@@ -114,7 +114,7 @@ func (w *writeVisitor) writeCallResult(target ast.Expr, shared bool) {
 	if call == nil || (target == ast.Expr(call) && !shared) {
 		return
 	}
-	fact := callStorage(w.scope, call, w.ownership.stateAt(target.Pos()))
+	fact := storageOf(w.scope, writtenContainer(target, shared), w.ownership.stateAt(target.Pos()))
 	deep := deepWrite(target)
 	if !fact.outer && !(deep && fact.reachable) {
 		return
@@ -148,7 +148,7 @@ func callRoot(target ast.Expr) *ast.CallExpr {
 func (w *writeVisitor) describe(target ast.Expr, id *ast.Ident, builtin bool) string {
 	direct := target == ast.Expr(id)
 	shared := builtin || reachesShared(target)
-	fact := w.ownership.stateAt(target.Pos())[id.Obj]
+	fact := w.ownership.stateAt(target.Pos()).bindings[id.Obj]
 	switch {
 	case w.isGlobal(id):
 		return "package variable " + id.Name
@@ -175,7 +175,7 @@ func captured(s *scope, id *ast.Ident) bool {
 }
 
 func sharedWrite(s *scope, target, container ast.Expr, direct, shared bool, fact storage) bool {
-	return !direct && fact.outer || deepWrite(target) && fact.reachable || shared && storageOf(s, container, s.ownership.stateAt(target.Pos())).outer
+	return !direct && storageOf(s, container, s.ownership.stateAt(target.Pos())).outer || shared && storageOf(s, container, s.ownership.stateAt(target.Pos())).outer
 }
 
 func writtenContainer(target ast.Expr, builtin bool) ast.Expr {
@@ -256,7 +256,8 @@ type readVisitor struct {
 	fields map[*ast.Ident]string
 	// calls are selectors that a call calls. They select a method, not a
 	// field.
-	calls map[*ast.SelectorExpr]bool
+	calls    map[*ast.SelectorExpr]bool
+	contents map[*ast.Ident]bool
 }
 
 // visit walks in source order, thus a call or a selector is found before the
@@ -264,16 +265,19 @@ type readVisitor struct {
 func (r *readVisitor) visit(n ast.Node) bool {
 	switch n := n.(type) {
 	case *ast.CallExpr:
-		if sel, ok := n.Fun.(*ast.SelectorExpr); ok {
-			r.calls[sel] = true
-		}
+		r.visitReadCall(n)
 	case *ast.SelectorExpr:
 		// The selected name is a field or a method, not a variable.
 		if id, ok := n.X.(*ast.Ident); ok && !r.calls[n] {
 			r.fields[id] = n.Sel.Name
+			r.readContent(n.X)
 		}
 		ast.Inspect(n.X, r.visit)
 		return false
+	case *ast.IndexExpr:
+		r.readContent(n.X)
+	case *ast.StarExpr:
+		r.readContent(n.X)
 	case *ast.CompositeLit:
 		r.visitComposite(n)
 		return false
@@ -281,6 +285,21 @@ func (r *readVisitor) visit(n ast.Node) bool {
 		r.read(n)
 	}
 	return true
+}
+
+func (r *readVisitor) visitReadCall(call *ast.CallExpr) {
+	if target := mutationArgument(r.scope, call); target != nil {
+		r.readContent(target)
+	}
+	if selector, ok := call.Fun.(*ast.SelectorExpr); ok {
+		r.calls[selector] = true
+	}
+}
+
+func (r *readVisitor) readContent(expression ast.Expr) {
+	if id := util.RootIdent(expression); id != nil {
+		r.contents[id] = true
+	}
 }
 
 // visitComposite skips the field names of a struct literal, because they are
@@ -340,33 +359,21 @@ func (r *readVisitor) read(id *ast.Ident) {
 		r.inputs = append(r.inputs, r.effect(id, "package variable "+id.Name))
 	case r.strict && r.isReceiver(id):
 		r.inputs = append(r.inputs, r.effect(id, receiverPart(id, r.fields[id])))
-	case captured(r.scope, id) && objectMutated(r.fn.File.Syntax, id.Obj):
-		e := r.effect(id, "captured variable "+id.Name)
-		e.binding, e.bindingAccess = id.Obj, true
-		r.inputs = append(r.inputs, e)
+	case captured(r.scope, id):
+		r.readCapture(id)
 	}
 }
 
-func objectMutated(tree ast.Node, object *ast.Object) bool {
-	mutated := false
-	ast.Inspect(tree, func(node ast.Node) bool {
-		var targets []ast.Expr
-		switch statement := node.(type) {
-		case *ast.AssignStmt:
-			if statement.Tok != token.DEFINE {
-				targets = statement.Lhs
-			}
-		case *ast.IncDecStmt:
-			targets = []ast.Expr{statement.X}
-		}
-		for _, target := range targets {
-			if id := util.RootIdent(target); id != nil && id.Obj == object {
-				mutated = true
-			}
-		}
-		return true
-	})
-	return mutated
+func (r *readVisitor) readCapture(id *ast.Ident) {
+	if !capturedMutable(r.scope, id, r.contents[id]) {
+		return
+	}
+	e := r.effect(id, "captured variable "+id.Name)
+	e.binding, e.bindingAccess = id.Obj, true
+	if r.contents[id] && !r.mutations.mutatedObjects[id.Obj] {
+		e.bindingAccess, e.storageRead, e.deep = false, true, true
+	}
+	r.inputs = append(r.inputs, e)
 }
 
 // flowVisitor finds data that goes through channels, streams, panics and the

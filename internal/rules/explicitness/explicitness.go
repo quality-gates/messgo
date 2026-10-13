@@ -7,7 +7,9 @@
 package explicitness
 
 import (
+	"cmp"
 	"go/ast"
+	"slices"
 
 	"github.com/quality-gates/messgo/internal/model"
 	"github.com/quality-gates/messgo/internal/rule"
@@ -72,6 +74,7 @@ type effect struct {
 	callable      bool
 	callableArgs  []ast.Expr
 	bindingAccess bool
+	storageRead   bool
 }
 
 // result holds the implicit inputs and outputs of one function.
@@ -81,12 +84,11 @@ type result struct {
 	unknown []effect
 }
 
-// report records one violation for each different effect, at its first line.
-// Each description comes from one visitor only, and each visitor walks in
-// source order, thus the first effect has the first line.
 func report(c *rule.Context, fn *model.Function, effects []effect) {
+	ordered := slices.Clone(effects)
+	slices.SortStableFunc(ordered, func(a, b effect) int { return cmp.Compare(a.line, b.line) })
 	seen := map[string]bool{}
-	for _, e := range effects {
+	for _, e := range ordered {
 		if seen[e.what] {
 			continue
 		}
@@ -127,25 +129,45 @@ func inspectReachable(node ast.Node, callables bool, visit func(ast.Node) bool) 
 				visit(n)
 			}
 			return false
-		case *ast.IfStmt:
-			if !visit(n) {
-				return false
-			}
-			inspectReachable(n.Init, callables, visit)
-			inspectReachable(n.Cond, callables, visit)
-			switch value, known := literalBool(n.Cond); {
-			case !known:
-				inspectReachable(n.Body, callables, visit)
-				inspectReachable(n.Else, callables, visit)
-			case value:
-				inspectReachable(n.Body, callables, visit)
-			default:
-				inspectReachable(n.Else, callables, visit)
-			}
+		}
+		if inspectControl(n, callables, visit) {
 			return false
 		}
 		return visit(n)
 	})
+}
+
+func inspectControl(node ast.Node, callables bool, visit func(ast.Node) bool) bool {
+	switch n := node.(type) {
+	case *ast.IfStmt:
+		if visit(n) {
+			inspectReachable(n.Init, callables, visit)
+			inspectReachable(n.Cond, callables, visit)
+			inspectChoice(n.Cond, n.Body, n.Else, callables, visit)
+		}
+	case *ast.ForStmt:
+		if visit(n) {
+			inspectReachable(n.Init, callables, visit)
+			inspectReachable(n.Cond, callables, visit)
+			if value, known := literalBool(n.Cond); !known || value {
+				inspectReachable(n.Body, callables, visit)
+				inspectReachable(n.Post, callables, visit)
+			}
+		}
+	default:
+		return false
+	}
+	return true
+}
+
+func inspectChoice(condition ast.Expr, positive, negative ast.Node, callables bool, visit func(ast.Node) bool) {
+	value, known := literalBool(condition)
+	if !known || value {
+		inspectReachable(positive, callables, visit)
+	}
+	if !known || !value {
+		inspectReachable(negative, callables, visit)
+	}
 }
 
 func literalBool(expr ast.Expr) (bool, bool) {
@@ -179,6 +201,7 @@ func scanScope(s *scope) *result {
 		writeRoots: writes.roots,
 		fields:     map[*ast.Ident]string{},
 		calls:      map[*ast.SelectorExpr]bool{},
+		contents:   map[*ast.Ident]bool{},
 	}
 	inspectExecuted(fn.Body, reads.visit)
 	inspectExecuted(fn.Body, (&flowVisitor{scope: s, result: res}).visit)
@@ -192,23 +215,33 @@ type scope struct {
 	sharedGlobals map[string]bool
 	params        paramTypes
 	ownership     ownershipSnapshots
-	captures      map[*ast.Object]storage
+	captures      state
+	invocation    *ast.CallExpr
+	context       string
 	recv          *ast.Object
 	pointerRcv    bool
-	returns       *returnSummaries
+	mutations     *storageMutations
 	// strict is true when the receiver is not exempt. Then a read of the
 	// receiver is an input, and a write through a pointer receiver is an
 	// output.
 	strict bool
 }
 
-func newScope(fn *model.Function, strict bool, returns *returnSummaries) *scope {
+func newScope(fn *model.Function, strict bool, mutations *storageMutations) *scope {
+	s := untrackedScope(fn, strict, mutations)
+	if fn.Body != nil {
+		trackOwnership(s)
+	}
+	return s
+}
+
+func untrackedScope(fn *model.Function, strict bool, mutations *storageMutations) *scope {
 	s := &scope{
 		fn:            fn,
 		sharedGlobals: sharedPackageGlobals(fn.File),
 		params:        paramTypes{},
 		strict:        strict,
-		returns:       returns,
+		mutations:     mutations,
 	}
 	for _, p := range fn.Params {
 		if p.Ident != nil && p.Ident.Obj != nil {
@@ -216,9 +249,6 @@ func newScope(fn *model.Function, strict bool, returns *returnSummaries) *scope 
 		}
 	}
 	s.recv, s.pointerRcv = receiverObject(fn.Decl)
-	if fn.Body != nil {
-		trackOwnership(s)
-	}
 	return s
 }
 

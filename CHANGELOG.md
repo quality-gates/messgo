@@ -23,6 +23,14 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 - Fixed explicitness analysis walking effects inside literal `if false` branches.
   Dead standard-library actions and unresolved callback calls no longer make a
   function look impure.
+- Fixed explicitness storage tracking across existing aliases and helper calls.
+  Later field and element inserts expose caller storage, while private
+  replacements remove the old origins. Returned aliases retain their storage
+  identity, and separate factory calls keep separate private allocations.
+- Fixed reads of mutable captured storage, including writes through an alias
+  and standard-library in-place mutations. Uncalled literals no longer change
+  their definer's storage, literal-false loops stay quiet, and transferred
+  effects use the earliest source line.
 
 ## [0.5.10] - 2026-10-11
 

@@ -60,9 +60,15 @@ when thresholds or membership need to live in the repo:
 `explicitness` classifies Go code within a documented native subset. Reads
 through arguments are explicit inputs; writes to caller-visible storage are
 implicit outputs. The analysis follows aliases, copies, escaped allocations,
-and resolved same-package calls. Function literals have their own `<lambda>`
-owner; invoking one transfers its effects to the caller, including `defer` and
-`go` calls. Package initialization uses a `<module>` owner. Injected callbacks,
+and resolved same-package calls. Field and element writes update shared
+allocation state, so existing aliases see later inserts and replacements.
+Helper calls preserve that state in their stores and return values; separate
+factory calls keep separate private allocations. Function literals have their
+own `<lambda>` owner; invoking one transfers its effects to the caller,
+including `defer` and `go` calls. Defining an uncalled literal leaves its
+caller's storage unchanged. Reads of mutable captured storage are implicit
+inputs. Literal-false branches and loops are pruned. Package initialization
+uses a `<module>` owner. Injected callbacks,
 opaque external calls, interface dispatch, and receiver effects excluded by
 the non-strict policy produce `UnknownEffect`. A clean report means
 "calculation within this analyzed subset."

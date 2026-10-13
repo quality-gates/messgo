@@ -8,18 +8,13 @@ import (
 
 func trackOwnership(s *scope) {
 	w := &ownershipFlow{s: s, current: initialState(s), labels: map[string]state{}}
-	w.escaped, w.stored = closureTargets(s, w.current)
-	var changes []bindingChange
-	for object, fact := range w.current {
-		changes = append(changes, bindingChange{object, widenStorage(w, object, fact)})
-	}
-	w.current = applyBindingChanges(w.current, changes...)
+	w.active = map[*ast.BlockStmt]bool{s.fn.Body: true}
 	s.ownership = nil
 	recordSnapshot(w, s.fn.Body.Pos())
-	initial := maps.Clone(w.current)
+	initial := cloneState(w.current)
 	for {
 		w.s.ownership = w.s.ownership[:1]
-		w.current = maps.Clone(initial)
+		w.current = cloneState(initial)
 		labels := maps.Clone(w.labels)
 		walkBlock(w, s.fn.Body.List)
 		if sameLabels(labels, w.labels) {
@@ -44,14 +39,14 @@ func sameLabels(a, b map[string]state) bool {
 type ownershipFlow struct {
 	s       *scope
 	current state
-	escaped map[*ast.Object]bool
-	stored  map[*ast.Object]storage
+	result  storage
+	active  map[*ast.BlockStmt]bool
 	labels  map[string]state
 	jumps   []*[]state
 }
 
 func recordSnapshot(w *ownershipFlow, position token.Pos) {
-	w.s.ownership = append(w.s.ownership, ownershipSnapshot{position, maps.Clone(w.current)})
+	w.s.ownership = append(w.s.ownership, ownershipSnapshot{position, cloneState(w.current)})
 }
 
 func walkBlock(w *ownershipFlow, list []ast.Stmt) {
@@ -111,6 +106,8 @@ func applyStatement(w *ownershipFlow, node ast.Stmt) {
 		declareBindings(w, n)
 	case *ast.SendStmt:
 		storeStorage(w, n.Chan, storageOf(w.s, n.Value, w.current))
+	case *ast.ReturnStmt:
+		w.result = joinStorage(w.result, resultStorage(w.s, n, w.current))
 	}
 	recordSnapshot(w, node.End())
 }
@@ -121,7 +118,7 @@ func recordJump(w *ownershipFlow, branch *ast.BranchStmt) {
 		return
 	}
 	for _, collector := range w.jumps {
-		*collector = append(*collector, maps.Clone(w.current))
+		*collector = append(*collector, cloneState(w.current))
 	}
 }
 
@@ -140,11 +137,21 @@ func walkIf(w *ownershipFlow, n *ast.IfStmt) {
 		walkStatement(w, n.Init)
 	}
 	collectEscapes(w, n.Cond)
-	pre := maps.Clone(w.current)
+	if value, known := literalBool(n.Cond); known {
+		if value {
+			recordSnapshot(w, n.Body.Lbrace)
+			walkBlock(w, n.Body.List)
+		} else if n.Else != nil {
+			walkStatement(w, n.Else)
+		}
+		recordSnapshot(w, n.End())
+		return
+	}
+	pre := cloneState(w.current)
 	recordSnapshot(w, n.Body.Lbrace)
 	walkBlock(w, n.Body.List)
 	then := w.current
-	w.current = maps.Clone(pre)
+	w.current = cloneState(pre)
 	if n.Else != nil {
 		recordSnapshot(w, n.Else.Pos())
 		walkStatement(w, n.Else)
@@ -193,7 +200,7 @@ func switchObjects(body *ast.BlockStmt, assign *ast.AssignStmt) []*ast.Object {
 }
 
 func walkClauses(w *ownershipFlow, body *ast.BlockStmt) {
-	pre := maps.Clone(w.current)
+	pre := cloneState(w.current)
 	exits := []state{}
 	complete := false
 	var previous state
@@ -219,21 +226,21 @@ func walkClauses(w *ownershipFlow, body *ast.BlockStmt) {
 
 func fallthroughState(clause *ast.CaseClause, current state) state {
 	if len(clause.Body) == 0 {
-		return nil
+		return state{}
 	}
 	if branch, ok := clause.Body[len(clause.Body)-1].(*ast.BranchStmt); ok && branch.Tok == token.FALLTHROUGH {
 		return current
 	}
-	return nil
+	return state{}
 }
 
 func walkSelect(w *ownershipFlow, n *ast.SelectStmt) {
-	pre := maps.Clone(w.current)
+	pre := cloneState(w.current)
 	exits := []state{pre}
 	pushJumps(w)
 	for _, statement := range n.Body.List {
 		clause := statement.(*ast.CommClause)
-		w.current = maps.Clone(pre)
+		w.current = cloneState(pre)
 		applyStatement(w, clause.Comm)
 		recordSnapshot(w, clause.Colon)
 		walkBlock(w, clause.Body)
@@ -249,6 +256,11 @@ func walkFor(w *ownershipFlow, n *ast.ForStmt) {
 	if n.Init != nil {
 		walkStatement(w, n.Init)
 		start = n.Init.End()
+	}
+	if value, known := literalBool(n.Cond); known && !value {
+		collectEscapes(w, n.Cond)
+		recordSnapshot(w, n.End())
+		return
 	}
 	walkLoop(w, start, func() {
 		collectEscapes(w, n.Cond)
@@ -294,11 +306,11 @@ func iterator(s *scope, x ast.Expr) bool {
 }
 
 func walkLoop(w *ownershipFlow, start token.Pos, iterate func()) {
-	entry := maps.Clone(w.current)
+	entry := cloneState(w.current)
 	mark := len(w.s.ownership)
 	for {
 		w.s.ownership = w.s.ownership[:mark]
-		w.current = maps.Clone(entry)
+		w.current = cloneState(entry)
 		recordSnapshot(w, start)
 		pushJumps(w)
 		iterate()

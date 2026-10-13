@@ -30,7 +30,7 @@ type effectGraph struct {
 	order     []*model.Function
 	literals  map[*ast.FuncLit]*model.Function
 	returning map[*model.Function]bool
-	returns   *returnSummaries
+	mutations *storageMutations
 	strict    bool
 }
 
@@ -40,7 +40,7 @@ func analyze(c *rule.Context, root *model.Function, strict bool) *effectGraph {
 		nodes:     map[*model.Function]*callableSummary{},
 		literals:  map[*ast.FuncLit]*model.Function{},
 		returning: map[*model.Function]bool{},
-		returns:   newReturnSummaries(),
+		mutations: newStorageMutations(),
 		strict:    strict,
 	}
 	graph.add(c, root, nil, strict)
@@ -64,7 +64,7 @@ func (g *effectGraph) add(c *rule.Context, fn, parent *model.Function, strict bo
 	if g.nodes[fn] != nil {
 		return
 	}
-	s := newScope(fn, strict, g.returns)
+	s := newScope(fn, strict, g.mutations)
 	if parent != nil {
 		inherit(s, g.nodes[parent].scope, fn.Decl.Type.Pos())
 		trackOwnership(s)
@@ -184,7 +184,7 @@ func rangesOverFunction(s *scope, x ast.Expr) bool {
 	}
 	typ := s.params[id.Obj]
 	if typ == nil {
-		typ = s.ownership.stateAt(id.Pos())[id.Obj].typ
+		typ = s.ownership.stateAt(id.Pos()).bindings[id.Obj].typ
 	}
 	return functionType(s, typ, map[ast.Expr]bool{})
 }
@@ -485,7 +485,7 @@ func translateEffect(s *scope, edge callEdge, fact effect) []effect {
 }
 
 func capturedEffects(s *scope, edge callEdge, fact effect) []effect {
-	if _, local := s.ownership.stateAt(edge.call.Pos())[fact.binding]; local {
+	if _, local := s.ownership.stateAt(edge.call.Pos()).bindings[fact.binding]; local {
 		id := ast.NewIdent(fact.binding.Name)
 		id.Obj = fact.binding
 		id.NamePos = edge.call.Pos()
@@ -604,7 +604,7 @@ func argumentObject(edge callEdge, index int) *ast.Object {
 }
 
 func visible(s *scope, object *ast.Object, position token.Pos) bool {
-	if _, tracked := s.ownership.stateAt(position)[object]; tracked {
+	if _, tracked := s.ownership.stateAt(position).bindings[object]; tracked {
 		return true
 	}
 	return owns(s, object)
@@ -663,12 +663,15 @@ func substituteIdent(s *scope, edge callEdge, id *ast.Ident) (ast.Expr, bool) {
 		}
 		return args[0], true
 	}
-	_, tracked := s.ownership.stateAt(edge.call.Pos())[id.Obj]
+	_, tracked := s.ownership.stateAt(edge.call.Pos()).bindings[id.Obj]
 	return id, tracked
 }
 
 func argumentEffects(s *scope, argument ast.Expr, fact effect) []effect {
 	storage := storageOf(s, argument, s.ownership.stateAt(argument.Pos()))
+	if fact.storageRead && !storage.ambient {
+		return nil
+	}
 	if !storage.outer && !(fact.deep && storage.reachable) {
 		return nil
 	}
@@ -719,13 +722,21 @@ func reportableEffects(fn *model.Function, effects []effect, skipReceiver bool) 
 }
 
 func addEffect(effects *[]effect, next effect) bool {
-	for _, prior := range *effects {
-		if prior.what == next.what && prior.binding == next.binding && prior.deep == next.deep && prior.callable == next.callable && prior.bindingAccess == next.bindingAccess {
+	for index, prior := range *effects {
+		if sameEffect(prior, next) {
+			if next.line > 0 && (prior.line == 0 || next.line < prior.line) {
+				(*effects)[index].line = next.line
+				return true
+			}
 			return false
 		}
 	}
 	*effects = append(*effects, next)
 	return true
+}
+
+func sameEffect(a, b effect) bool {
+	return a.what == b.what && a.binding == b.binding && a.deep == b.deep && a.callable == b.callable && a.bindingAccess == b.bindingAccess && a.storageRead == b.storageRead
 }
 
 func establishedCall(s *scope, call *ast.CallExpr) bool {

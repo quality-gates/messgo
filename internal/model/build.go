@@ -78,7 +78,7 @@ func (b *fileBuilder) collectTypes() {
 
 func (b *fileBuilder) collectTypeSpec(ts *ast.TypeSpec, docGroup *ast.CommentGroup) {
 	doc := docText(ts.Doc, docGroup)
-	switch t := ts.Type.(type) {
+	switch t := ast.Unparen(ts.Type).(type) { // type S (struct{...})
 	case *ast.StructType:
 		c := &Class{
 			Name:       ts.Name.Name,

@@ -2377,6 +2377,11 @@ func TestShortMethodNameIgnoresFreeFunctions(t *testing.T) {
 	mustNotHave(t, hits, "ShortMethodName")
 }
 
+func TestShortMethodNameFiresOnParenthesizedReceiver(t *testing.T) {
+	hits := analyze(t, "type Widget struct{}\nfunc (w (*Widget)) M() {}\n", "naming")
+	mustHave(t, hits, "ShortMethodName")
+}
+
 func TestUnusedPrivateFieldGenericMultiParam(t *testing.T) {
 	src := `
 type pair[A, B any] struct {

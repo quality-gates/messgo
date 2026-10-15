@@ -365,3 +365,34 @@ func TestParenthesizedReceiverAttachesToClass(t *testing.T) {
 		})
 	}
 }
+
+func TestParenthesizedTypeSpecDeclaresClassAndInterface(t *testing.T) {
+	cases := map[string]string{
+		"single parens": "type S (struct {\n\tA int\n})\ntype I (interface {\n\tM()\n})\n",
+		"nested parens": "type S ((struct {\n\tA int\n}))\ntype I (((interface {\n\tM()\n})))\n",
+	}
+	for name, body := range cases {
+		t.Run(name, func(t *testing.T) {
+			f, err := ParseSource("paren.go", []byte("package p\n"+body+"func (s S) Run() {}\n"))
+			if err != nil {
+				t.Fatalf("ParseSource: %v", err)
+			}
+			if len(f.Classes) != 1 || f.Classes[0].Name != "S" {
+				t.Fatalf("Classes = %v, want [S]", f.Classes)
+			}
+			c := f.Classes[0]
+			if len(c.Fields) != 1 || c.Fields[0].Name != "A" {
+				t.Fatalf("S.Fields = %v, want [A]", c.Fields)
+			}
+			if len(c.Methods) != 1 || c.Methods[0].Class != c {
+				t.Fatalf("S.Methods = %v, want [Run] attached to S", c.Methods)
+			}
+			if len(f.Interfaces) != 1 || f.Interfaces[0].Name != "I" {
+				t.Fatalf("Interfaces = %v, want [I]", f.Interfaces)
+			}
+			if ms := f.Interfaces[0].Methods; len(ms) != 1 || ms[0].Name != "M" {
+				t.Fatalf("I.Methods = %v, want [M]", ms)
+			}
+		})
+	}
+}

@@ -2382,6 +2382,16 @@ func TestShortMethodNameFiresOnParenthesizedReceiver(t *testing.T) {
 	mustHave(t, hits, "ShortMethodName")
 }
 
+func TestShortClassNameFiresOnParenthesizedTypeSpec(t *testing.T) {
+	for _, src := range []string{
+		"type S (struct {\n\tA int\n})\n",
+		"type I (interface {\n\tM()\n})\n",
+		"type S ((struct{}))\n",
+	} {
+		mustHave(t, analyze(t, src, "naming"), "ShortClassName")
+	}
+}
+
 func TestUnusedPrivateFieldGenericMultiParam(t *testing.T) {
 	src := `
 type pair[A, B any] struct {

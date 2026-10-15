@@ -17,6 +17,10 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
   separate `<lambda>` owners.
 
 ### Fixed
+- Fixed parenthesized type declarations such as `type S (struct{...})` and
+  `type I ((interface{...}))` being skipped by the model. They are now
+  collected as classes and interfaces, so class naming and size rules apply
+  and their methods attach to them (#269).
 - Fixed methods with parenthesized receiver types such as `(*T)`, `(T)`,
   `*(T)`, and `(*T[P])` being treated as free functions. They now attach to
   their class, so `ShortMethodName`, `UnusedPrivateMethod`, class metrics, and

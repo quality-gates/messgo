@@ -335,3 +335,33 @@ func TestAliasToStructLiteralStillDeclaresClass(t *testing.T) {
 		t.Fatalf("Classes = %v, want [T]", f.Classes)
 	}
 }
+
+func TestParenthesizedReceiverAttachesToClass(t *testing.T) {
+	cases := map[string]string{
+		"paren value":       "type Widget struct{}\nfunc (w (Widget)) M() {}\n",
+		"paren pointer":     "type Widget struct{}\nfunc (w (*Widget)) M() {}\n",
+		"pointer to paren":  "type Widget struct{}\nfunc (w *(Widget)) M() {}\n",
+		"nested parens":     "type Widget struct{}\nfunc (w ((*(Widget)))) M() {}\n",
+		"paren generic":     "type Widget[T any] struct{}\nfunc (w (*Widget[T])) M() {}\n",
+		"paren generic two": "type Widget[K, V any] struct{}\nfunc (w (Widget[K, V])) M() {}\n",
+	}
+	for name, body := range cases {
+		t.Run(name, func(t *testing.T) {
+			f, err := ParseSource("paren.go", []byte("package p\n"+body))
+			if err != nil {
+				t.Fatalf("ParseSource: %v", err)
+			}
+			if len(f.Classes) != 1 {
+				t.Fatalf("Classes = %v, want [Widget]", f.Classes)
+			}
+			c := f.Classes[0]
+			if len(c.Methods) != 1 {
+				t.Fatalf("Widget.Methods = %v, want [M]", c.Methods)
+			}
+			m := c.Methods[0]
+			if m.Receiver != "Widget" || !m.IsMethod() || m.Class != c {
+				t.Fatalf("M: Receiver=%q IsMethod=%v Class=%v, want Widget/true/Widget", m.Receiver, m.IsMethod(), m.Class)
+			}
+		})
+	}
+}

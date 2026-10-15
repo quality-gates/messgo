@@ -17,6 +17,10 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
   separate `<lambda>` owners.
 
 ### Fixed
+- Fixed methods with parenthesized receiver types such as `(*T)`, `(T)`,
+  `*(T)`, and `(*T[P])` being treated as free functions. They now attach to
+  their class, so `ShortMethodName`, `UnusedPrivateMethod`, class metrics, and
+  report class/method attribution include them (#268).
 - Fixed inferred package-global value types through array, slice, and map
   indexing and struct field selection. Copied structs keep private scalar
   fields even when their initializer selects another value.

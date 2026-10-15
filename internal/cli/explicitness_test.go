@@ -670,7 +670,7 @@ func write(w interface{ Write([]byte) (int, error) }) {
 	}
 	_, got := runExplicitness(t, "explicitness", files)
 	assertFindings(t, got,
-		"a.go:7 ImplicitOutput set: write through receiver t",
+		"a.go:7 ImplicitOutput T.set: write through receiver t",
 		"a.go:10 ImplicitInput drain: receive from ch",
 		"a.go:15 ImplicitOutput write: write to w",
 	)

@@ -248,6 +248,8 @@ func receiverTypeName(e ast.Expr) string {
 		return receiverTypeName(t.X)
 	case *ast.IndexListExpr:
 		return receiverTypeName(t.X)
+	case *ast.ParenExpr: // (T), (*T), *(T)
+		return receiverTypeName(t.X)
 	}
 	return ""
 }

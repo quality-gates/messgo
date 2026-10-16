@@ -12,8 +12,8 @@ import (
 // A variable is "mutated" if it is reassigned (`=`, `+=`, ...), incremented or
 // decremented, has a field/element written through it (`g.f = x`, `g[k] = v`),
 // is changed by delete, clear, copy, close or an in-place sort (`sort.Ints(g)`),
-// is sent to (`g <- x`), or has its address taken (`&g`): every target that
-// Mutations reports. Short variable declarations (`:=`) introduce locals and
+// is sent to (`g <- x`), or has its address taken (`&g`). These are the
+// targets that Mutations reports. Short variable declarations (`:=`) introduce locals and
 // are ignored, as are the variables' own initializers (which are declarations,
 // not assignments). The result is intersected with the names
 // actually declared as package-level vars, so locals never appear.

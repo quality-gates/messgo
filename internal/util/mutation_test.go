@@ -44,31 +44,30 @@ func work(m map[int]int, xs, ys []int, ch chan int, n int) {
 		kind   MutationKind
 		reads  bool
 		shared bool
-		callee string
 	}
 	var got []fact
 	ast.Inspect(f, func(n ast.Node) bool {
 		for _, m := range Mutations(f, n) {
-			got = append(got, fact{RootIdent(m.Target).Name, m.Kind, m.Reads, m.Shared, m.Callee})
+			got = append(got, fact{RootIdent(m.Target).Name, m.Kind, m.Reads, m.Shared})
 		}
 		return true
 	})
 	want := []fact{
-		{"n", MutationAssign, false, false, ""},
-		{"n", MutationUpdate, true, false, ""},
-		{"n", MutationUpdate, true, false, ""},
-		{"n", MutationAssign, false, false, ""},
-		{"n", MutationAddress, false, false, ""},
-		{"ch", MutationSend, true, true, ""},
-		{"m", MutationCall, false, true, "delete"},
-		{"m", MutationCall, false, true, "clear"},
-		{"xs", MutationCall, true, true, "copy"},
-		{"ch", MutationCall, true, true, "close"},
-		{"xs", MutationCall, true, true, "copy"},
-		{"xs", MutationCall, true, true, "sort.Ints"},
-		{"xs", MutationCall, true, true, "slices.Sort"},
-		{"xs", MutationCall, true, true, "slices.Sort"},
-		{"xs", MutationCall, true, true, "append"},
+		{"n", MutationAssign, false, false},
+		{"n", MutationUpdate, true, false},
+		{"n", MutationUpdate, true, false},
+		{"n", MutationAssign, false, false},
+		{"n", MutationAddress, false, false},
+		{"ch", MutationSend, true, true},
+		{"m", MutationCall, false, true},
+		{"m", MutationCall, false, true},
+		{"xs", MutationCall, true, true},
+		{"ch", MutationCall, true, true},
+		{"xs", MutationCall, true, true},
+		{"xs", MutationCall, true, true},
+		{"xs", MutationCall, true, true},
+		{"xs", MutationCall, true, true},
+		{"xs", MutationCall, true, true},
 	}
 	if len(got) != len(want) {
 		t.Fatalf("got %d mutations, want %d:\n got: %+v\nwant: %+v", len(got), len(want), got, want)

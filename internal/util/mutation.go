@@ -36,9 +36,6 @@ type Mutation struct {
 	// Shared is true if the operation changes the data that Target refers to
 	// rather than Target itself, as delete(m, k) and ch <- v do.
 	Shared bool
-	// Callee is the name of the function of a MutationCall: a builtin name
-	// such as "close", or a qualified name such as "sort.Ints".
-	Callee string
 }
 
 // Mutations returns the targets that node n changes. f is the file of n; it
@@ -124,10 +121,11 @@ var changingBuiltins = map[string]bool{
 }
 
 // MutatingCall reports the first argument of a call that changes the data
-// that the argument refers to: delete, clear, copy, close, an append to a
-// two-index slice of the argument, or an in-place library change. Parentheses
-// and explicit instantiation around the callee are peeled, and a builtin or an
-// import name that a declaration shadows is not a mutation.
+// that the argument refers to. These calls are delete, clear, copy, close, an
+// append to a two-index slice of the argument, and an in-place library
+// change. MutatingCall removes parentheses and explicit instantiation from the
+// callee. A call to a declaration that shadows a builtin or an import name is
+// not a mutation.
 func MutatingCall(f *ast.File, call *ast.CallExpr) (Mutation, bool) {
 	if len(call.Args) == 0 {
 		return Mutation{}, false
@@ -138,15 +136,13 @@ func MutatingCall(f *ast.File, call *ast.CallExpr) (Mutation, bool) {
 		if fun.Obj != nil {
 			return Mutation{}, false
 		}
-		m.Callee = fun.Name
 		reads, ok := changingBuiltins[fun.Name]
 		if ok {
 			m.Reads = reads
 		}
 		return m, ok || resliceAppend(fun, call)
 	case *ast.SelectorExpr:
-		m.Callee = QualifiedName(f, fun)
-		return m, InPlaceChanges[m.Callee]
+		return m, InPlaceChanges[QualifiedName(f, fun)]
 	}
 	return Mutation{}, false
 }

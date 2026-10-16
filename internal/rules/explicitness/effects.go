@@ -73,8 +73,3 @@ var streamReaders = map[string]int{
 	"io.ReadAll": 0, "io.ReadFull": 0, "io.ReadAtLeast": 0,
 	"io.Copy": 1, "io.CopyN": 1, "io.CopyBuffer": 1,
 }
-
-// builtinWrites are the builtins that change the data that their first
-// argument refers to. The value is true if the builtin does not also read that
-// data.
-var builtinWrites = map[string]bool{"delete": true, "clear": true, "copy": false, "close": false}

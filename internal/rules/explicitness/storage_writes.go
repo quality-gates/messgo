@@ -2,7 +2,6 @@ package explicitness
 
 import (
 	"go/ast"
-	"go/token"
 	"maps"
 
 	"github.com/quality-gates/messgo/internal/util"
@@ -104,15 +103,10 @@ func markStorageMutation(w *ownershipFlow, target ast.Expr) {
 }
 
 func markNodeMutation(w *ownershipFlow, node ast.Node) {
-	switch n := node.(type) {
-	case *ast.AssignStmt:
-		if n.Tok != token.DEFINE {
-			for _, target := range n.Lhs {
-				markStorageMutation(w, target)
-			}
+	for _, m := range util.Mutations(w.s.syntax(), node) {
+		if m.Kind == util.MutationAssign || m.Kind == util.MutationUpdate {
+			markStorageMutation(w, m.Target)
 		}
-	case *ast.IncDecStmt:
-		markStorageMutation(w, n.X)
 	}
 }
 
@@ -125,19 +119,8 @@ func markCallMutation(w *ownershipFlow, call *ast.CallExpr) {
 }
 
 func mutationArgument(s *scope, call *ast.CallExpr) ast.Expr {
-	if len(call.Args) == 0 {
-		return nil
-	}
-	mutates := false
-	switch fun := ast.Unparen(call.Fun).(type) {
-	case *ast.Ident:
-		_, mutates = builtinWrites[builtinName(call)]
-		mutates = mutates || resliceAppend(fun, call)
-	case *ast.SelectorExpr:
-		mutates = util.InPlaceChanges[s.qualified(fun)]
-	}
-	if mutates {
-		return call.Args[0]
+	if m, ok := util.MutatingCall(s.syntax(), call); ok {
+		return m.Target
 	}
 	return nil
 }

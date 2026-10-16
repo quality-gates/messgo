@@ -12,9 +12,10 @@ import (
 // A variable is "mutated" if it is reassigned (`=`, `+=`, ...), incremented or
 // decremented, has a field/element written through it (`g.f = x`, `g[k] = v`),
 // is changed by delete, clear, copy, close or an in-place sort (`sort.Ints(g)`),
-// is sent to (`g <- x`), or has its address taken (`&g`). Short variable declarations (`:=`) introduce
-// locals and are ignored, as are the variables' own initializers (which are
-// declarations, not assignments). The result is intersected with the names
+// is sent to (`g <- x`), or has its address taken (`&g`). These are the
+// targets that Mutations reports. Short variable declarations (`:=`) introduce locals and
+// are ignored, as are the variables' own initializers (which are declarations,
+// not assignments). The result is intersected with the names
 // actually declared as package-level vars, so locals never appear.
 //
 // Detection is AST-based and deliberately errs toward visibility: a local that
@@ -46,85 +47,11 @@ func collectMutations(f *ast.File, globals map[string]bool, topSpecs map[any]boo
 		mutated[id.Name] = true
 	}
 	ast.Inspect(f, func(n ast.Node) bool {
-		markMutation(f, n, mark)
+		for _, m := range Mutations(f, n) {
+			mark(m.Target)
+		}
 		return true
 	})
-}
-
-// markMutation calls mark on the lvalue(s) of any node that mutates a variable:
-// assignment (excluding ":=", which introduces locals), increment/decrement,
-// address-of, delete/clear of a map, copy into a slice, an in-place change, a
-// send on or close of a channel, and a range clause that assigns into existing
-// variables.
-func markMutation(f *ast.File, n ast.Node, mark func(ast.Expr)) {
-	switch s := n.(type) {
-	case *ast.AssignStmt:
-		if s.Tok == token.DEFINE {
-			return
-		}
-		for _, lhs := range s.Lhs {
-			mark(lhs)
-		}
-	case *ast.IncDecStmt:
-		mark(s.X)
-	case *ast.SendStmt:
-		mark(s.Chan)
-	case *ast.UnaryExpr:
-		markAddressOf(s, mark)
-	case *ast.RangeStmt:
-		markRangeAssign(s, mark)
-	case *ast.CallExpr:
-		markFirstArgChange(f, s, mark)
-	}
-}
-
-func markAddressOf(s *ast.UnaryExpr, mark func(ast.Expr)) {
-	if s.Op == token.AND {
-		mark(s.X)
-	}
-}
-
-func markRangeAssign(s *ast.RangeStmt, mark func(ast.Expr)) {
-	if s.Tok != token.ASSIGN {
-		return
-	}
-	mark(s.Key)
-	mark(s.Value)
-}
-
-// InPlaceChanges are standard library functions that change the elements of
-// their first argument in place: sorts, and the slices helpers that shift or
-// overwrite elements in the backing array even when the result is discarded.
-var InPlaceChanges = map[string]bool{
-	"sort.Slice": true, "sort.SliceStable": true, "sort.Sort": true,
-	"sort.Stable": true, "sort.Strings": true, "sort.Ints": true,
-	"sort.Float64s": true, "slices.Sort": true, "slices.SortFunc": true,
-	"slices.SortStableFunc": true, "slices.Reverse": true,
-	"slices.Delete": true, "slices.DeleteFunc": true, "slices.Compact": true,
-	"slices.CompactFunc": true, "slices.Replace": true, "slices.Insert": true,
-}
-
-// changingBuiltins are the builtin functions that change their first argument.
-var changingBuiltins = map[string]bool{
-	"delete": true, "clear": true, "copy": true, "close": true,
-}
-
-// markFirstArgChange calls mark on the first argument of a call that changes
-// the data of that argument: delete, clear, copy, close, or an in-place change.
-func markFirstArgChange(f *ast.File, call *ast.CallExpr, mark func(ast.Expr)) {
-	if len(call.Args) == 0 {
-		return
-	}
-	switch fun := call.Fun.(type) {
-	case *ast.Ident:
-		if changingBuiltins[fun.Name] {
-			mark(call.Args[0])
-		}
-	case *ast.SelectorExpr:
-		if InPlaceChanges[QualifiedName(f, fun)] {
-			mark(call.Args[0])
-		}
-	}
 }
 
 // QualifiedName returns the import path and name of a package member, for
@@ -145,6 +72,9 @@ func QualifiedName(f *ast.File, sel *ast.SelectorExpr) string {
 // ImportedPath returns the path of the package that f imports as name, or ""
 // if f does not import a package with that name.
 func ImportedPath(f *ast.File, name string) string {
+	if f == nil {
+		return ""
+	}
 	for _, spec := range f.Imports {
 		importPath, ok := importPath(spec)
 		if ok && importMatchesQualifier(spec, importPath, name) {

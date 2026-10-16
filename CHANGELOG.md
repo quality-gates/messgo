@@ -17,6 +17,14 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
   separate `<lambda>` owners.
 
 ### Fixed
+- Fixed `GlobalVariable`, `ImplicitInput`, and `ImplicitOutput` disagreeing
+  about which operations change a variable. Package analysis and explicitness
+  now share one mutation classifier, so mutating calls with a parenthesized or
+  explicitly instantiated callee such as `(copy)(g, src)` or
+  `(slices.Sort)(g)` are mutations for all three rules, a local function that
+  shadows a builtin such as `copy` is not, and `append(g[:1], v)` makes `g` a
+  mutable global. A range clause that assigns to a captured variable now makes
+  reads of that variable an implicit input, as a plain assignment does (#263).
 - Fixed parenthesized type declarations such as `type S (struct{...})` and
   `type I ((interface{...}))` being skipped by the model. They are now
   collected as classes and interfaces, so class naming and size rules apply

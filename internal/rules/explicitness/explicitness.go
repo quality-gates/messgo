@@ -324,6 +324,14 @@ func (s *scope) qualified(sel *ast.SelectorExpr) string {
 	return pkg + "." + sel.Sel.Name
 }
 
+// syntax returns the syntax tree of the file of the function, or nil.
+func (s *scope) syntax() *ast.File {
+	if s.fn.File == nil {
+		return nil
+	}
+	return s.fn.File.Syntax
+}
+
 func (s *scope) effect(n ast.Node, what string) effect {
 	return effect{line: model.PhysicalSpan(s.fn.File, n.Pos(), n.Pos()).Line, what: what}
 }

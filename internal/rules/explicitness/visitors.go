@@ -19,68 +19,13 @@ type writeVisitor struct {
 }
 
 func (w *writeVisitor) visit(n ast.Node) bool {
-	switch n := n.(type) {
-	case *ast.AssignStmt:
-		w.visitAssign(n)
-	case *ast.IncDecStmt:
-		w.write(n.X, false, false)
-	case *ast.RangeStmt:
-		w.visitRange(n)
-	case *ast.CallExpr:
-		w.visitCall(n)
+	for _, m := range util.Mutations(w.syntax(), n) {
+		switch m.Kind {
+		case util.MutationAssign, util.MutationUpdate, util.MutationCall:
+			w.write(m.Target, !m.Reads, m.Shared)
+		}
 	}
 	return true
-}
-
-// visitAssign records the writes of an assignment. A plain assignment does
-// not read its targets. An operator assignment (x += y) reads them too.
-func (w *writeVisitor) visitAssign(a *ast.AssignStmt) {
-	if a.Tok == token.DEFINE {
-		return
-	}
-	for _, lhs := range a.Lhs {
-		w.write(lhs, a.Tok == token.ASSIGN, false)
-	}
-}
-
-// visitRange records a range that assigns to existing variables.
-func (w *writeVisitor) visitRange(r *ast.RangeStmt) {
-	if r.Tok == token.ASSIGN {
-		w.write(r.Key, true, false)
-		w.write(r.Value, true, false)
-	}
-}
-
-// visitCall records a builtin or a library call that changes the data that its
-// first argument refers to.
-func (w *writeVisitor) visitCall(call *ast.CallExpr) {
-	if len(call.Args) == 0 {
-		return
-	}
-	switch fun := call.Fun.(type) {
-	case *ast.Ident:
-		if only, ok := builtinWrites[fun.Name]; ok && fun.Obj == nil {
-			w.write(call.Args[0], only, true)
-		}
-		if resliceAppend(fun, call) {
-			w.write(call.Args[0], false, true)
-		}
-	case *ast.SelectorExpr:
-		if util.InPlaceChanges[w.qualified(fun)] {
-			w.write(call.Args[0], false, true)
-		}
-	}
-}
-
-// resliceAppend reports whether call appends to a two-index slice of other
-// data, as append(xs[:1], 2) does. The slice keeps the capacity of the data,
-// so the append writes into the array of the data.
-func resliceAppend(fun *ast.Ident, call *ast.CallExpr) bool {
-	if fun.Name != "append" || fun.Obj != nil || len(call.Args) < 2 {
-		return false
-	}
-	slice, ok := ast.Unparen(call.Args[0]).(*ast.SliceExpr)
-	return ok && !slice.Slice3
 }
 
 // write records a write to the variable at the root of target. If only is
@@ -386,9 +331,12 @@ type flowVisitor struct {
 }
 
 func (f *flowVisitor) visit(n ast.Node) bool {
+	for _, m := range util.Mutations(f.syntax(), n) {
+		if m.Kind == util.MutationSend {
+			f.flow(&f.outputs, m.Target, "send on ")
+		}
+	}
 	switch n := n.(type) {
-	case *ast.SendStmt:
-		f.flow(&f.outputs, n.Chan, "send on ")
 	case *ast.UnaryExpr:
 		if n.Op == token.ARROW {
 			f.flow(&f.inputs, n.X, "receive from ")

@@ -275,6 +275,7 @@ func walkFor(w *ownershipFlow, n *ast.ForStmt) {
 
 func walkRange(w *ownershipFlow, n *ast.RangeStmt) {
 	collectEscapes(w, n.X)
+	markNodeMutation(w, n)
 	element := rangeStorage(w, n.X)
 	walkLoop(w, n.Pos(), func() {
 		for _, target := range []ast.Expr{n.Key, n.Value} {

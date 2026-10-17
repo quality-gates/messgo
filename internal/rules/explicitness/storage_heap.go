@@ -137,9 +137,13 @@ func freezeReferences(fact storage, current state, seen map[reference]bool) stor
 }
 
 func selectedCell(fact storage, key string, current state, index bool) storage {
+	return selectedCellSeen(fact, key, current, index, map[allocation]bool{})
+}
+
+func selectedCellSeen(fact storage, key string, current state, index bool, seen map[allocation]bool) storage {
 	cells := cellsOf(fact, current)
-	if value, addressed := cells[addressCell]; addressed && key != addressCell {
-		return selectedCell(value, key, current, index)
+	if value, addressed := cells[addressCell]; addressed && key != addressCell && followAddress(value, seen) {
+		return selectedCellSeen(value, key, current, index, seen)
 	}
 	if selected, found := readCell(cells, key); found {
 		return selected
@@ -151,6 +155,23 @@ func selectedCell(fact storage, key string, current state, index bool) storage {
 	resolved.outer = resolved.outer || resolved.reachable
 	resolved.references, resolved.cells = nil, nil
 	return resolved
+}
+
+// followAddress reports whether $value is a further pointee. A storage whose
+// allocation is already on this selection is a cycle, not another pointee.
+func followAddress(fact storage, seen map[allocation]bool) bool {
+	if len(fact.references) == 0 {
+		return true
+	}
+	for ref := range fact.references {
+		if seen[ref.allocation] {
+			return false
+		}
+	}
+	for ref := range fact.references {
+		seen[ref.allocation] = true
+	}
+	return true
 }
 
 func readCell(cells map[string]storage, key string) (storage, bool) {

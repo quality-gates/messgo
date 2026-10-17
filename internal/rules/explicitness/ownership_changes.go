@@ -133,9 +133,9 @@ func collectCallEscapes(w *ownershipFlow, call *ast.CallExpr, arguments map[ast.
 	if executeStorageCall(w, call) {
 		return
 	}
-	incoming := argumentsStorage(w.s, call.Args, w.current)
+	before := w.current
 	if root := calledReceiver(w, call); root != nil {
-		w.current = applyBindingChanges(w.current, bindingChange{root, addressed(w.current.bindings[root], incoming)})
+		w.current = escapeAddressed(w, before, root, call.Args)
 	}
 	for _, arg := range call.Args {
 		unary, ok := ast.Unparen(arg).(*ast.UnaryExpr)
@@ -144,9 +144,38 @@ func collectCallEscapes(w *ownershipFlow, call *ast.CallExpr, arguments map[ast.
 		}
 		arguments[unary] = true
 		if root := trackedRoot(w, unary.X); root != nil {
-			w.current = applyBindingChanges(w.current, bindingChange{root, addressed(w.current.bindings[root], incoming)})
+			w.current = escapeAddressed(w, before, root, call.Args)
 		}
 	}
+}
+
+// escapeAddressed records that an unresolved callee may overwrite root.
+// The address argument is a pointer to root, not a value stored into it;
+// joining that pointer installs a $value cycle and selectedCell never returns.
+func escapeAddressed(w *ownershipFlow, before state, root *ast.Object, args []ast.Expr) state {
+	fact := w.current.bindings[root]
+	incoming := argumentsExceptRoot(w.s, args, root, before)
+	return applyBindingChanges(w.current, bindingChange{root, addressed(fact, incoming)})
+}
+
+func argumentsExceptRoot(s *scope, args []ast.Expr, root *ast.Object, current state) storage {
+	fact := storage{}
+	for _, arg := range args {
+		if addressOfRoot(arg, root) {
+			continue
+		}
+		fact = joinStorage(fact, valueStorage(s, arg, current))
+	}
+	return fact
+}
+
+func addressOfRoot(arg ast.Expr, root *ast.Object) bool {
+	unary, ok := ast.Unparen(arg).(*ast.UnaryExpr)
+	if !ok || unary.Op != token.AND {
+		return false
+	}
+	id := util.RootIdent(unary.X)
+	return id != nil && id.Obj == root
 }
 
 func calledReceiver(w *ownershipFlow, call *ast.CallExpr) *ast.Object {

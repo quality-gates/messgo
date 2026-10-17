@@ -174,7 +174,7 @@ func f(items []int) {
 `,
 			want: []string{
 				"UnknownEffect f: unresolved call",
-				"ImplicitOutput f: write through parameter dst",
+				"ImplicitOutput f: write through parameter items",
 			},
 		},
 		{

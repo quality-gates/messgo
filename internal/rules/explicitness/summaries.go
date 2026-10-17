@@ -676,10 +676,11 @@ func argumentEffects(s *scope, argument ast.Expr, fact effect) []effect {
 		return nil
 	}
 	id := util.RootIdent(argument)
-	if id != nil {
-		fact.what = argumentPart(s, id, fact.what)
+	if id == nil {
+		return originEffects(fact, storage)
 	}
-	return originEffects(fact, storage)
+	fact.what = argumentPart(s, id, fact.what)
+	return parameterOrigins(s, id, originEffects(fact, storage))
 }
 
 func argumentPart(s *scope, id *ast.Ident, what string) string {
@@ -694,7 +695,24 @@ func argumentPart(s *scope, id *ast.Ident, what string) string {
 	case s.isReceiver(id):
 		return "write through receiver " + id.Name
 	}
-	return "write through parameter " + id.Name
+	return parameterWrite + id.Name
+}
+
+// parameterOrigins names the parameter that each write through local reaches.
+// A local that aliases a parameter is not itself a parameter, so the effect
+// names the parameter whose storage it shares. A parameter whose type cannot
+// share storage, such as a string, is never the target of the write.
+func parameterOrigins(s *scope, local *ast.Ident, effects []effect) []effect {
+	for index, fact := range effects {
+		typ, ok := s.params[fact.binding]
+		if !ok || fact.what != parameterWrite+local.Name {
+			continue
+		}
+		if shared := typeStorage(typ, s.fn.File.PackageTypeDefs); shared.outer || shared.reachable {
+			effects[index].what = parameterWrite + fact.binding.Name
+		}
+	}
+	return effects
 }
 
 func originEffects(fact effect, storage storage) []effect {

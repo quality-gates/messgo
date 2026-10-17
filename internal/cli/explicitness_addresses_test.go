@@ -16,7 +16,7 @@ func Change(items []int) {
     *field = items
     box.Items[0] = 9
 }
-`, "a.go:9 ImplicitOutput Change: write through parameter box"},
+`, "a.go:9 ImplicitOutput Change: write through parameter items"},
 		{"reverse field", `package p
 type Box struct{ Items []int }
 func Change(items []int) {
@@ -25,7 +25,7 @@ func Change(items []int) {
  box.Items = items
  (*field)[0] = 9
 }
-`, "a.go:7 ImplicitOutput Change: write through parameter field"},
+`, "a.go:7 ImplicitOutput Change: write through parameter items"},
 		{"element", `package p
 func Change(items []int) {
  local := [][]int{nil}
@@ -33,7 +33,7 @@ func Change(items []int) {
  *element = items
  local[0][0] = 9
 }
-`, "a.go:6 ImplicitOutput Change: write through parameter local"},
+`, "a.go:6 ImplicitOutput Change: write through parameter items"},
 		{"reverse element", `package p
 func Change(items []int) {
  local := [][]int{nil}
@@ -41,7 +41,7 @@ func Change(items []int) {
  local[0] = items
  (*element)[0] = 9
 }
-`, "a.go:6 ImplicitOutput Change: write through parameter element"},
+`, "a.go:6 ImplicitOutput Change: write through parameter items"},
 		{"value field", `package p
 type Box struct{ Items []int }
 func Change(items []int) {
@@ -50,7 +50,7 @@ func Change(items []int) {
  *field = items
  box.Items[0] = 9
 }
-`, "a.go:7 ImplicitOutput Change: write through parameter box"},
+`, "a.go:7 ImplicitOutput Change: write through parameter items"},
 		{"value array", `package p
 func Change(items []int) {
  local := [1][]int{}
@@ -58,7 +58,7 @@ func Change(items []int) {
  *element = items
  local[0][0] = 9
 }
-`, "a.go:6 ImplicitOutput Change: write through parameter local"},
+`, "a.go:6 ImplicitOutput Change: write through parameter items"},
 		{"value replacement", `package p
 type Box struct{ Items []int }
 func Change(items []int) {
@@ -67,7 +67,7 @@ func Change(items []int) {
  box = Box{Items: items}
  (*field)[0] = 9
 }
-`, "a.go:7 ImplicitOutput Change: write through parameter field"},
+`, "a.go:7 ImplicitOutput Change: write through parameter items"},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
@@ -194,8 +194,8 @@ func Calculate(items []int) []int {
 `})
 	assertFindings(t, got,
 		"a.go:3 ImplicitOutput Put: write through parameter slot",
-		"a.go:8 ImplicitOutput Change: write through parameter box",
-		"a.go:13 ImplicitOutput ChangeReturned: write through parameter box",
+		"a.go:8 ImplicitOutput Change: write through parameter items",
+		"a.go:13 ImplicitOutput ChangeReturned: write through parameter items",
 	)
 }
 
@@ -227,9 +227,9 @@ func Calculate(items []int) int {
 }
 `})
 	assertFindings(t, got,
-		"a.go:10 ImplicitOutput Change: write through parameter box",
+		"a.go:10 ImplicitOutput Change: write through parameter items",
 		"a.go:12 ImplicitOutput ChangeCaller: write through call result",
-		"a.go:17 ImplicitOutput Conditional: write through parameter box",
+		"a.go:17 ImplicitOutput Conditional: write through parameter items",
 	)
 }
 
@@ -256,8 +256,8 @@ func Calculate() []int {
 }
 `})
 	assertFindings(t, got,
-		"a.go:8 ImplicitOutput Change: write through parameter local",
+		"a.go:8 ImplicitOutput Change: write through parameter items",
 		"a.go:10 ImplicitOutput ChangeCaller: write through call result",
-		"a.go:13 ImplicitOutput ChangeNested: write through parameter element",
+		"a.go:13 ImplicitOutput ChangeNested: write through parameter items",
 	)
 }

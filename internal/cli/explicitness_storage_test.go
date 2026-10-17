@@ -277,7 +277,7 @@ func Change(items []int) {
  box.Items = items
  alias.Items[0] = 9
 }
-`, "a.go:7 ImplicitOutput Change: write through parameter alias"},
+`, "a.go:7 ImplicitOutput Change: write through parameter items"},
 		{"reverse pointer", `package p
 type Box struct { Items []int }
 func Change(items []int) {
@@ -286,7 +286,7 @@ func Change(items []int) {
  alias.Items = items
  box.Items[0] = 9
 }
-`, "a.go:7 ImplicitOutput Change: write through parameter box"},
+`, "a.go:7 ImplicitOutput Change: write through parameter items"},
 		{"map", `package p
 func Change(items []int) {
  box := map[string][]int{}
@@ -294,7 +294,7 @@ func Change(items []int) {
  alias["value"] = items
  box["value"][0] = 9
 }
-`, "a.go:6 ImplicitOutput Change: write through parameter box"},
+`, "a.go:6 ImplicitOutput Change: write through parameter items"},
 		{"slice", `package p
 func Change(items []int) {
  box := make([][]int, 1)
@@ -302,7 +302,7 @@ func Change(items []int) {
  box[0] = items
  alias[0][0] = 9
 }
-`, "a.go:6 ImplicitOutput Change: write through parameter alias"},
+`, "a.go:6 ImplicitOutput Change: write through parameter items"},
 		{"copy", `package p
 func Change(items [][]int) {
  box := make([][]int, 1)
@@ -310,7 +310,7 @@ func Change(items [][]int) {
  copy(box, items)
  alias[0][0] = 9
 }
-`, "a.go:6 ImplicitOutput Change: write through parameter alias"},
+`, "a.go:6 ImplicitOutput Change: write through parameter items"},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
@@ -403,7 +403,7 @@ func Replace(items []int) []int {
 `})
 	assertFindings(t, got,
 		"a.go:3 ImplicitOutput Put: write through parameter box",
-		"a.go:10 ImplicitOutput Change: write through parameter alias",
+		"a.go:10 ImplicitOutput Change: write through parameter items",
 	)
 }
 
@@ -433,7 +433,7 @@ func Dead(items []int) []int {
 	assertFindings(t, got,
 		"a.go:4 ImplicitOutput <lambda>: captured variable local",
 		"a.go:11 ImplicitOutput <lambda>: captured variable local",
-		"a.go:13 ImplicitOutput Change: write through parameter local",
+		"a.go:13 ImplicitOutput Change: write through parameter items",
 	)
 }
 
@@ -542,8 +542,8 @@ func Conditional(items []int, replace bool) {
 }
 `})
 	assertFindings(t, got,
-		"a.go:12 ImplicitOutput Change: write through parameter box",
-		"a.go:18 ImplicitOutput Conditional: write through parameter box",
+		"a.go:12 ImplicitOutput Change: write through parameter items",
+		"a.go:18 ImplicitOutput Conditional: write through parameter items",
 	)
 }
 
@@ -610,8 +610,8 @@ func Captured() func() int {
 `})
 	assertFindings(t, got,
 		"a.go:2 ImplicitOutput Get: write through parameter dst",
-		"a.go:7 ImplicitOutput Change: write through parameter target",
-		"a.go:12 ImplicitOutput ChangeThroughHelper: write through parameter target",
+		"a.go:7 ImplicitOutput Change: write through parameter items",
+		"a.go:12 ImplicitOutput ChangeThroughHelper: write through parameter items",
 		"a.go:26 ImplicitInput <lambda>: captured variable value",
 		"a.go:27 ImplicitOutput <lambda>: captured variable alias",
 	)
@@ -640,8 +640,8 @@ func ChangeIndex(items []int) {
 }
 `})
 	assertFindings(t, got,
-		"a.go:14 ImplicitOutput ChangeField: write through parameter box",
-		"a.go:19 ImplicitOutput ChangeIndex: write through parameter box",
+		"a.go:14 ImplicitOutput ChangeField: write through parameter items",
+		"a.go:19 ImplicitOutput ChangeIndex: write through parameter items",
 	)
 }
 
@@ -666,8 +666,56 @@ func ChangeLiteral(items []int) {
 	assertFindings(t, got,
 		"a.go:3 ImplicitOutput Put: write through parameter box",
 		"a.go:4 UnknownEffect Apply: unresolved call",
-		"a.go:9 ImplicitOutput Change: write through parameter alias",
+		"a.go:9 ImplicitOutput Change: write through parameter items",
 		"a.go:14 ImplicitOutput <lambda>: write through parameter target",
-		"a.go:15 ImplicitOutput ChangeLiteral: write through parameter alias",
+		"a.go:15 ImplicitOutput ChangeLiteral: write through parameter items",
+	)
+}
+
+func TestExplicitnessNamesTheParameterBehindALocalAlias(t *testing.T) {
+	_, got := runExplicitness(t, "explicitness", map[string]string{"a.go": `package p
+import ("slices"; "example.com/x")
+func Alias(p *int) {
+ q := p
+ *q = 1
+}
+func Direct(p *int) { *p = 1 }
+func Slice(s []int) {
+ t := s
+ t[0] = 1
+}
+func Clone(s []*int) {
+ c := slices.Clone(s)
+ *c[0] = 1
+}
+func Either(a, b *int, ok bool) {
+ q := a
+ if ok {
+  q = b
+ }
+ *q = 1
+}
+func set(p *int) { *p = 1 }
+func Pass(p *int) {
+ q := p
+ set(q)
+}
+func Opaque(name string, data []byte) {
+ v := x.Parse(name, data)
+ v[0] = 1
+}
+`})
+	assertFindings(t, got,
+		"a.go:5 ImplicitOutput Alias: write through parameter p",
+		"a.go:7 ImplicitOutput Direct: write through parameter p",
+		"a.go:10 ImplicitOutput Slice: write through parameter s",
+		"a.go:14 ImplicitOutput Clone: write through parameter s",
+		"a.go:21 ImplicitOutput Either: write through parameter a",
+		"a.go:21 ImplicitOutput Either: write through parameter b",
+		"a.go:23 ImplicitOutput set: write through parameter p",
+		"a.go:26 ImplicitOutput Pass: write through parameter p",
+		"a.go:29 UnknownEffect Opaque: unresolved call",
+		"a.go:30 ImplicitOutput Opaque: write through parameter data",
+		"a.go:30 ImplicitOutput Opaque: write through parameter v",
 	)
 }

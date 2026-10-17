@@ -122,7 +122,9 @@ storage stays private.
 | Receiver in strict mode | a receiver read | a caller-visible receiver write |
 
 Ownership follows aliases and rebinding at each operation. Conditional and
-loop-carried assignments retain every possible shared origin. A shallow clone
+loop-carried assignments retain every possible shared origin. A write through
+a local that aliases a parameter names that parameter, once per possible
+origin. A shallow clone
 has private outer storage but can still reach shared elements. A copied array
 is private; a copied slice shares its backing storage. Taking an address alone
 does not write storage. Proven fixed, private package variables and captures

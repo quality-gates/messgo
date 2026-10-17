@@ -26,7 +26,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
   excluded by policy are now `UnknownEffect` and propagate through resolved
   same-package calls. `explicitness-strict` still reports precise receiver
   inputs and outputs. An unused receiver stays clean, and a copy-only field
-  write is not treated as caller-visible mutation (#277).
+  write is not treated as caller-visible mutation. The shared Go
+  explicitness contract now expects that unknown result (#277).
 - Fixed explicitness analysis failing to finish when same-package calls build
   cyclic storage inside loops. Fixed-point joins now retain heap references
   instead of expanding copied cell snapshots, while keeping effect propagation

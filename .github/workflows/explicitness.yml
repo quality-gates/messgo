@@ -9,7 +9,7 @@ permissions:
 
 jobs:
   conformance:
-    uses: quality-gates/mess-detection/.github/workflows/explicitness.yml@e0896093daeb17bd09afa635559a9b8bdc013283
+    uses: quality-gates/mess-detection/.github/workflows/explicitness.yml@bed69fddfc2cb31e4d3f74aea97726e5b5d4465e
     with:
       language: go
-      contract_ref: e0896093daeb17bd09afa635559a9b8bdc013283
+      contract_ref: bed69fddfc2cb31e4d3f74aea97726e5b5d4465e

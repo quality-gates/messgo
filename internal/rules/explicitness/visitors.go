@@ -105,6 +105,7 @@ func (w *writeVisitor) describe(target ast.Expr, id *ast.Ident, builtin bool) st
 		return "captured variable " + id.Name
 	case !sharedWrite(w.scope, target, writtenContainer(target, builtin), direct, shared, fact):
 	case w.isReceiver(id):
+		noteExcludedReceiver(w.scope, w.result, id)
 		return "write through receiver " + id.Name
 	default:
 		return "write through parameter " + id.Name
@@ -304,11 +305,19 @@ func (r *readVisitor) read(id *ast.Ident) {
 	case r.writeRoots[id]:
 	case r.isGlobal(id) && r.sharedGlobals[id.Name]:
 		r.inputs = append(r.inputs, r.effect(id, "package variable "+id.Name))
-	case r.strict && r.isReceiver(id):
-		r.inputs = append(r.inputs, r.effect(id, receiverPart(id, r.fields[id])))
+	case r.isReceiver(id):
+		r.readReceiver(id)
 	case captured(r.scope, id):
 		r.readCapture(id)
 	}
+}
+
+func (r *readVisitor) readReceiver(id *ast.Ident) {
+	if r.strict {
+		r.inputs = append(r.inputs, r.effect(id, receiverPart(id, r.fields[id])))
+		return
+	}
+	noteExcludedReceiver(r.scope, r.result, id)
 }
 
 func (r *readVisitor) readCapture(id *ast.Ident) {

@@ -20,6 +20,13 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
   separate `<lambda>` owners.
 
 ### Fixed
+- Fixed `explicitness` certifying `return ctx.Done()` as a calculation. A
+  `context.Context.Done` call is unresolved interface dispatch, so it is now
+  `UnknownEffect` like `Err`, `Value`, `Deadline`, and other interface methods,
+  and the uncertainty propagates to same-package callers. `<-ctx.Done()` still
+  reports its receive as `ImplicitInput`, now alongside `UnknownEffect`, and the
+  receive is also detected when the call is parenthesised, as in
+  `<-(ctx.Done())` (#278).
 - Fixed non-strict `explicitness` classifying caller-visible receiver writes as
   `ImplicitOutput` and omitting receiver reads, which certified those methods
   and their callers as pure. Receiver reads and caller-visible receiver writes

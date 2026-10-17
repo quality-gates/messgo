@@ -757,9 +757,6 @@ func establishedCall(s *scope, call *ast.CallExpr) bool {
 		if knownOperation(name) {
 			return true
 		}
-		if knownReceiverOperation(s, fun) {
-			return true
-		}
 		if call, ok := ast.Unparen(fun.X).(*ast.CallExpr); ok {
 			return establishedCall(s, call)
 		}
@@ -808,26 +805,6 @@ var pureOperations = setOf(
 
 var immediateCallbacks = map[string][]int{
 	"slices.DeleteFunc": {1}, "slices.CompactFunc": {1}, "slices.SortFunc": {1}, "slices.SortStableFunc": {1}, "slices.IndexFunc": {1}, "slices.ContainsFunc": {1}, "slices.EqualFunc": {2}, "slices.CompareFunc": {2}, "slices.IsSortedFunc": {1}, "sort.Slice": {1}, "sort.SliceStable": {1}, "path/filepath.Walk": {1}, "path/filepath.WalkDir": {1},
-}
-
-func knownReceiverOperation(s *scope, selector *ast.SelectorExpr) bool {
-	id, ok := ast.Unparen(selector.X).(*ast.Ident)
-	if !ok || id.Obj == nil {
-		return false
-	}
-	typ := s.params[id.Obj]
-	if typ == nil {
-		return false
-	}
-	if selector.Sel.Name != "Done" {
-		return false
-	}
-	expr, ok := ast.Unparen(typ).(*ast.SelectorExpr)
-	if !ok || expr.Sel.Name != "Context" {
-		return false
-	}
-	pkg, ok := ast.Unparen(expr.X).(*ast.Ident)
-	return ok && model.ImportedPackagePath(s.fn.File, pkg) == "context"
 }
 
 func flowPrefix(what string) string {

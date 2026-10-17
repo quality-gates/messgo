@@ -410,7 +410,7 @@ func (f *flowVisitor) visitSelector(sel *ast.SelectorExpr) {
 }
 
 func (f *flowVisitor) flow(list *[]effect, e ast.Expr, prefix string) {
-	if call, ok := e.(*ast.CallExpr); ok {
+	if call, ok := ast.Unparen(e).(*ast.CallExpr); ok {
 		e = call.Fun
 	}
 	id := flowRoot(f.scope, e)

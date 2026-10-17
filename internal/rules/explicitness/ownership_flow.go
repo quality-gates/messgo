@@ -114,7 +114,7 @@ func applyStatement(w *ownershipFlow, node ast.Stmt) {
 
 func recordJump(w *ownershipFlow, branch *ast.BranchStmt) {
 	if branch.Tok == token.GOTO && branch.Label != nil {
-		w.labels[branch.Label.Name] = joinStates(w.labels[branch.Label.Name], w.current)
+		w.labels[branch.Label.Name] = compactState(joinStates(w.labels[branch.Label.Name], w.current))
 		return
 	}
 	for _, collector := range w.jumps {
@@ -315,7 +315,7 @@ func walkLoop(w *ownershipFlow, start token.Pos, iterate func()) {
 		recordSnapshot(w, start)
 		pushJumps(w)
 		iterate()
-		next := joinStates(append([]state{entry, w.current}, popJumps(w)...)...)
+		next := compactState(joinStates(append([]state{entry, w.current}, popJumps(w)...)...))
 		if sameStates(next, entry) {
 			break
 		}

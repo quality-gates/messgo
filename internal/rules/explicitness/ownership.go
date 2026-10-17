@@ -110,6 +110,9 @@ func joinStates(states ...state) state {
 	for _, fact := range out.bindings {
 		out = registerStorage(out, fact)
 	}
+	for _, fact := range out.calls {
+		out = registerStorage(out, fact)
+	}
 	return out
 }
 

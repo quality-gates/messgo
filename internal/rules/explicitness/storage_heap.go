@@ -20,7 +20,9 @@ func joinedReferences(a, b map[reference]bool) map[reference]bool {
 func joinCells(a, b map[string]storage) map[string]storage {
 	out := map[string]storage{}
 	for key, fact := range a {
-		out[key] = joinStorage(fact, priorCell(b, key))
+		if _, shared := b[key]; !shared {
+			out[key] = joinStorage(fact, priorCell(b, key))
+		}
 	}
 	for key, fact := range b {
 		out[key] = joinStorage(fact, priorCell(a, key))

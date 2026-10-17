@@ -20,6 +20,10 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
   separate `<lambda>` owners.
 
 ### Fixed
+- Fixed explicitness analysis failing to finish when same-package calls build
+  cyclic storage inside loops. Fixed-point joins now retain heap references
+  instead of expanding copied cell snapshots, while keeping effect propagation
+  and unresolved-call findings (#276).
 - Fixed an explicitness stack overflow after a function takes a local's address, passes it to a call, and then reads a field or index. The address is no longer stored back into that local as its own value, and selection stops if that address cycle is still present. Unresolved calls stay `UnknownEffect`, and known input and output effects are kept (#275).
 - Fixed `GlobalVariable`, `ImplicitInput`, and `ImplicitOutput` disagreeing
   about which operations change a variable. Package analysis and explicitness

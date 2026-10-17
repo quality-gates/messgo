@@ -311,7 +311,7 @@ func (s *server) Run(n int) {
 		"a.go:42 ImplicitOutput Dump: write to w",
 		"a.go:43 ImplicitInput Dump: read from r",
 		"a.go:53 ImplicitOutput server.Run: send on s",
-		"a.go:54 ImplicitOutput server.Run: write through receiver s",
+		"a.go:53 UnknownEffect server.Run: receiver effect",
 	)
 }
 
@@ -542,7 +542,7 @@ func (q queue) Load(src []int) { copy(q.items[:], src) }
 		"a.go:9 ImplicitInput Fill: package variable arr",
 		"a.go:9 ImplicitOutput Fill: package variable arr",
 		"a.go:11 ImplicitOutput Tail: write through parameter s",
-		"a.go:13 ImplicitOutput queue.Load: write through receiver q",
+		"a.go:13 UnknownEffect queue.Load: receiver effect",
 	)
 	_, got = runExplicitness(t, "explicitness-strict", map[string]string{"a.go": src})
 	if !slices.Contains(got, "a.go:13 ImplicitOutput queue.Load: receiver field items") {
@@ -623,10 +623,12 @@ func TestExplicitnessTreatsReceiverAsParameterByDefault(t *testing.T) {
 		t.Errorf("exit = %d, want %d", code, ExitViolation)
 	}
 	assertFindings(t, got,
-		"a.go:9 ImplicitOutput cart.Add: write through receiver c",
-		"a.go:17 ImplicitOutput cart.Reset: write through receiver c",
-		"a.go:25 ImplicitOutput cart.clear: write through receiver c",
-		"a.go:27 ImplicitOutput cart.Tag: write through receiver c",
+		"a.go:9 UnknownEffect cart.Add: receiver effect",
+		"a.go:13 UnknownEffect cart.Count: receiver effect",
+		"a.go:17 UnknownEffect cart.Reset: receiver effect",
+		"a.go:21 UnknownEffect cart.With: receiver effect",
+		"a.go:25 UnknownEffect cart.clear: receiver effect",
+		"a.go:27 UnknownEffect cart.Tag: receiver effect",
 	)
 }
 
@@ -670,7 +672,7 @@ func write(w interface{ Write([]byte) (int, error) }) {
 	}
 	_, got := runExplicitness(t, "explicitness", files)
 	assertFindings(t, got,
-		"a.go:7 ImplicitOutput T.set: write through receiver t",
+		"a.go:7 UnknownEffect T.set: receiver effect",
 		"a.go:10 ImplicitInput drain: receive from ch",
 		"a.go:15 ImplicitOutput write: write to w",
 	)
@@ -805,4 +807,174 @@ func LiveTrue(value int) { if true { fmt.Println(value) } else { notify(value) }
 		"a.go:5 ImplicitOutput LiveElse: fmt.Println",
 		"a.go:6 ImplicitOutput LiveTrue: fmt.Println",
 	)
+}
+
+const receiverPolicySource = `package p
+
+type Counter struct{ n int }
+
+func (c *Counter) Inc() { c.n++ }
+
+func (c *Counter) N() int { return c.n }
+
+func (c Counter) Read() int { return c.n }
+
+func (c *Counter) Pure(x int) int { return x + 1 }
+
+func caller(c *Counter) int { return c.N() }
+
+func (c *(Counter)) parenRead() int { return c.n }
+
+func (c *(Counter)) parenInc() { c.n++ }
+
+func (c (Counter)) copyAssign() { c.n = 1 }
+
+func (c Counter) copyInc() { c.n++ }
+
+type Cart struct{ items []string }
+
+func (c Cart) Tag(i int, item string) { c.items[i] = item }
+
+var hits int
+
+func (c *Counter) Both() int {
+	hits++
+	return c.n
+}
+
+func (c *Counter) Set() { c.n = 1 }
+
+func setCaller(c *Counter) { c.Set() }
+`
+
+func TestExplicitnessKeepsExcludedReceiverEffectsUnknown(t *testing.T) {
+	code, got := runExplicitness(t, "explicitness", map[string]string{"a.go": receiverPolicySource})
+	if code != ExitViolation {
+		t.Errorf("exit = %d, want %d", code, ExitViolation)
+	}
+	assertFindings(t, got,
+		"a.go:5 UnknownEffect Counter.Inc: receiver effect",
+		"a.go:7 UnknownEffect Counter.N: receiver effect",
+		"a.go:9 UnknownEffect Counter.Read: receiver effect",
+		"a.go:13 UnknownEffect caller: receiver effect",
+		"a.go:15 UnknownEffect Counter.parenRead: receiver effect",
+		"a.go:17 UnknownEffect Counter.parenInc: receiver effect",
+		"a.go:21 UnknownEffect Counter.copyInc: receiver effect",
+		"a.go:25 UnknownEffect Cart.Tag: receiver effect",
+		"a.go:30 ImplicitInput Counter.Both: package variable hits",
+		"a.go:30 ImplicitOutput Counter.Both: package variable hits",
+		"a.go:31 UnknownEffect Counter.Both: receiver effect",
+		"a.go:34 UnknownEffect Counter.Set: receiver effect",
+		"a.go:36 ImplicitOutput setCaller: write through parameter c",
+		"a.go:36 UnknownEffect setCaller: receiver effect",
+	)
+
+	dir := writePackage(t, map[string]string{"a.go": receiverPolicySource})
+	onlyCode, onlyOut, onlyErr := runMain(t, dir, "text", "explicitness", "--only", "UnknownEffect")
+	if onlyCode != ExitViolation || onlyErr != "" {
+		t.Fatalf("only UnknownEffect exit = %d, stderr = %q", onlyCode, onlyErr)
+	}
+	for _, name := range []string{"Inc", "N", "Read", "caller", "parenRead", "parenInc", "copyInc", "Tag", "Both", "Set", "setCaller"} {
+		if !strings.Contains(onlyOut, name) {
+			t.Errorf("--only UnknownEffect missing %s\n%s", name, onlyOut)
+		}
+	}
+	for _, absent := range []string{"Pure", "copyAssign", "ImplicitInput", "ImplicitOutput"} {
+		if strings.Contains(onlyOut, absent) {
+			t.Errorf("--only UnknownEffect listed %s\n%s", absent, onlyOut)
+		}
+	}
+}
+
+func TestExplicitnessStrictKeepsReceiverFactsPrecise(t *testing.T) {
+	_, got := runExplicitness(t, "explicitness-strict", map[string]string{"a.go": receiverPolicySource})
+	assertFindings(t, got,
+		"a.go:5 ImplicitInput Counter.Inc: receiver field n",
+		"a.go:5 ImplicitOutput Counter.Inc: receiver field n",
+		"a.go:7 ImplicitInput Counter.N: receiver field n",
+		"a.go:9 ImplicitInput Counter.Read: receiver field n",
+		"a.go:13 ImplicitInput caller: receiver field n",
+		"a.go:15 ImplicitInput Counter.parenRead: receiver field n",
+		"a.go:17 ImplicitInput Counter.parenInc: receiver field n",
+		"a.go:17 ImplicitOutput Counter.parenInc: receiver field n",
+		"a.go:21 ImplicitInput Counter.copyInc: receiver field n",
+		"a.go:25 ImplicitOutput Cart.Tag: receiver field items",
+		"a.go:30 ImplicitInput Counter.Both: package variable hits",
+		"a.go:30 ImplicitOutput Counter.Both: package variable hits",
+		"a.go:31 ImplicitInput Counter.Both: receiver field n",
+		"a.go:34 ImplicitOutput Counter.Set: receiver field n",
+		"a.go:36 ImplicitOutput setCaller: write through parameter c",
+	)
+}
+
+func TestExplicitnessTranslatesReceiverArgumentsAsUnknown(t *testing.T) {
+	const src = `package p
+
+type Counter struct{ n int }
+
+func mutate(p *Counter) { p.n++ }
+
+func (c *Counter) Inc() { mutate(c) }
+
+func read(p *Counter) int { return p.n }
+
+func (c *Counter) N() int { return read(c) }
+`
+	_, got := runExplicitness(t, "explicitness", map[string]string{"a.go": src})
+	assertFindings(t, got,
+		"a.go:5 ImplicitOutput mutate: write through parameter p",
+		"a.go:7 UnknownEffect Counter.Inc: receiver effect",
+		"a.go:11 UnknownEffect Counter.N: receiver effect",
+	)
+	_, got = runExplicitness(t, "explicitness-strict", map[string]string{"a.go": src})
+	assertFindings(t, got,
+		"a.go:5 ImplicitOutput mutate: write through parameter p",
+		"a.go:7 ImplicitInput Counter.Inc: receiver c",
+		"a.go:7 ImplicitOutput Counter.Inc: write through receiver c",
+		"a.go:11 ImplicitInput Counter.N: receiver c",
+	)
+}
+
+func TestExplicitnessHonorsPerRuleIncludeReceiver(t *testing.T) {
+	files := map[string]string{"a.go": receiverPolicySource}
+	outputs := filepath.Join(t.TempDir(), "outputs.xml")
+	if err := os.WriteFile(outputs, []byte(`<ruleset name="outputs">
+  <rule ref="ImplicitInput"/>
+  <rule ref="ImplicitOutput">
+    <properties>
+      <property name="include-receiver" value="true"/>
+    </properties>
+  </rule>
+  <rule ref="UnknownEffect"/>
+</ruleset>
+`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	_, got := runExplicitness(t, outputs, files)
+	if !slices.Contains(got, "a.go:5 ImplicitOutput Counter.Inc: receiver field n") {
+		t.Errorf("custom include-receiver output missing: %q", got)
+	}
+	if slices.Contains(got, "a.go:7 ImplicitInput Counter.N: receiver field n") {
+		t.Errorf("input rule classified a receiver read: %q", got)
+	}
+	if !slices.Contains(got, "a.go:7 UnknownEffect Counter.N: receiver effect") {
+		t.Errorf("unknown rule missed excluded receiver read: %q", got)
+	}
+
+	all := filepath.Join(t.TempDir(), "all.xml")
+	if err := os.WriteFile(all, []byte(`<ruleset name="all">
+  <rule ref="ImplicitInput"><properties><property name="include-receiver" value="true"/></properties></rule>
+  <rule ref="ImplicitOutput"><properties><property name="include-receiver" value="true"/></properties></rule>
+  <rule ref="UnknownEffect"><properties><property name="include-receiver" value="true"/></properties></rule>
+</ruleset>
+`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	_, got = runExplicitness(t, all, map[string]string{"a.go": receiverPolicySource})
+	if slices.ContainsFunc(got, func(f string) bool { return strings.Contains(f, "UnknownEffect") }) {
+		t.Errorf("include-receiver on UnknownEffect still reported policy exclusion: %q", got)
+	}
+	if !slices.Contains(got, "a.go:7 ImplicitInput Counter.N: receiver field n") || !slices.Contains(got, "a.go:5 ImplicitOutput Counter.Inc: receiver field n") {
+		t.Errorf("custom strict receiver facts missing: %q", got)
+	}
 }

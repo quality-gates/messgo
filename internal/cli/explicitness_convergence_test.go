@@ -13,14 +13,14 @@ func TestExplicitnessCrossFunctionCompletion(t *testing.T) {
 	}
 	assertFindings(t, findings,
 		"ImplicitOutput ParseSource: write through parameter b",
-		"ImplicitOutput ParseSource: write through receiver b",
-		"ImplicitOutput fileBuilder.build: write through receiver b",
-		"ImplicitOutput fileBuilder.collectTypeSpec: write through receiver b",
 		"ImplicitOutput fileBuilder.collectTypes: write through parameter ts",
-		"ImplicitOutput fileBuilder.collectTypes: write through receiver b",
+		"UnknownEffect ParseSource: receiver effect",
 		"UnknownEffect ParseSource: unresolved call",
+		"UnknownEffect fileBuilder.build: receiver effect",
 		"UnknownEffect fileBuilder.build: unresolved call",
+		"UnknownEffect fileBuilder.collectTypeSpec: receiver effect",
 		"UnknownEffect fileBuilder.collectTypeSpec: unresolved call",
+		"UnknownEffect fileBuilder.collectTypes: receiver effect",
 		"UnknownEffect fileBuilder.collectTypes: unresolved call",
 	)
 	code, findings, errOut = runAddressChild(t, "go", "", path)

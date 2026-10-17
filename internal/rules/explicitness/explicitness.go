@@ -344,3 +344,15 @@ func receiverPart(id *ast.Ident, field string) string {
 	}
 	return "receiver field " + field
 }
+
+// excludedReceiverEffect is the non-strict stand-in for a receiver read or a
+// caller-visible receiver write. The effect stays unknown so a clean report
+// does not certify the method as a calculation.
+const excludedReceiverEffect = "receiver effect"
+
+func noteExcludedReceiver(s *scope, res *result, at ast.Node) {
+	if s.strict || at == nil {
+		return
+	}
+	res.unknown = append(res.unknown, s.effect(at, excludedReceiverEffect))
+}

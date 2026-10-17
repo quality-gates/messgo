@@ -713,12 +713,16 @@ func originEffects(fact effect, storage storage) []effect {
 func reportableEffects(fn *model.Function, effects []effect, skipReceiver bool) []effect {
 	var out []effect
 	for _, fact := range effects {
-		if skipReceiver && receiverEffect(fact) {
+		if skipReceiver && excludedReceiverReport(fact) {
 			continue
 		}
 		out = append(out, fact)
 	}
 	return out
+}
+
+func excludedReceiverReport(fact effect) bool {
+	return receiverEffect(fact) || strings.HasPrefix(fact.what, "write through receiver ")
 }
 
 func addEffect(effects *[]effect, next effect) bool {

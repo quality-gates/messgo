@@ -559,7 +559,67 @@ import "context"
 func Wait(ctx context.Context) { <-ctx.Done() }
 `,
 	})
-	assertFindings(t, got, "a.go:5 ImplicitInput Wait: receive from ctx")
+	assertFindings(t, got,
+		"a.go:5 ImplicitInput Wait: receive from ctx",
+		"a.go:5 UnknownEffect Wait: unresolved call",
+	)
+}
+
+func TestExplicitnessKeepsContextDoneDispatchUnknown(t *testing.T) {
+	code, got := runExplicitness(t, "explicitness", map[string]string{
+		"a.go": `package p
+
+import "context"
+
+func retDone(ctx context.Context) <-chan struct{} { return ctx.Done() }
+`,
+	})
+	if code != ExitViolation {
+		t.Errorf("only Done exit = %d, want %d", code, ExitViolation)
+	}
+	assertFindings(t, got, "a.go:5 UnknownEffect retDone: unresolved call")
+
+	src := `package p
+
+import (
+	"context"
+	stdctx "context"
+)
+
+type reader interface{ Read() int }
+
+func retDone(ctx context.Context) <-chan struct{} { return ctx.Done() }
+
+func retErr(ctx context.Context) error { return ctx.Err() }
+
+func retValue(ctx context.Context) any { return ctx.Value("k") }
+
+func retDeadline(ctx context.Context) bool { _, ok := ctx.Deadline(); return ok }
+
+func retRead(r reader) int { return r.Read() }
+
+func recvParen(ctx context.Context) { <-(ctx).Done() }
+
+func recvAlias(ctx stdctx.Context) { <-(ctx.Done()) }
+
+func caller(ctx context.Context) <-chan struct{} { return retDone(ctx) }
+`
+	want := []string{
+		"a.go:10 UnknownEffect retDone: unresolved call",
+		"a.go:12 UnknownEffect retErr: unresolved call",
+		"a.go:14 UnknownEffect retValue: unresolved call",
+		"a.go:16 UnknownEffect retDeadline: unresolved call",
+		"a.go:18 UnknownEffect retRead: unresolved call",
+		"a.go:20 ImplicitInput recvParen: receive from ctx",
+		"a.go:20 UnknownEffect recvParen: unresolved call",
+		"a.go:22 ImplicitInput recvAlias: receive from ctx",
+		"a.go:22 UnknownEffect recvAlias: unresolved call",
+		"a.go:24 UnknownEffect caller: unresolved call",
+	}
+	for _, ruleset := range []string{"explicitness", "explicitness-strict"} {
+		_, got = runExplicitness(t, ruleset, map[string]string{"a.go": src})
+		assertFindings(t, got, want...)
+	}
 }
 
 func TestExplicitnessReportsProcessNetworkAndTimerEffects(t *testing.T) {

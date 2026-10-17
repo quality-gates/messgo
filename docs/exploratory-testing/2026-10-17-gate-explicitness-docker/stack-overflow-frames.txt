@@ -1,0 +1,11 @@
+runtime: goroutine stack exceeds 1000000000-byte limit
+fatal error: stack overflow
+
+github.com/quality-gates/messgo/internal/rules/explicitness.selectedCell
+github.com/quality-gates/messgo/internal/rules/explicitness.selectedCell
+  storage_heap.go:142 calls itself until the stack exceeds 1GB.
+  The same trace also passes through cellsOf, joinCells, and joinStorage.
+
+Captured from `messgo p.go text explicitness` on the Bug 1 program.
+The process exits 2. Stdout is empty. The full trace repeats selectedCell
+for more than a million frames.

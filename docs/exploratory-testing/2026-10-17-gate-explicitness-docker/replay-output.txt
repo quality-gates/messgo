@@ -1,0 +1,102 @@
+binary: /Users/jonathanbaldie/Code-2/github.com/quality-gates/messgo/messgo
+messgo dev
+repo: /Users/jonathanbaldie/Code-2/github.com/quality-gates/messgo
+
+===== Bug 1 stack overflow =====
+-- run 1 --
+exit=2
+stack overflow
+stdout_bytes=0
+exit=0
+-- run 2 --
+exit=2
+stack overflow
+stdout_bytes=0
+exit=0
+-- run 3 --
+exit=2
+stack overflow
+stdout_bytes=0
+exit=0
+===== Bug 2 receiver policy =====
+-- run 1 --
+-- explicitness --
+/Users/jonathanbaldie/.fleet/events/scratch/43e0a3892626ebba04be388462626bb51c3dd0a2fe5c6c5394f843400e70c24b/messgo-et-replay.CVu374/receiver/p.go:5  ImplicitOutput  The method Inc() has an implicit output: write through receiver c. Return it instead.
+exit=2
+-- explicitness-strict --
+/Users/jonathanbaldie/.fleet/events/scratch/43e0a3892626ebba04be388462626bb51c3dd0a2fe5c6c5394f843400e70c24b/messgo-et-replay.CVu374/receiver/p.go:5  ImplicitInput   The method Inc() has an implicit input: receiver field n. Pass it in as an argument.
+/Users/jonathanbaldie/.fleet/events/scratch/43e0a3892626ebba04be388462626bb51c3dd0a2fe5c6c5394f843400e70c24b/messgo-et-replay.CVu374/receiver/p.go:5  ImplicitOutput  The method Inc() has an implicit output: receiver field n. Return it instead.
+/Users/jonathanbaldie/.fleet/events/scratch/43e0a3892626ebba04be388462626bb51c3dd0a2fe5c6c5394f843400e70c24b/messgo-et-replay.CVu374/receiver/p.go:7  ImplicitInput   The method N() has an implicit input: receiver field n. Pass it in as an argument.
+/Users/jonathanbaldie/.fleet/events/scratch/43e0a3892626ebba04be388462626bb51c3dd0a2fe5c6c5394f843400e70c24b/messgo-et-replay.CVu374/receiver/p.go:9  ImplicitInput   The method Read() has an implicit input: receiver field n. Pass it in as an argument.
+exit=2
+exit=0
+-- run 2 --
+-- explicitness --
+/Users/jonathanbaldie/.fleet/events/scratch/43e0a3892626ebba04be388462626bb51c3dd0a2fe5c6c5394f843400e70c24b/messgo-et-replay.CVu374/receiver/p.go:5  ImplicitOutput  The method Inc() has an implicit output: write through receiver c. Return it instead.
+exit=2
+-- explicitness-strict --
+/Users/jonathanbaldie/.fleet/events/scratch/43e0a3892626ebba04be388462626bb51c3dd0a2fe5c6c5394f843400e70c24b/messgo-et-replay.CVu374/receiver/p.go:5  ImplicitInput   The method Inc() has an implicit input: receiver field n. Pass it in as an argument.
+/Users/jonathanbaldie/.fleet/events/scratch/43e0a3892626ebba04be388462626bb51c3dd0a2fe5c6c5394f843400e70c24b/messgo-et-replay.CVu374/receiver/p.go:5  ImplicitOutput  The method Inc() has an implicit output: receiver field n. Return it instead.
+/Users/jonathanbaldie/.fleet/events/scratch/43e0a3892626ebba04be388462626bb51c3dd0a2fe5c6c5394f843400e70c24b/messgo-et-replay.CVu374/receiver/p.go:7  ImplicitInput   The method N() has an implicit input: receiver field n. Pass it in as an argument.
+/Users/jonathanbaldie/.fleet/events/scratch/43e0a3892626ebba04be388462626bb51c3dd0a2fe5c6c5394f843400e70c24b/messgo-et-replay.CVu374/receiver/p.go:9  ImplicitInput   The method Read() has an implicit input: receiver field n. Pass it in as an argument.
+exit=2
+exit=0
+-- run 3 --
+-- explicitness --
+/Users/jonathanbaldie/.fleet/events/scratch/43e0a3892626ebba04be388462626bb51c3dd0a2fe5c6c5394f843400e70c24b/messgo-et-replay.CVu374/receiver/p.go:5  ImplicitOutput  The method Inc() has an implicit output: write through receiver c. Return it instead.
+exit=2
+-- explicitness-strict --
+/Users/jonathanbaldie/.fleet/events/scratch/43e0a3892626ebba04be388462626bb51c3dd0a2fe5c6c5394f843400e70c24b/messgo-et-replay.CVu374/receiver/p.go:5  ImplicitInput   The method Inc() has an implicit input: receiver field n. Pass it in as an argument.
+/Users/jonathanbaldie/.fleet/events/scratch/43e0a3892626ebba04be388462626bb51c3dd0a2fe5c6c5394f843400e70c24b/messgo-et-replay.CVu374/receiver/p.go:5  ImplicitOutput  The method Inc() has an implicit output: receiver field n. Return it instead.
+/Users/jonathanbaldie/.fleet/events/scratch/43e0a3892626ebba04be388462626bb51c3dd0a2fe5c6c5394f843400e70c24b/messgo-et-replay.CVu374/receiver/p.go:7  ImplicitInput   The method N() has an implicit input: receiver field n. Pass it in as an argument.
+/Users/jonathanbaldie/.fleet/events/scratch/43e0a3892626ebba04be388462626bb51c3dd0a2fe5c6c5394f843400e70c24b/messgo-et-replay.CVu374/receiver/p.go:9  ImplicitInput   The method Read() has an implicit input: receiver field n. Pass it in as an argument.
+exit=2
+exit=0
+===== Bug 3 ctx.Done =====
+-- run 1 --
+/Users/jonathanbaldie/.fleet/events/scratch/43e0a3892626ebba04be388462626bb51c3dd0a2fe5c6c5394f843400e70c24b/messgo-et-replay.CVu374/done/p.go:7  UnknownEffect  The function retErr() has an unknown effect: unresolved call. Analyze the callee before classifying it as a calculation.
+/Users/jonathanbaldie/.fleet/events/scratch/43e0a3892626ebba04be388462626bb51c3dd0a2fe5c6c5394f843400e70c24b/messgo-et-replay.CVu374/done/p.go:9  ImplicitInput  The function recv() has an implicit input: receive from ctx. Pass it in as an argument.
+exit=2
+exit=0
+-- run 2 --
+/Users/jonathanbaldie/.fleet/events/scratch/43e0a3892626ebba04be388462626bb51c3dd0a2fe5c6c5394f843400e70c24b/messgo-et-replay.CVu374/done/p.go:7  UnknownEffect  The function retErr() has an unknown effect: unresolved call. Analyze the callee before classifying it as a calculation.
+/Users/jonathanbaldie/.fleet/events/scratch/43e0a3892626ebba04be388462626bb51c3dd0a2fe5c6c5394f843400e70c24b/messgo-et-replay.CVu374/done/p.go:9  ImplicitInput  The function recv() has an implicit input: receive from ctx. Pass it in as an argument.
+exit=2
+exit=0
+-- run 3 --
+/Users/jonathanbaldie/.fleet/events/scratch/43e0a3892626ebba04be388462626bb51c3dd0a2fe5c6c5394f843400e70c24b/messgo-et-replay.CVu374/done/p.go:7  UnknownEffect  The function retErr() has an unknown effect: unresolved call. Analyze the callee before classifying it as a calculation.
+/Users/jonathanbaldie/.fleet/events/scratch/43e0a3892626ebba04be388462626bb51c3dd0a2fe5c6c5394f843400e70c24b/messgo-et-replay.CVu374/done/p.go:9  ImplicitInput  The function recv() has an implicit input: receive from ctx. Pass it in as an argument.
+exit=2
+exit=0
+===== Bug 4 local alias named as parameter =====
+-- run 1 --
+/Users/jonathanbaldie/.fleet/events/scratch/43e0a3892626ebba04be388462626bb51c3dd0a2fe5c6c5394f843400e70c24b/messgo-et-replay.CVu374/alias/p.go:5  ImplicitOutput  The function alias() has an implicit output: write through parameter q. Return it instead.
+/Users/jonathanbaldie/.fleet/events/scratch/43e0a3892626ebba04be388462626bb51c3dd0a2fe5c6c5394f843400e70c24b/messgo-et-replay.CVu374/alias/p.go:8  ImplicitOutput  The function direct() has an implicit output: write through parameter p. Return it instead.
+exit=2
+exit=0
+-- run 2 --
+/Users/jonathanbaldie/.fleet/events/scratch/43e0a3892626ebba04be388462626bb51c3dd0a2fe5c6c5394f843400e70c24b/messgo-et-replay.CVu374/alias/p.go:5  ImplicitOutput  The function alias() has an implicit output: write through parameter q. Return it instead.
+/Users/jonathanbaldie/.fleet/events/scratch/43e0a3892626ebba04be388462626bb51c3dd0a2fe5c6c5394f843400e70c24b/messgo-et-replay.CVu374/alias/p.go:8  ImplicitOutput  The function direct() has an implicit output: write through parameter p. Return it instead.
+exit=2
+exit=0
+-- run 3 --
+/Users/jonathanbaldie/.fleet/events/scratch/43e0a3892626ebba04be388462626bb51c3dd0a2fe5c6c5394f843400e70c24b/messgo-et-replay.CVu374/alias/p.go:5  ImplicitOutput  The function alias() has an implicit output: write through parameter q. Return it instead.
+/Users/jonathanbaldie/.fleet/events/scratch/43e0a3892626ebba04be388462626bb51c3dd0a2fe5c6c5394f843400e70c24b/messgo-et-replay.CVu374/alias/p.go:8  ImplicitOutput  The function direct() has an implicit output: write through parameter p. Return it instead.
+exit=2
+exit=0
+===== Bug 5 cross-function explicitness does not finish =====
+-- run 1 --
+extract_lines=100
+TIMEOUT >8s
+go_ruleset_exit=0 go_lines=0
+exit=0
+-- run 2 --
+extract_lines=100
+TIMEOUT >8s
+go_ruleset_exit=0 go_lines=0
+exit=0
+-- run 3 --
+extract_lines=100
+TIMEOUT >8s
+go_ruleset_exit=0 go_lines=0
+exit=0

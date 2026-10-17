@@ -7,6 +7,9 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 ## [Unreleased]
 
 ### Added
+- Added an exploratory testing report for the recommended gate, explicitness
+  effect classification, and the Docker entrypoint, with a replay script for
+  findings #275–#279.
 - Added native explicitness effect summaries for Go. Resolved same-package
   calls now propagate `ImplicitInput`, `ImplicitOutput`, and `UnknownEffect`
   to a fixed point; function literals keep their own execution owner; shallow

@@ -142,6 +142,9 @@ the non-strict policy produces `UnknownEffect`. A clean report certifies a
 calculation within the modeled subset; unknown behavior is not certified as
 pure.
 
+Exploratory testing feedback on this contract is in
+[`exploratory-testing/2026-10-17-gate-explicitness-docker.md`](exploratory-testing/2026-10-17-gate-explicitness-docker.md).
+
 ## Custom rulesets
 
 Ruleset XML supports phpmd's `<rule ref="...">` form, `<exclude name="..."/>`

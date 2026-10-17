@@ -51,7 +51,7 @@ func (w *writeVisitor) write(target ast.Expr, only, shared bool) {
 		w.outputs = append(w.outputs, e)
 		return
 	}
-	w.outputs = append(w.outputs, originEffects(e, storageOf(w.scope, writtenContainer(target, shared), w.ownership.stateAt(target.Pos())))...)
+	w.outputs = append(w.outputs, parameterOrigins(w.scope, id, originEffects(e, storageOf(w.scope, writtenContainer(target, shared), w.ownership.stateAt(target.Pos()))))...)
 }
 
 func (w *writeVisitor) writeCallResult(target ast.Expr, shared bool) {
@@ -108,7 +108,7 @@ func (w *writeVisitor) describe(target ast.Expr, id *ast.Ident, builtin bool) st
 		noteExcludedReceiver(w.scope, w.result, id)
 		return "write through receiver " + id.Name
 	default:
-		return "write through parameter " + id.Name
+		return parameterWrite + id.Name
 	}
 	return ""
 }

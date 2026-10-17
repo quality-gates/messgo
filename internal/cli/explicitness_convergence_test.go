@@ -13,6 +13,7 @@ func TestExplicitnessCrossFunctionCompletion(t *testing.T) {
 	}
 	assertFindings(t, findings,
 		"ImplicitOutput ParseSource: write through parameter b",
+		"ImplicitOutput ParseSource: write through parameter src",
 		"ImplicitOutput fileBuilder.collectTypes: write through parameter ts",
 		"UnknownEffect ParseSource: receiver effect",
 		"UnknownEffect ParseSource: unresolved call",
@@ -71,9 +72,9 @@ func pure(x int) int { return x + 1 }
 		t.Fatalf("exit = %d, stderr = %q", code, errOut)
 	}
 	assertFindings(t, findings,
-		"ImplicitOutput build: write through parameter root",
+		"ImplicitOutput build: write through parameter items",
 		"ImplicitOutput link: write through parameter root",
-		"ImplicitOutput jump: write through parameter root",
+		"ImplicitOutput jump: write through parameter items",
 		"ImplicitOutput first: write through parameter p",
 		"ImplicitOutput first: package variable global",
 		"ImplicitOutput second: write through parameter p",

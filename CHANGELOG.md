@@ -20,6 +20,12 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
   separate `<lambda>` owners.
 
 ### Fixed
+- Fixed `explicitness` naming a local alias as a parameter in
+  `ImplicitOutput`. After `q := p`, a write through `q` (or through
+  `t := s`, a `slices.Clone` result, or an alias passed to a writing helper)
+  now reports "write through parameter p", once for each parameter the alias
+  may share storage with. A parameter whose type cannot share storage, such as
+  a `string` passed to an unresolved call, is never named (#279).
 - Fixed `explicitness` certifying `return ctx.Done()` as a calculation. A
   `context.Context.Done` call is unresolved interface dispatch, so it is now
   `UnknownEffect` like `Err`, `Value`, `Deadline`, and other interface methods,

@@ -350,6 +350,10 @@ func receiverPart(id *ast.Ident, field string) string {
 // does not certify the method as a calculation.
 const excludedReceiverEffect = "receiver effect"
 
+// parameterWrite prefixes the description of a write through the storage a
+// parameter refers to.
+const parameterWrite = "write through parameter "
+
 func noteExcludedReceiver(s *scope, res *result, at ast.Node) {
 	if s.strict || at == nil {
 		return

@@ -753,7 +753,7 @@ func Copy(values []int) []int { values = slices.Clone(values); slices.Sort(value
 func Conditional(values []int, copy bool) { if copy { values = slices.Clone(values) }; values[0] = 1 }
 `})
 	assertFindings(t, got,
-		"a.go:3 ImplicitOutput Alias: write through parameter alias",
+		"a.go:3 ImplicitOutput Alias: write through parameter values",
 		"a.go:5 ImplicitOutput Conditional: write through parameter values",
 	)
 }
@@ -817,8 +817,8 @@ func Shallow(values []*int) { next := slices.Clone(values); *next[0] = 1 }
 func Rebind(values []int) { alias := values; values = slices.Clone(values); alias[0] = 1; values[0] = 2 }
 `})
 	assertFindings(t, got,
-		"a.go:3 ImplicitOutput Shallow: write through parameter next",
-		"a.go:4 ImplicitOutput Rebind: write through parameter alias",
+		"a.go:3 ImplicitOutput Shallow: write through parameter values",
+		"a.go:4 ImplicitOutput Rebind: write through parameter values",
 	)
 }
 

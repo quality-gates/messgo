@@ -6,6 +6,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 
 ## [Unreleased]
 
+## [0.5.11] - 2026-10-18
+
 ### Added
 - Added an exploratory testing report for the recommended gate, explicitness
   effect classification, and the Docker entrypoint, with a replay script for

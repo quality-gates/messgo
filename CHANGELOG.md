@@ -6,6 +6,11 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 
 ## [Unreleased]
 
+### Fixed
+- Fixed `ImplicitOutput` labeling ambient locals without a parameter origin as
+  parameters. Receiver aliases now follow direct receiver write classification:
+  `UnknownEffect` in non-strict mode and receiver outputs in strict mode (#286).
+
 ## [0.5.11] - 2026-10-18
 
 ### Added

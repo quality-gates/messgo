@@ -51,7 +51,16 @@ func (w *writeVisitor) write(target ast.Expr, only, shared bool) {
 		w.outputs = append(w.outputs, e)
 		return
 	}
-	w.outputs = append(w.outputs, parameterOrigins(w.scope, id, originEffects(e, storageOf(w.scope, writtenContainer(target, shared), w.ownership.stateAt(target.Pos()))))...)
+	effects := parameterOrigins(w.scope, id, originEffects(e, storageOf(w.scope, writtenContainer(target, shared), w.ownership.stateAt(target.Pos()))))
+	for index, fact := range effects {
+		if fact.binding != nil && fact.binding == w.recv {
+			noteExcludedReceiver(w.scope, w.result, id)
+			if w.strict {
+				effects[index].what = receiverPart(&ast.Ident{Name: w.recv.Name}, receiverField(target, id))
+			}
+		}
+	}
+	w.outputs = append(w.outputs, effects...)
 }
 
 func (w *writeVisitor) writeCallResult(target ast.Expr, shared bool) {

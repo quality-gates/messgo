@@ -12,9 +12,8 @@ func TestExplicitnessCrossFunctionCompletion(t *testing.T) {
 		t.Fatalf("exit = %d, stderr = %q", code, errOut)
 	}
 	assertFindings(t, findings,
-		"ImplicitOutput ParseSource: write through parameter b",
+		"ImplicitOutput ParseSource: write through local b",
 		"ImplicitOutput ParseSource: write through parameter src",
-		"ImplicitOutput fileBuilder.collectTypes: write through parameter ts",
 		"UnknownEffect ParseSource: receiver effect",
 		"UnknownEffect ParseSource: unresolved call",
 		"UnknownEffect fileBuilder.build: receiver effect",

@@ -60,9 +60,9 @@ func FromLiteral() {
 	})
 	assertFindings(t, got,
 		"use.go:3 ImplicitInput FromName: package variable shared",
-		"use.go:6 ImplicitOutput FromName: write through parameter value",
+		"use.go:6 ImplicitOutput FromName: write through local value",
 		"use.go:9 ImplicitInput FromLiteral: package variable literal",
-		"use.go:12 ImplicitOutput FromLiteral: write through parameter value",
+		"use.go:12 ImplicitOutput FromLiteral: write through local value",
 	)
 }
 
@@ -104,13 +104,13 @@ func FromTyped() {
 	})
 	assertFindings(t, got,
 		"use.go:3 ImplicitInput FromArray: package variable fromArray",
-		"use.go:5 ImplicitOutput FromArray: write through parameter value",
+		"use.go:5 ImplicitOutput FromArray: write through local value",
 		"use.go:8 ImplicitInput FromField: package variable fromField",
-		"use.go:10 ImplicitOutput FromField: write through parameter value",
+		"use.go:10 ImplicitOutput FromField: write through local value",
 		"use.go:13 ImplicitInput FromPointerArray: package variable fromPointerArray",
-		"use.go:15 ImplicitOutput FromPointerArray: write through parameter value",
+		"use.go:15 ImplicitOutput FromPointerArray: write through local value",
 		"use.go:18 ImplicitInput FromTyped: package variable typed",
-		"use.go:20 ImplicitOutput FromTyped: write through parameter value",
+		"use.go:20 ImplicitOutput FromTyped: write through local value",
 	)
 }
 
@@ -135,7 +135,7 @@ func Copy() {
 			_, got := runExplicitness(t, "explicitness", map[string]string{"a.go": source})
 			assertFindings(t, got,
 				"a.go:11 ImplicitInput Copy: package variable shared",
-				"a.go:13 ImplicitOutput Copy: write through parameter value",
+				"a.go:13 ImplicitOutput Copy: write through local value",
 			)
 		})
 	}
@@ -157,7 +157,7 @@ func Copy() {
 	})
 	assertFindings(t, got,
 		"embedded.go:7 ImplicitInput Copy: package variable shared",
-		"embedded.go:9 ImplicitOutput Copy: write through parameter value",
+		"embedded.go:9 ImplicitOutput Copy: write through local value",
 	)
 }
 
@@ -188,7 +188,7 @@ func Copy() {
 			_, got := runExplicitness(t, "explicitness", map[string]string{"generic.go": source})
 			assertFindings(t, got,
 				"generic.go:7 ImplicitInput Copy: package variable shared",
-				"generic.go:9 ImplicitOutput Copy: write through parameter value",
+				"generic.go:9 ImplicitOutput Copy: write through local value",
 			)
 		})
 	}
@@ -217,9 +217,9 @@ func ViaGetter() {
 	assertFindings(t, got,
 		"state.go:4 ImplicitInput Get: package variable shared",
 		"use.go:3 ImplicitInput Direct: package variable shared",
-		"use.go:5 ImplicitOutput Direct: write through parameter copy",
+		"use.go:5 ImplicitOutput Direct: write through local copy",
 		"use.go:8 ImplicitInput ViaGetter: package variable shared",
-		"use.go:10 ImplicitOutput ViaGetter: write through parameter copy",
+		"use.go:10 ImplicitOutput ViaGetter: write through local copy",
 	)
 }
 
@@ -240,7 +240,7 @@ func Copy() {
 	})
 	assertFindings(t, got,
 		"use.go:3 ImplicitInput Copy: package variable shared",
-		"use.go:5 ImplicitOutput Copy: write through parameter value",
+		"use.go:5 ImplicitOutput Copy: write through local value",
 	)
 }
 
@@ -261,7 +261,7 @@ func Copy() {
 	})
 	assertFindings(t, got,
 		"use.go:3 ImplicitInput Copy: package variable alias",
-		"use.go:5 ImplicitOutput Copy: write through parameter value",
+		"use.go:5 ImplicitOutput Copy: write through local value",
 	)
 }
 
@@ -716,6 +716,6 @@ func Opaque(name string, data []byte) {
 		"a.go:26 ImplicitOutput Pass: write through parameter p",
 		"a.go:29 UnknownEffect Opaque: unresolved call",
 		"a.go:30 ImplicitOutput Opaque: write through parameter data",
-		"a.go:30 ImplicitOutput Opaque: write through parameter v",
+		"a.go:30 ImplicitOutput Opaque: write through local v",
 	)
 }

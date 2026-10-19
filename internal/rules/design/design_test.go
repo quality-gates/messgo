@@ -7,20 +7,78 @@ import (
 	"github.com/quality-gates/messgo/internal/rule"
 )
 
-func TestBuiltinTypeNamesIncludeGoContainersAndFunctionTypes(t *testing.T) {
-	for _, name := range []string{"map", "chan", "func"} {
-		if !builtinTypes[name] {
-			t.Errorf("builtinTypes[%q] = false, want true", name)
-		}
+func TestCouplingNestedTypeDependenciesThroughAnalyze(t *testing.T) {
+	f, err := model.ParseSource("coupling.go", []byte(`package sample
+ const arrayLength = 3
+ type Service struct {
+  callback func(named Input, rest ...Extra) (result Output)
+  nested struct { field [arrayLength]Element }
+  contract interface { Method(param Request) Response }
+  self *Service
+  builtins map[string]chan int
+ }
+ func (Service) Process(Input) Output { panic("fixture") }
+ `))
+	if err != nil {
+		t.Fatal(err)
 	}
-	for input, want := range map[string]string{
-		"map[string]int": "map",
-		"chan int":       "chan",
-		"func":           "func",
-	} {
-		if got := baseTypeName(input); got != want {
-			t.Errorf("baseTypeName(%q) = %q, want %q", input, got, want)
-		}
+	for _, tc := range []struct {
+		maximum string
+		want    int
+	}{{"6", 1}, {"7", 0}} {
+		t.Run(tc.maximum, func(t *testing.T) {
+			threshold := newCouplingBetweenObjects()
+			if err := threshold.(rule.Configurable).Configure(rule.Properties{"maximum": tc.maximum}); err != nil {
+				t.Fatal(err)
+			}
+			violations := rule.Analyze(f, []*rule.RuleSet{{Rules: []rule.Rule{threshold}}})
+			if len(violations) != tc.want {
+				t.Fatalf("CBO violations at maximum %s = %d, want %d (six dependencies)", tc.maximum, len(violations), tc.want)
+			}
+		})
+	}
+}
+
+func TestCouplingBuiltinTypesThroughAnalyze(t *testing.T) {
+	f, err := model.ParseSource("builtins.go", []byte(`package sample
+ type Service struct {
+  boolean bool
+  text string
+  integer int
+  signed8 int8
+  signed16 int16
+  signed32 int32
+  signed64 int64
+  unsigned uint
+  unsigned8 uint8
+  unsigned16 uint16
+  unsigned32 uint32
+  unsigned64 uint64
+  pointer uintptr
+  octet byte
+  character rune
+  real32 float32
+  real64 float64
+  complex64 complex64
+  complex128 complex128
+  failure error
+  anything any
+  constraint interface { comparable }
+  empty struct{}
+  contract interface{}
+  container map[string]chan int
+  callback func() error
+ }
+ `))
+	if err != nil {
+		t.Fatal(err)
+	}
+	threshold := newCouplingBetweenObjects()
+	if err := threshold.(rule.Configurable).Configure(rule.Properties{"maximum": "1"}); err != nil {
+		t.Fatal(err)
+	}
+	if violations := rule.Analyze(f, []*rule.RuleSet{{Rules: []rule.Rule{threshold}}}); len(violations) != 0 {
+		t.Fatalf("builtin-only class has CBO findings: %v", violations)
 	}
 }
 
@@ -181,7 +239,7 @@ type S struct {
 	}
 }
 
-func TestCouplingMeasureGenericTypes(t *testing.T) {
+func TestTypeReferencesInGenericFields(t *testing.T) {
 	tests := []struct {
 		input string
 		want  []string
@@ -202,13 +260,17 @@ func TestCouplingMeasureGenericTypes(t *testing.T) {
 	}
 
 	for _, tc := range tests {
-		got := namedTypesIn(tc.input)
+		f, err := model.ParseSource("generic.go", []byte("package sample; type Service struct { field "+tc.input+" }"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		got := model.TypeReferences(f.Classes[0].Fields[0].TypeExpr)
 		if len(got) != len(tc.want) {
-			t.Fatalf("namedTypesIn(%q) len = %d (%v), want len = %d (%v)", tc.input, len(got), got, len(tc.want), tc.want)
+			t.Fatalf("TypeReferences(%q) = %v, want %v", tc.input, got, tc.want)
 		}
 		for i := range got {
 			if got[i] != tc.want[i] {
-				t.Errorf("namedTypesIn(%q)[%d] = %q, want %q", tc.input, i, got[i], tc.want[i])
+				t.Errorf("TypeReferences(%q)[%d] = %q, want %q", tc.input, i, got[i], tc.want[i])
 			}
 		}
 	}

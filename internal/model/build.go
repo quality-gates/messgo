@@ -222,16 +222,17 @@ func (b *fileBuilder) params(fl *ast.FieldList) []*Parameter {
 	for _, fld := range fl.List {
 		typeStr := exprString(fld.Type)
 		if len(fld.Names) == 0 {
-			out = append(out, &Parameter{Type: typeStr, Line: b.line(fld.Pos()), Field: fld})
+			out = append(out, &Parameter{Type: typeStr, TypeExpr: fld.Type, Line: b.line(fld.Pos()), Field: fld})
 			continue
 		}
 		for _, n := range fld.Names {
 			out = append(out, &Parameter{
-				Name:  n.Name,
-				Type:  typeStr,
-				Line:  b.line(n.Pos()),
-				Field: fld,
-				Ident: n,
+				Name:     n.Name,
+				Type:     typeStr,
+				TypeExpr: fld.Type,
+				Line:     b.line(n.Pos()),
+				Field:    fld,
+				Ident:    n,
 			})
 		}
 	}

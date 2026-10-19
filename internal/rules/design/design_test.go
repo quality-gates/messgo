@@ -7,20 +7,35 @@ import (
 	"github.com/quality-gates/messgo/internal/rule"
 )
 
-func TestBuiltinTypeNamesIncludeGoContainersAndFunctionTypes(t *testing.T) {
-	for _, name := range []string{"map", "chan", "func"} {
-		if !builtinTypes[name] {
-			t.Errorf("builtinTypes[%q] = false, want true", name)
-		}
+func TestCouplingNestedTypeDependenciesThroughAnalyze(t *testing.T) {
+	f, err := model.ParseSource("coupling.go", []byte(`package sample
+ const arrayLength = 3
+ type Service struct {
+  callback func(named Input, rest ...Extra) (result Output)
+  nested struct { field [arrayLength]Element }
+  contract interface { Method(param Request) Response }
+  self *Service
+  builtins map[string]chan int
+ }
+ func (Service) Process(Input) Output { panic("fixture") }
+ `))
+	if err != nil {
+		t.Fatal(err)
 	}
-	for input, want := range map[string]string{
-		"map[string]int": "map",
-		"chan int":       "chan",
-		"func":           "func",
-	} {
-		if got := baseTypeName(input); got != want {
-			t.Errorf("baseTypeName(%q) = %q, want %q", input, got, want)
-		}
+	for _, tc := range []struct {
+		maximum string
+		want    int
+	}{{"6", 1}, {"7", 0}} {
+		t.Run(tc.maximum, func(t *testing.T) {
+			threshold := newCouplingBetweenObjects()
+			if err := threshold.(rule.Configurable).Configure(rule.Properties{"maximum": tc.maximum}); err != nil {
+				t.Fatal(err)
+			}
+			violations := rule.Analyze(f, []*rule.RuleSet{{Rules: []rule.Rule{threshold}}})
+			if len(violations) != tc.want {
+				t.Fatalf("CBO violations at maximum %s = %d, want %d (six dependencies)", tc.maximum, len(violations), tc.want)
+			}
+		})
 	}
 }
 
@@ -181,7 +196,7 @@ type S struct {
 	}
 }
 
-func TestCouplingMeasureGenericTypes(t *testing.T) {
+func TestTypeReferencesInGenericFields(t *testing.T) {
 	tests := []struct {
 		input string
 		want  []string
@@ -202,13 +217,17 @@ func TestCouplingMeasureGenericTypes(t *testing.T) {
 	}
 
 	for _, tc := range tests {
-		got := namedTypesIn(tc.input)
+		f, err := model.ParseSource("generic.go", []byte("package sample; type Service struct { field "+tc.input+" }"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		got := model.TypeReferences(f.Classes[0].Fields[0].TypeExpr)
 		if len(got) != len(tc.want) {
-			t.Fatalf("namedTypesIn(%q) len = %d (%v), want len = %d (%v)", tc.input, len(got), got, len(tc.want), tc.want)
+			t.Fatalf("TypeReferences(%q) = %v, want %v", tc.input, got, tc.want)
 		}
 		for i := range got {
 			if got[i] != tc.want[i] {
-				t.Errorf("namedTypesIn(%q)[%d] = %q, want %q", tc.input, i, got[i], tc.want[i])
+				t.Errorf("TypeReferences(%q)[%d] = %q, want %q", tc.input, i, got[i], tc.want[i])
 			}
 		}
 	}

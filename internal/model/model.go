@@ -320,6 +320,7 @@ func (f *File) EffectiveLinesOfCode(start, end token.Pos) int {
 type Parameter struct {
 	Name     string
 	Type     string
+	TypeExpr ast.Expr
 	Line     int
 	Field    *ast.Field
 	Ident    *ast.Ident

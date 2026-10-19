@@ -6,6 +6,11 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 
 ## [Unreleased]
 
+### Changed
+- Moved CBO type dependency queries into the AST model and exposed parameter
+  type expressions. CBO now includes named types inside callbacks, anonymous
+  structs, and interfaces without parsing formatted type strings (#222).
+
 ### Fixed
 - Fixed `ImplicitOutput` labeling ambient locals without a parameter origin as
   parameters. Receiver aliases now follow direct receiver write classification:

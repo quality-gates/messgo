@@ -39,6 +39,49 @@ func TestCouplingNestedTypeDependenciesThroughAnalyze(t *testing.T) {
 	}
 }
 
+func TestCouplingBuiltinTypesThroughAnalyze(t *testing.T) {
+	f, err := model.ParseSource("builtins.go", []byte(`package sample
+ type Service struct {
+  boolean bool
+  text string
+  integer int
+  signed8 int8
+  signed16 int16
+  signed32 int32
+  signed64 int64
+  unsigned uint
+  unsigned8 uint8
+  unsigned16 uint16
+  unsigned32 uint32
+  unsigned64 uint64
+  pointer uintptr
+  octet byte
+  character rune
+  real32 float32
+  real64 float64
+  complex64 complex64
+  complex128 complex128
+  failure error
+  anything any
+  constraint interface { comparable }
+  empty struct{}
+  contract interface{}
+  container map[string]chan int
+  callback func() error
+ }
+ `))
+	if err != nil {
+		t.Fatal(err)
+	}
+	threshold := newCouplingBetweenObjects()
+	if err := threshold.(rule.Configurable).Configure(rule.Properties{"maximum": "1"}); err != nil {
+		t.Fatal(err)
+	}
+	if violations := rule.Analyze(f, []*rule.RuleSet{{Rules: []rule.Rule{threshold}}}); len(violations) != 0 {
+		t.Fatalf("builtin-only class has CBO findings: %v", violations)
+	}
+}
+
 func TestCouplingBetweenObjectsThresholdReportsThroughAnalyze(t *testing.T) {
 	f, err := model.ParseSource("coupling.go", []byte(`package sample
 

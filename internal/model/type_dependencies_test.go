@@ -15,7 +15,10 @@ func TestClassTypeDependencies(t *testing.T) {
   *Embedded
   first, second map[Key][]*pkg.Value
   self *Service
-  callback func(int) error
+  callback func(bool, string, int, int8, int16, int32, int64,
+   uint, uint8, uint16, uint32, uint64, uintptr, byte, rune,
+   float32, float64, complex64, complex128, any) error
+  constraint interface { comparable }
  }
  func (Service) Process(a, b Input, rest ...Extra) (result Output, err error) { panic("fixture") }
  func (Service) Clone() *Service { var local BodyOnly; _ = local; return nil }

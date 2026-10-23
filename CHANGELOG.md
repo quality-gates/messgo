@@ -7,6 +7,9 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 ## [Unreleased]
 
 ### Changed
+- Derived the built-in ruleset catalogue from embedded XML for loading, help,
+  and rule-owner resolution. Removed stale repo-root `rulesets/` copies so
+  canonical references use current built-ins when run from this repository (#290).
 - Moved CBO type dependency queries into the AST model and exposed parameter
   type expressions. CBO now includes named types inside callbacks, anonymous
   structs, and interfaces without parsing formatted type strings (#222).

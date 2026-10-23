@@ -10,10 +10,6 @@ import (
 	"github.com/quality-gates/messgo/internal/rule"
 )
 
-var leafBuiltinRulesets = []string{
-	"cleancode", "codesize", "controversial", "design", "explicitness", "naming", "opinionated", "unusedcode",
-}
-
 type refExpander struct {
 	session    *loadSession
 	set        *rule.RuleSet

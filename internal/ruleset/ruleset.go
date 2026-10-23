@@ -8,8 +8,10 @@ import (
 	"embed"
 	"encoding/xml"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 
 	"github.com/quality-gates/messgo/internal/rule"
@@ -28,19 +30,21 @@ import (
 //go:embed builtin/*.xml
 var builtinFS embed.FS
 
-// builtinNames maps the short ruleset identifiers accepted on the command line
-// to the embedded XML file.
-var builtinNames = map[string]string{
-	"cleancode":           "builtin/cleancode.xml",
-	"codesize":            "builtin/codesize.xml",
-	"controversial":       "builtin/controversial.xml",
-	"design":              "builtin/design.xml",
-	"naming":              "builtin/naming.xml",
-	"unusedcode":          "builtin/unusedcode.xml",
-	"go":                  "builtin/go.xml",
-	"opinionated":         "builtin/opinionated.xml",
-	"explicitness":        "builtin/explicitness.xml",
-	"explicitness-strict": "builtin/explicitness-strict.xml",
+// builtinNames is the catalogue of short identifiers and embedded XML paths.
+// The embedded files are the sole declaration of the built-in rulesets.
+var builtinNames = builtinCatalogue()
+
+func builtinCatalogue() map[string]string {
+	files, err := fs.Glob(builtinFS, "builtin/*.xml")
+	if err != nil {
+		panic(err) // The fixed embed glob must be valid.
+	}
+	catalogue := make(map[string]string, len(files))
+	for _, file := range files {
+		id := strings.TrimSuffix(strings.TrimPrefix(file, "builtin/"), ".xml")
+		catalogue[id] = file
+	}
+	return catalogue
 }
 
 // builtinID maps a ruleset reference to its built-in identifier. It accepts
@@ -67,7 +71,12 @@ func builtinID(part, fromDir string) (string, bool) {
 
 // BuiltinNames returns the sorted list of built-in ruleset identifiers.
 func BuiltinNames() []string {
-	return []string{"cleancode", "codesize", "controversial", "design", "explicitness", "explicitness-strict", "go", "naming", "opinionated", "unusedcode"}
+	names := make([]string, 0, len(builtinNames))
+	for name := range builtinNames {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	return names
 }
 
 // xml structures -----------------------------------------------------------
@@ -202,7 +211,9 @@ type selectedCandidate struct {
 func builtinRuleOwner(session *loadSession, name string) string {
 	if session.builtinOwners == nil {
 		session.builtinOwners = make(map[string]string)
-		for _, id := range leafBuiltinRulesets {
+		// Only direct class definitions establish ownership. Composite references
+		// and overrides do not, so no separate leaf-ruleset list is needed.
+		for _, id := range BuiltinNames() {
 			source, _, err := readSource(session, id, "")
 			if err != nil {
 				continue

@@ -3,10 +3,12 @@ package ruleset
 import (
 	"encoding/xml"
 	"fmt"
+	"io/fs"
 	"net/url"
 	"os"
 	"path/filepath"
 	"reflect"
+	"sort"
 	"strings"
 	"testing"
 
@@ -33,6 +35,41 @@ func ruleByName(set *rule.RuleSet, name string) rule.Rule {
 		}
 	}
 	return nil
+}
+
+func TestBuiltinNamesCoverEmbeddedRulesets(t *testing.T) {
+	files, err := fs.Glob(builtinFS, "builtin/*.xml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var want []string
+	for _, file := range files {
+		want = append(want, strings.TrimSuffix(filepath.Base(file), ".xml"))
+	}
+	sort.Strings(want)
+	if got := BuiltinNames(); !reflect.DeepEqual(got, want) {
+		t.Fatalf("BuiltinNames() = %v, embedded rulesets = %v", got, want)
+	}
+	for _, name := range BuiltinNames() {
+		t.Run(name, func(t *testing.T) {
+			loadOne(t, name)
+		})
+	}
+}
+
+func TestBuiltinRulesResolveByName(t *testing.T) {
+	for _, name := range BuiltinNames() {
+		for _, loaded := range loadOne(t, name).Rules {
+			ruleName := loaded.Name()
+			t.Run(name+"/"+ruleName, func(t *testing.T) {
+				file := writeRulesetRefFile(t, t.TempDir(), ruleName)
+				set := loadOne(t, file)
+				if len(set.Rules) != 1 || set.Rules[0].Name() != ruleName {
+					t.Fatalf("bare reference %q did not select exactly that rule", ruleName)
+				}
+			})
+		}
+	}
 }
 
 func TestBuiltinNamingLoads(t *testing.T) {
@@ -1481,16 +1518,13 @@ func TestBuiltinExternalInfoURLsAreAbsolute(t *testing.T) {
 	}
 }
 
-func TestDistributedControversialRulesetMatchesBuiltin(t *testing.T) {
-	builtin, err := builtinFS.ReadFile("builtin/controversial.xml")
-	if err != nil {
-		t.Fatal(err)
+func TestCanonicalRulesetFromRepoRootMatchesBuiltin(t *testing.T) {
+	t.Chdir(filepath.Join("..", ".."))
+	canonical := loadOne(t, "rulesets/design.xml")
+	if ruleByName(canonical, "GlobalVariable") == nil {
+		t.Fatal("repo-root canonical design ruleset must include GlobalVariable")
 	}
-	distributed, err := os.ReadFile(filepath.Join("..", "..", "rulesets", "controversial.xml"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if string(builtin) != string(distributed) {
-		t.Fatal("rulesets/controversial.xml differs from internal/ruleset/builtin/controversial.xml")
+	if ruleByName(canonical, "LackOfCohesionOfMethods") == nil {
+		t.Fatal("repo-root canonical design ruleset must include LackOfCohesionOfMethods")
 	}
 }

@@ -36,6 +36,9 @@ func executeKnownStorageCall(w *ownershipFlow, call *ast.CallExpr, callee *model
 	bindCallArguments(w, flow, call, callee)
 	entry, _ := storageEntry(w.summaries, callee, flow.current)
 	recursiveEntry := w.summaries.recursiveCall(callee)
+	if recursiveEntry {
+		entry = w.summaries.graphStorageEntry(entry)
+	}
 	entry, inverse := abstractStorageEntry(entry, w.s, call, recursiveEntry)
 	summary, recursive := w.summaries.summarize(callee, entry, w.s.strict)
 	var mutations *storageMutations

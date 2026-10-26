@@ -39,6 +39,9 @@ func mapStorageReferences(refs map[reference]bool, rename func(allocation) []all
 		for _, a := range rename(ref.allocation) {
 			mapped := ref
 			mapped.allocation = a
+			if a.summary && mapped.path != "" {
+				mapped.path = recursiveStoragePath
+			}
 			out[mapped] = true
 		}
 	}

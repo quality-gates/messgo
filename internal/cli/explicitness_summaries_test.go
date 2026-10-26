@@ -68,6 +68,37 @@ func storageReportFindings(t *testing.T, data []byte) string {
 	return strings.Join(findings, "\n") + "\n"
 }
 
+func TestExplicitnessStorageSummaryKeepsRecursiveValuesAndPaths(t *testing.T) {
+	for _, test := range []struct {
+		name, source string
+		want         []string
+	}{
+		{"inline values", `package p
+type Box struct { Items []int; Next *Box }
+func a(x,y *Box,n int) { y.Items=x.Items; if n>0 { b(x,y,n-1) } }
+func b(x,y *Box,n int) { x.Next=y; if n>0 { a(y,x,n-1) } }
+`, []string{"ImplicitOutput a: write through parameter x", "ImplicitOutput a: write through parameter y", "ImplicitOutput b: write through parameter x", "ImplicitOutput b: write through parameter y"}},
+		{"private projected paths", `package p
+type S []S
+func f(x *S,n int) { if n>0 { f(&(*x)[0],n-1) }; *x=nil }
+func Run() { x:=S{S{}}; f(&x,1) }
+`, []string{"ImplicitOutput f: write through parameter x"}},
+		{"projected heap writes", `package p
+type S []S
+func f(x *S,items S,n int) { if n>0 { f(&(*x)[0],items,n-1) }; *x=items }
+func Run(items S) { x:=S{S{}}; f(&x,items,1); x[0][0]=nil }
+`, []string{"ImplicitOutput f: write through parameter x", "ImplicitOutput Run: write through parameter items"}},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			code, findings, stderr := runAddressChild(t, "explicitness", test.source, "")
+			if code != ExitViolation || stderr != "" {
+				t.Fatalf("exit = %d, stderr = %q", code, stderr)
+			}
+			assertFindings(t, findings, test.want...)
+		})
+	}
+}
+
 func TestExplicitnessStorageSummaryKeepsNamedResultTypes(t *testing.T) {
 	const source = `package p
 type S struct { B []int }

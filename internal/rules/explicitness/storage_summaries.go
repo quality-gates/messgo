@@ -19,6 +19,7 @@ type storageSummaryCache struct {
 	pending      []*storageSummary
 	queued       map[*storageSummary]bool
 	bodyCalls    map[*ast.BlockStmt]map[*ast.BlockStmt]bool
+	inlineSites  map[string]*ast.Ident
 }
 
 type storageSummary struct {
@@ -45,6 +46,7 @@ func (c *storageSummaryCache) forFile(file *model.File) *storageSummaryCache {
 		c.dependencies = map[*ast.BlockStmt]*storageDependencies{}
 		c.queued = map[*storageSummary]bool{}
 		c.bodyCalls = map[*ast.BlockStmt]map[*ast.BlockStmt]bool{}
+		c.inlineSites = map[string]*ast.Ident{}
 		c.current, c.pending = nil, nil
 	}
 	return c

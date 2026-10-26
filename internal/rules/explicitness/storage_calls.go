@@ -46,11 +46,7 @@ func executeKnownStorageCall(w *ownershipFlow, call *ast.CallExpr, callee *model
 			active[body] = true
 		}
 	}
-	summary := w.summaries.lookup(callee.Body, entry, active, child.strict)
-	if summary == nil {
-		summary = computeStorageSummary(flow, callee, entry, active)
-		w.summaries.entries[callee.Body] = append(w.summaries.entries[callee.Body], summary)
-	}
+	summary := w.summaries.summarize(flow, callee, entry, active)
 	var mutations *storageMutations
 	flow.current, flow.result, mutations = instantiateStorageSummary(summary, inverse, w.s, call)
 	publishStorageMutations(w.s.mutations, mutations)
@@ -72,7 +68,8 @@ func computeStorageSummary(flow *ownershipFlow, callee *model.Function, entry st
 	flow.active[callee.Body] = true
 	recordSnapshot(flow, callee.Body.Pos())
 	walkBlock(flow, callee.Body.List)
-	return &storageSummary{entry: entry, active: active, strict: flow.s.strict, exit: flow.current, result: flow.result, mutations: flow.s.mutations, context: flow.s.context}
+	exit := storageSummaryExit(flow, callee, entry)
+	return &storageSummary{entry: entry, active: active, strict: flow.s.strict, exit: exit, result: flow.result, mutations: visibleStorageMutations(flow.s.mutations, exit), context: flow.s.context}
 }
 
 func recordCallResult(w *ownershipFlow, call *ast.CallExpr, fact storage) {

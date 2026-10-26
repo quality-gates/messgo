@@ -64,8 +64,14 @@ func collectStorageDependencies(fn *model.Function, d *storageDependencies) {
 			if n.Obj != nil {
 				d.objects[n.Obj] = true
 			}
-		case *ast.CallExpr:
-			collectStorageDependencies(model.ResolveCall(fn, n), d)
+			// Function values can be bound locally before they are called.
+			collectStorageDependencies(model.ResolveCall(fn, &ast.CallExpr{Fun: n}), d)
+		case *ast.SelectorExpr:
+			// Method values introduce the same recursive dependencies as calls.
+			collectStorageDependencies(model.ResolveCall(fn, &ast.CallExpr{Fun: n}), d)
+		case *ast.FuncLit:
+			collectStorageDependencies(literalFunction(fn.File, n), d)
+			return false
 		}
 		return true
 	})
@@ -192,7 +198,7 @@ func sameHeapTypes(a, b map[allocation]map[string]storage) bool {
 }
 
 func sameStorageTypes(a, b storage) bool {
-	if a.typ != b.typ {
+	if !sameStorageType(a.typ, b.typ) {
 		return false
 	}
 	for key, fact := range a.cells {
@@ -203,6 +209,33 @@ func sameStorageTypes(a, b storage) bool {
 	return true
 }
 
+// Address expressions synthesize fresh pointer type nodes on every walk.
+// Compare their shape, not AST identity, while retaining named type identity.
+// Other types keep the conservative AST-identity comparison.
+func sameStorageType(a, b ast.Expr) bool {
+	if a == b {
+		return true
+	}
+	switch a := a.(type) {
+	case *ast.StarExpr:
+		other, ok := b.(*ast.StarExpr)
+		return ok && sameStorageType(a.X, other.X)
+	case *ast.Ident:
+		other, ok := b.(*ast.Ident)
+		return ok && a.Name == other.Name && a.Obj == other.Obj
+	}
+	return false
+}
+
+func (c *storageSummaryCache) summarize(flow *ownershipFlow, callee *model.Function, entry state, active map[*ast.BlockStmt]bool) *storageSummary {
+	if summary := c.lookup(callee.Body, entry, active, flow.s.strict); summary != nil {
+		return summary
+	}
+	summary := computeStorageSummary(flow, callee, entry, active)
+	c.entries[callee.Body] = append(c.entries[callee.Body], summary)
+	return summary
+}
+
 func (c *storageSummaryCache) lookup(body *ast.BlockStmt, entry state, active map[*ast.BlockStmt]bool, strict bool) *storageSummary {
 	for _, summary := range c.entries[body] {
 		if summary.strict == strict && maps.Equal(summary.active, active) && sameStorageEntry(summary.entry, entry) {
@@ -210,6 +243,26 @@ func (c *storageSummaryCache) lookup(body *ast.BlockStmt, entry state, active ma
 		}
 	}
 	return nil
+}
+
+// Only caller-visible storage belongs in an exit summary. Exporting every
+// private allocation would reproduce the entire call tree in the caller's heap,
+// even if every callee body were walked just once.
+func storageSummaryExit(flow *ownershipFlow, callee *model.Function, entry state) state {
+	exit := state{bindings: map[*ast.Object]storage{}, heap: map[allocation]map[string]storage{}, addresses: map[*ast.Object]map[reference]bool{}}
+	for object, fact := range flow.current.bindings {
+		if !owns(flow.s, object) && paramIndex(callee, object) < 0 && object != flow.s.recv {
+			exit.bindings[object] = fact
+			retainStorageHeap(fact, flow.current, exit)
+		}
+	}
+	// Entry locations can still have aliases in the caller, even if the callee
+	// overwrote the parameter or disconnected a cell from its result.
+	for a := range entry.heap {
+		retainAllocation(a, flow.current, exit)
+	}
+	retainStorageHeap(flow.result, flow.current, exit)
+	return exit
 }
 
 func instantiateStorageSummary(summary *storageSummary, inverse map[allocation]allocation, s *scope, call *ast.CallExpr) (state, storage, *storageMutations) {
@@ -226,6 +279,16 @@ func instantiateStorageSummary(summary *storageSummary, inverse map[allocation]a
 		return a
 	}
 	return mapStorageState(summary.exit, rename), mapStorage(summary.result, rename), mapStorageMutations(summary.mutations, rename)
+}
+
+func visibleStorageMutations(m *storageMutations, exit state) *storageMutations {
+	out := &storageMutations{mutatedObjects: m.mutatedObjects, mutatedContents: m.mutatedContents, mutatedAllocations: map[allocation]bool{}}
+	for a := range m.mutatedAllocations {
+		if _, visible := exit.heap[a]; visible {
+			out.mutatedAllocations[a] = true
+		}
+	}
+	return out
 }
 
 func mapStorageMutations(m *storageMutations, rename func(allocation) allocation) *storageMutations {

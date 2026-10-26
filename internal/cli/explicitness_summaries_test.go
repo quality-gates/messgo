@@ -93,6 +93,31 @@ func Private(items []int) {
 	)
 }
 
+func TestExplicitnessStorageSummaryKeepsIndirectRecursionContext(t *testing.T) {
+	const source = `package p
+func A(slot *[]int, items []int) { if len(items)>1 { B(slot,items[1:]) }; *slot = items }
+func B(slot *[]int, items []int) { f := A; f(slot,items) }
+func Run(items []int) {
+ x := items
+ x = nil
+ p := &x
+ A(p,items)
+ x = nil
+ B(p,items)
+ x[0] = 1
+}
+`
+	code, findings, stderr := runAddressChild(t, "explicitness", source, "")
+	if code != ExitViolation || stderr != "" {
+		t.Fatalf("exit = %d, stderr = %q", code, stderr)
+	}
+	assertFindings(t, findings,
+		"ImplicitOutput A: write through parameter slot",
+		"ImplicitOutput B: write through parameter slot",
+		"ImplicitOutput Run: write through parameter items",
+	)
+}
+
 func TestExplicitnessStorageSummaryInstantiatesAllocations(t *testing.T) {
 	const source = `package p
 type Box struct { Items []int; Next *Box }
@@ -137,17 +162,18 @@ func Loop(items []int) {
 
 func TestExplicitnessCallFanoutCompletes(t *testing.T) {
 	for _, test := range []struct {
-		name, header, params, args, leaf string
-		want                             []string
+		name, header, params, args, prolog, leaf string
+		want                                     []string
 	}{
-		{"parameter", "type T struct { n int }", "t *T", "t", "t.n++", nil},
-		{"heap", "type T struct { Items []int }; func Run(items []int) { t := &T{}; f0(t,items); t.Items[0] = 1 }", "t *T, items []int", "t,items", "t.Items = items", []string{"ImplicitOutput Run: write through parameter items"}},
+		{"parameter", "type T struct { n int }", "t *T", "t", "", "t.n++", nil},
+		{"heap", "type T struct { Items []int }; func Run(items []int) { t := &T{}; f0(t,items); t.Items[0] = 1 }", "t *T, items []int", "t,items", "", "t.Items = items", []string{"ImplicitOutput Run: write through parameter items"}},
+		{"addressed local", "type T struct { n int }", "t *T", "&x", "t.n++; var x T;", "t.n++", nil},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			var source strings.Builder
 			fmt.Fprintf(&source, "package p\n%s\n", test.header)
 			for i := 0; i < 16; i++ {
-				fmt.Fprintf(&source, "func f%d(%s) { f%d(%s); f%d(%s) }\n", i, test.params, i+1, test.args, i+1, test.args)
+				fmt.Fprintf(&source, "func f%d(%s) { %s f%d(%s); f%d(%s) }\n", i, test.params, test.prolog, i+1, test.args, i+1, test.args)
 			}
 			fmt.Fprintf(&source, "func f16(%s) { %s }\n", test.params, test.leaf)
 			start := time.Now()

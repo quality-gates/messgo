@@ -1,0 +1,10 @@
+extract.go:15:15 UnknownEffect ParseSource: The function ParseSource() has an unknown effect: unresolved call. Analyze the callee before classifying it as a calculation.
+extract.go:32:32 ImplicitOutput ParseSource: The function ParseSource() has an implicit output: write through local b. Return it instead.
+extract.go:32:32 ImplicitOutput ParseSource: The function ParseSource() has an implicit output: write through parameter src. Return it instead.
+extract.go:32:32 UnknownEffect ParseSource: The function ParseSource() has an unknown effect: receiver effect. Analyze the callee before classifying it as a calculation.
+extract.go:46:46 UnknownEffect fileBuilder.build: The method build() has an unknown effect: receiver effect. Analyze the callee before classifying it as a calculation.
+extract.go:46:46 UnknownEffect fileBuilder.build: The method build() has an unknown effect: unresolved call. Analyze the callee before classifying it as a calculation.
+extract.go:53:53 UnknownEffect fileBuilder.collectTypes: The method collectTypes() has an unknown effect: receiver effect. Analyze the callee before classifying it as a calculation.
+extract.go:63:63 UnknownEffect fileBuilder.collectTypes: The method collectTypes() has an unknown effect: unresolved call. Analyze the callee before classifying it as a calculation.
+extract.go:69:69 UnknownEffect fileBuilder.collectTypeSpec: The method collectTypeSpec() has an unknown effect: unresolved call. Analyze the callee before classifying it as a calculation.
+extract.go:74:74 UnknownEffect fileBuilder.collectTypeSpec: The method collectTypeSpec() has an unknown effect: receiver effect. Analyze the callee before classifying it as a calculation.

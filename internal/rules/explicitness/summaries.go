@@ -31,16 +31,18 @@ type effectGraph struct {
 	literals  map[*ast.FuncLit]*model.Function
 	returning map[*model.Function]bool
 	mutations *storageMutations
+	summaries *storageSummaryCache
 	strict    bool
 }
 
-func analyze(c *rule.Context, root *model.Function, strict bool) *effectGraph {
+func analyze(c *rule.Context, root *model.Function, strict bool, summaries *storageSummaryCache) *effectGraph {
 	graph := &effectGraph{
 		ctx:       c,
 		nodes:     map[*model.Function]*callableSummary{},
 		literals:  map[*ast.FuncLit]*model.Function{},
 		returning: map[*model.Function]bool{},
 		mutations: newStorageMutations(),
+		summaries: summaries,
 		strict:    strict,
 	}
 	graph.add(c, root, nil, strict)
@@ -64,10 +66,13 @@ func (g *effectGraph) add(c *rule.Context, fn, parent *model.Function, strict bo
 	if g.nodes[fn] != nil {
 		return
 	}
-	s := newScope(fn, strict, g.mutations)
+	s := untrackedScope(fn, strict, g.mutations)
+	if fn.Body != nil {
+		trackOwnership(s, g.summaries)
+	}
 	if parent != nil {
 		inherit(s, g.nodes[parent].scope, fn.Decl.Type.Pos())
-		trackOwnership(s)
+		trackOwnership(s, g.summaries)
 	}
 	facts := scanScope(s)
 	g.nodes[fn] = &callableSummary{facts: facts, scope: s, parent: parent}
@@ -801,6 +806,7 @@ func knownOperation(name string) bool {
 type UnknownEffect struct {
 	*rule.Base
 	includeReceiver bool
+	summaries       storageSummaryCache
 }
 
 func newUnknownEffect() rule.Rule { return &UnknownEffect{Base: rule.NewBase(receiverProperty)} }
@@ -812,7 +818,7 @@ func (r *UnknownEffect) ApplyFile(c *rule.Context) { applyModule(c, r.ApplyFunc)
 
 func (r *UnknownEffect) ApplyFunc(c *rule.Context, fn *model.Function) {
 	fn = moduleOwner(fn)
-	graph := analyze(c, fn, r.includeReceiver)
+	graph := analyze(c, fn, r.includeReceiver, r.summaries.forFile(c.File))
 	for _, callable := range graph.owned(fn) {
 		facts := graph.nodes[callable].facts
 		unknown := append([]effect(nil), facts.unknown...)

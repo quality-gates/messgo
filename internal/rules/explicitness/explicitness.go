@@ -30,6 +30,7 @@ const receiverProperty = "include-receiver"
 type ImplicitInput struct {
 	*rule.Base
 	includeReceiver bool
+	summaries       storageSummaryCache
 }
 
 func newImplicitInput() rule.Rule { return &ImplicitInput{Base: rule.NewBase(receiverProperty)} }
@@ -40,7 +41,7 @@ func (r *ImplicitInput) Configure(props rule.Properties) error {
 }
 
 func (r *ImplicitInput) ApplyFunc(c *rule.Context, fn *model.Function) {
-	reportFunctions(c, moduleOwner(fn), r.includeReceiver, true)
+	reportFunctions(c, moduleOwner(fn), r.includeReceiver, true, r.summaries.forFile(c.File))
 }
 
 func (r *ImplicitInput) ApplyFile(c *rule.Context) { applyModule(c, r.ApplyFunc) }
@@ -50,6 +51,7 @@ func (r *ImplicitInput) ApplyFile(c *rule.Context) { applyModule(c, r.ApplyFunc)
 type ImplicitOutput struct {
 	*rule.Base
 	includeReceiver bool
+	summaries       storageSummaryCache
 }
 
 func newImplicitOutput() rule.Rule { return &ImplicitOutput{Base: rule.NewBase(receiverProperty)} }
@@ -60,7 +62,7 @@ func (r *ImplicitOutput) Configure(props rule.Properties) error {
 }
 
 func (r *ImplicitOutput) ApplyFunc(c *rule.Context, fn *model.Function) {
-	reportFunctions(c, moduleOwner(fn), r.includeReceiver, false)
+	reportFunctions(c, moduleOwner(fn), r.includeReceiver, false, r.summaries.forFile(c.File))
 }
 
 func (r *ImplicitOutput) ApplyFile(c *rule.Context) { applyModule(c, r.ApplyFunc) }
@@ -97,8 +99,8 @@ func report(c *rule.Context, fn *model.Function, effects []effect) {
 	}
 }
 
-func reportFunctions(c *rule.Context, fn *model.Function, strict, input bool) {
-	graph := analyze(c, fn, strict)
+func reportFunctions(c *rule.Context, fn *model.Function, strict, input bool, summaries *storageSummaryCache) {
+	graph := analyze(c, fn, strict, summaries)
 	for _, callable := range graph.owned(fn) {
 		effects := graph.nodes[callable].facts.outputs
 		if input {
@@ -225,14 +227,6 @@ type scope struct {
 	// receiver is an input, and a write through a pointer receiver is an
 	// output.
 	strict bool
-}
-
-func newScope(fn *model.Function, strict bool, mutations *storageMutations) *scope {
-	s := untrackedScope(fn, strict, mutations)
-	if fn.Body != nil {
-		trackOwnership(s)
-	}
-	return s
 }
 
 func untrackedScope(fn *model.Function, strict bool, mutations *storageMutations) *scope {

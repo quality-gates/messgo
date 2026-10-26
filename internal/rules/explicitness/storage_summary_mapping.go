@@ -17,7 +17,7 @@ func storageKeys[K comparable, V any](m map[K]V) []K {
 	return keys
 }
 
-func mapStorage(fact storage, rename func(allocation) allocation) storage {
+func mapStorage(fact storage, rename func(allocation) []allocation) storage {
 	fact.references = mapStorageReferences(fact.references, rename)
 	cells := fact.cells
 	fact.cells = nil
@@ -30,19 +30,22 @@ func mapStorage(fact storage, rename func(allocation) allocation) storage {
 	return fact
 }
 
-func mapStorageReferences(refs map[reference]bool, rename func(allocation) allocation) map[reference]bool {
+func mapStorageReferences(refs map[reference]bool, rename func(allocation) []allocation) map[reference]bool {
 	if refs == nil {
 		return nil
 	}
 	out := map[reference]bool{}
 	for _, ref := range storageKeys(refs) {
-		ref.allocation = rename(ref.allocation)
-		out[ref] = true
+		for _, a := range rename(ref.allocation) {
+			mapped := ref
+			mapped.allocation = a
+			out[mapped] = true
+		}
 	}
 	return out
 }
 
-func mapStorageState(current state, rename func(allocation) allocation) state {
+func mapStorageState(current state, rename func(allocation) []allocation) state {
 	out := state{bindings: map[*ast.Object]storage{}, heap: map[allocation]map[string]storage{}, addresses: map[*ast.Object]map[reference]bool{}, calls: map[*ast.CallExpr]storage{}}
 	for _, object := range storageKeys(current.bindings) {
 		out.bindings[object] = mapStorage(current.bindings[object], rename)
@@ -51,13 +54,14 @@ func mapStorageState(current state, rename func(allocation) allocation) state {
 		out.addresses[object] = mapStorageReferences(current.addresses[object], rename)
 	}
 	for _, a := range storageKeys(current.heap) {
-		mapped := rename(a)
 		cells := map[string]storage{}
 		for _, key := range storageKeys(current.heap[a]) {
 			cells[key] = mapStorage(current.heap[a][key], rename)
 		}
 		// Recursive allocation abstraction may merge contexts of one site.
-		out.heap[mapped] = joinCells(out.heap[mapped], cells)
+		for _, mapped := range rename(a) {
+			out.heap[mapped] = joinCells(out.heap[mapped], cells)
+		}
 	}
 	for _, call := range storageKeys(current.calls) {
 		out.calls[call] = mapStorage(current.calls[call], rename)

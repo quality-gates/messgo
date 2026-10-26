@@ -67,7 +67,7 @@ func dereferenceStorage(fact storage, current state) storage {
 func writeBindingCell(current state, object *ast.Object, fact storage) state {
 	for reference := range current.addresses[object] {
 		current.heap = maps.Clone(current.heap)
-		current.heap[reference.allocation] = updatedCells(current.heap[reference.allocation], addressCell, fact, true)
+		current.heap[reference.allocation] = updatedCells(current.heap[reference.allocation], addressCell, fact, !reference.summary)
 	}
 	return current
 }

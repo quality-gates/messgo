@@ -16,9 +16,9 @@ type storageSummaryCache struct {
 	entries      map[*ast.BlockStmt][]*storageSummary
 	dependencies map[*ast.BlockStmt]*storageDependencies
 	current      *storageSummary
-	stack        []*storageSummary
 	pending      []*storageSummary
 	queued       map[*storageSummary]bool
+	bodyCalls    map[*ast.BlockStmt]map[*ast.BlockStmt]bool
 }
 
 type storageSummary struct {
@@ -44,7 +44,8 @@ func (c *storageSummaryCache) forFile(file *model.File) *storageSummaryCache {
 		c.entries = map[*ast.BlockStmt][]*storageSummary{}
 		c.dependencies = map[*ast.BlockStmt]*storageDependencies{}
 		c.queued = map[*storageSummary]bool{}
-		c.current, c.stack, c.pending = nil, nil, nil
+		c.bodyCalls = map[*ast.BlockStmt]map[*ast.BlockStmt]bool{}
+		c.current, c.pending = nil, nil
 	}
 	return c
 }
@@ -167,30 +168,35 @@ func retainAllocation(a allocation, current, entry state) {
 
 // Canonical entry allocations retain aliasing but discard caller-specific
 // invocation paths. The inverse map instantiates the summary at each call site.
-func abstractStorageEntry(entry state, s *scope, call *ast.CallExpr) (state, map[allocation]allocation) {
+type storageAllocationMapping map[allocation][]allocation
+
+func abstractStorageEntry(entry state, s *scope, call *ast.CallExpr, recursive bool) (state, storageAllocationMapping) {
 	context := callContext(s, call)
 	names := map[allocation]allocation{}
-	inverse := map[allocation]allocation{}
-	rename := func(a allocation) allocation {
+	inverse := storageAllocationMapping{}
+	rename := func(a allocation) []allocation {
 		if named, ok := names[a]; ok {
-			return named
+			return []allocation{named}
 		}
-		named := allocation{context: "@entry" + strconv.Itoa(len(names)), binding: a.binding}
+		named := allocation{context: "@entry" + strconv.Itoa(len(names)), site: a.site, invocation: a.invocation, binding: a.binding, summary: a.summary}
 		// A loop may already contain allocations from this very invocation.
 		// Preserve that identity: a repeated allocation must update the existing
 		// abstract location, not become a distinct fresh cell in the summary.
-		if a.context == context || strings.HasPrefix(a.context, context+"/") {
+		if recursive {
+			named.context, named.summary = "@recursive-entry", true
+		} else if a.context == context || strings.HasPrefix(a.context, context+"/") {
 			named = a
 			named.context = storageSummaryContext + strings.TrimPrefix(a.context, context)
 			if named.invocation == call {
 				named.invocation = nil
 			}
 		}
-		names[a], inverse[named] = named, a
-		return named
+		names[a] = named
+		inverse[named] = append(inverse[named], a)
+		return []allocation{named}
 	}
 	// A stable traversal is important: maps must not decide alias numbering.
-	return mapStorageState(entry, rename), inverse
+	return mapStorageState(compactState(entry), rename), inverse
 }
 
 func sameStorageEntry(a, b state) bool {
@@ -276,16 +282,16 @@ func storageSummaryExit(flow *ownershipFlow, callee *model.Function, entry state
 	return exit
 }
 
-func instantiateStorageSummary(summary *storageSummary, inverse map[allocation]allocation, s *scope, call *ast.CallExpr, recursive bool) (state, storage, *storageMutations) {
-	rename := func(a allocation) allocation {
-		if original, ok := inverse[a]; ok {
-			return original
+func instantiateStorageSummary(summary *storageSummary, inverse storageAllocationMapping, s *scope, call *ast.CallExpr, recursive bool, incoming state) (state, storage, *storageMutations) {
+	rename := func(a allocation) []allocation {
+		if originals, ok := inverse[a]; ok {
+			return originals
 		}
 		if strings.HasPrefix(a.context, summary.context) {
 			if recursive {
 				// Recursive SCCs share allocation sites instead of growing an
 				// unbounded invocation string on every fixed-point iteration.
-				a.context = callContext(s, call) + "/recursive"
+				a.context, a.summary = callContext(s, call)+"/recursive", true
 			} else {
 				a.context = callContext(s, call) + strings.TrimPrefix(a.context, summary.context)
 			}
@@ -293,9 +299,11 @@ func instantiateStorageSummary(summary *storageSummary, inverse map[allocation]a
 				a.invocation = call
 			}
 		}
-		return a
+		return []allocation{a}
 	}
-	return mapStorageState(summary.exit, rename), mapStorage(summary.result, rename), mapStorageMutations(summary.mutations, rename)
+	exit := mapStorageState(summary.exit, rename)
+	weakReplayStorage(exit, incoming, inverse)
+	return exit, mapStorage(summary.result, rename), mapStorageMutations(summary.mutations, rename)
 }
 
 func visibleStorageMutations(m *storageMutations, exit state) *storageMutations {
@@ -308,12 +316,14 @@ func visibleStorageMutations(m *storageMutations, exit state) *storageMutations 
 	return out
 }
 
-func mapStorageMutations(m *storageMutations, rename func(allocation) allocation) *storageMutations {
+func mapStorageMutations(m *storageMutations, rename func(allocation) []allocation) *storageMutations {
 	out := newStorageMutations()
 	maps.Copy(out.mutatedObjects, m.mutatedObjects)
 	maps.Copy(out.mutatedContents, m.mutatedContents)
 	for a := range m.mutatedAllocations {
-		out.mutatedAllocations[rename(a)] = true
+		for _, mapped := range rename(a) {
+			out.mutatedAllocations[mapped] = true
+		}
 	}
 	return out
 }

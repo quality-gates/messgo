@@ -84,10 +84,11 @@ func referenceCells(fact storage, ref reference, current state) map[string]stora
 
 func writeReference(current state, fact storage, ref reference, key string, incoming storage, strong bool) state {
 	cells := allocationCells(fact, ref, current)
+	strong = strong && !ref.summary
 	if ref.path == "" {
 		current.heap = maps.Clone(current.heap)
 		current.heap[ref.allocation] = updatedCells(cells, key, incoming, strong)
-		return publishAddress(current, ref, key, incoming)
+		return publishAddress(current, ref, key, current.heap[ref.allocation][key])
 	}
 	path := ref.path
 	if key != addressCell {

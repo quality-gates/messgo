@@ -26,6 +26,7 @@ type allocation struct {
 	binding    *ast.Object
 	invocation *ast.CallExpr
 	context    string
+	summary    bool // may represent multiple allocations in a recursive SCC
 }
 
 type reference struct {

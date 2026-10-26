@@ -35,10 +35,11 @@ func executeKnownStorageCall(w *ownershipFlow, call *ast.CallExpr, callee *model
 	flow := &ownershipFlow{s: child, current: initialState(child), labels: map[string]state{}, summaries: w.summaries}
 	bindCallArguments(w, flow, call, callee)
 	entry, _ := storageEntry(w.summaries, callee, flow.current)
-	entry, inverse := abstractStorageEntry(entry, w.s, call)
+	recursiveEntry := w.summaries.recursiveCall(callee)
+	entry, inverse := abstractStorageEntry(entry, w.s, call, recursiveEntry)
 	summary, recursive := w.summaries.summarize(callee, entry, w.s.strict)
 	var mutations *storageMutations
-	flow.current, flow.result, mutations = instantiateStorageSummary(summary, inverse, w.s, call, recursive)
+	flow.current, flow.result, mutations = instantiateStorageSummary(summary, inverse, w.s, call, recursive, w.current)
 	publishStorageMutations(w.s.mutations, mutations)
 	// The summary contains only reachable entry storage. Preserve unrelated heap.
 	heap := maps.Clone(w.current.heap)

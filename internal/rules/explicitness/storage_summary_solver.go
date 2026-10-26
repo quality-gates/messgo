@@ -12,12 +12,6 @@ import (
 func (c *storageSummaryCache) summarize(fn *model.Function, entry state, strict bool) (*storageSummary, bool) {
 	summary := c.lookup(fn.Body, entry, strict)
 	if summary == nil {
-		// Preserve the previous uncertainty for recursion that changes its entry
-		// graph. Do not materialize infinitely many recursive heap contexts.
-		if active := c.activeBody(fn); active != nil {
-			c.link(c.current, active)
-			return provisionalStorageSummary(entry), true
-		}
 		summary = &storageSummary{fn: fn, entry: entry, strict: strict, context: storageSummaryContext,
 			callees: map[*storageSummary]bool{}, callers: map[*storageSummary]bool{}}
 		c.entries[fn.Body] = append(c.entries[fn.Body], summary)
@@ -39,15 +33,6 @@ func (c *storageSummaryCache) summarize(fn *model.Function, entry state, strict 
 func provisionalStorageSummary(entry state) *storageSummary {
 	return &storageSummary{entry: entry, exit: entry, result: ambientStorage,
 		mutations: newStorageMutations(), context: storageSummaryContext}
-}
-
-func (c *storageSummaryCache) activeBody(fn *model.Function) *storageSummary {
-	for _, summary := range c.stack {
-		if summary.fn.Body == fn.Body {
-			return summary
-		}
-	}
-	return nil
 }
 
 func (c *storageSummaryCache) link(caller, callee *storageSummary) {
@@ -76,11 +61,9 @@ func storageSummaryReaches(from, target *storageSummary, seen map[*storageSummar
 func (c *storageSummaryCache) evaluate(summary *storageSummary) {
 	previous := c.current
 	c.current, summary.computing = summary, true
-	c.stack = append(c.stack, summary)
 	s := untrackedScope(summary.fn, summary.strict, newStorageMutations())
 	flow := &ownershipFlow{s: s, summaries: c, labels: map[string]state{}}
 	next := computeStorageSummary(flow, summary.fn, summary.entry)
-	c.stack = c.stack[:len(c.stack)-1]
 	c.current, summary.computing = previous, false
 	changed := !summary.initialized || !sameStorageSummary(summary, next)
 	summary.exit, summary.result, summary.mutations = next.exit, next.result, next.mutations

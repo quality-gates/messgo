@@ -81,6 +81,20 @@ func Zero() { x := zero(); x.B[0] = 1 }
 	assertFindings(t, findings, "ImplicitOutput Zero: write through local x")
 }
 
+func TestExplicitnessStorageSummaryKeepsRecursiveEntries(t *testing.T) {
+	const source = `package p
+type Box struct { Next *Box; Items []int }
+func a(x *Box,n int,items []int) { x.Next=&Box{Next:x,Items:items}; if n>0 { b(x.Next,n-1,items) } }
+func b(x *Box,n int,items []int) { x.Next=&Box{Next:x,Items:items}; if n>0 { a(x.Next,n-1,items) } }
+func Run(items []int) { x:=&Box{}; a(x,2,items); x.Next.Next.Items[0]++ }
+`
+	code, findings, stderr := runAddressChild(t, "explicitness", source, "")
+	if code != ExitViolation || stderr != "" {
+		t.Fatalf("exit = %d, stderr = %q", code, stderr)
+	}
+	assertFindings(t, findings, "ImplicitOutput a: write through parameter x", "ImplicitOutput b: write through parameter x", "ImplicitOutput Run: write through parameter items")
+}
+
 func TestExplicitnessStorageSummaryKeepsAddressedCaptures(t *testing.T) {
 	const source = `package p
 func set(slot *[]int, items []int) { *slot = items }

@@ -168,6 +168,13 @@ func RecursiveInstances(items []int) {
  a.Items = items
  b.Items[0]++
 }
+func allocateA(n int) *Box { x := &Box{}; if n > 0 { x.Next = allocateB(n-1) }; return x }
+func allocateB(n int) *Box { x := &Box{}; if n > 0 { x.Next = allocateA(n-1) }; return x }
+func MutualInstances(items []int) {
+ a, b := allocateA(2), allocateA(2)
+ a.Items = items
+ b.Items[0]++
+}
 `
 	code, findings, stderr := runAddressChild(t, "explicitness", source, "")
 	if code != ExitViolation || stderr != "" {
@@ -180,6 +187,7 @@ func RecursiveInstances(items []int) {
 		"ImplicitOutput node: write through parameter b",
 		"ImplicitOutput Loop: write through local b",
 		"ImplicitOutput RecursiveInstances: write through local b",
+		"ImplicitOutput MutualInstances: write through local b",
 	)
 }
 

@@ -57,8 +57,11 @@ func computeStorageSummary(flow *ownershipFlow, callee *model.Function, entry st
 	flow.current = cloneState(entry)
 	recordSnapshot(flow, callee.Body.Pos())
 	walkBlock(flow, callee.Body.List)
-	exit := storageSummaryExit(flow, callee, entry)
-	return &storageSummary{entry: entry, strict: flow.s.strict, exit: exit, result: flow.result, mutations: visibleStorageMutations(flow.s.mutations, exit), context: flow.s.context}
+	// Heap identities alone are not a finite abstraction if frozen inline cells
+	// still duplicate each recursive return. Reuse the loop graph compaction.
+	exit := compactState(storageSummaryExit(flow, callee, entry))
+	result := compactStorage(flow.result, exit)
+	return &storageSummary{entry: entry, strict: flow.s.strict, exit: exit, result: result, mutations: visibleStorageMutations(flow.s.mutations, exit), context: flow.s.context}
 }
 
 func recordCallResult(w *ownershipFlow, call *ast.CallExpr, fact storage) {

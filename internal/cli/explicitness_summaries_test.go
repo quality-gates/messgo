@@ -2,9 +2,12 @@ package cli
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -161,6 +164,13 @@ func Loop(items []int) {
 }
 
 func TestExplicitnessCallFanoutCompletes(t *testing.T) {
+	// Measure the shipping binary, not race/coverage instrumentation or compiler
+	// time. The remaining summary tests exercise Main under that instrumentation.
+	binary := filepath.Join(t.TempDir(), "messgo")
+	build := exec.Command("go", "build", "-o", binary, "../../cmd/messgo")
+	if out, err := build.CombinedOutput(); err != nil {
+		t.Fatalf("build CLI: %v\n%s", err, out)
+	}
 	for _, test := range []struct {
 		name, header, params, args, prolog, leaf string
 		want                                     []string
@@ -176,14 +186,30 @@ func TestExplicitnessCallFanoutCompletes(t *testing.T) {
 				fmt.Fprintf(&source, "func f%d(%s) { %s f%d(%s); f%d(%s) }\n", i, test.params, test.prolog, i+1, test.args, i+1, test.args)
 			}
 			fmt.Fprintf(&source, "func f16(%s) { %s }\n", test.params, test.leaf)
+			path := filepath.Join(t.TempDir(), "fan.go")
+			if err := os.WriteFile(path, []byte(source.String()), 0o644); err != nil {
+				t.Fatal(err)
+			}
+			ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
+			defer cancel()
+			cmd := exec.CommandContext(ctx, binary, path, "json", "explicitness")
+			cmd.Env = append(os.Environ(), "GOMAXPROCS=1")
+			var stderr bytes.Buffer
+			cmd.Stderr = &stderr
 			start := time.Now()
-			code, findings, stderr := runAddressChild(t, "explicitness", source.String(), "")
-			if elapsed := time.Since(start); elapsed > time.Second {
-				t.Fatalf("depth-16 fan-out took %s, want under 1s", elapsed)
+			out, err := cmd.Output()
+			var exit *exec.ExitError
+			if !errors.As(err, &exit) || exit.ExitCode() != ExitViolation || stderr.Len() != 0 {
+				t.Fatalf("CLI: %v\nstdout: %s\nstderr: %s", err, out, stderr.String())
 			}
-			if code != ExitViolation || stderr != "" {
-				t.Fatalf("exit = %d, stderr = %q", code, stderr)
+			// Bound CPU work separately from scheduling delays on shared CI hosts.
+			// The context above also enforces an 8s wall-clock completion deadline.
+			cpu := cmd.ProcessState.UserTime() + cmd.ProcessState.SystemTime()
+			if cpu > time.Second {
+				t.Fatalf("depth-16 fan-out used %s CPU, want under 1s", cpu)
 			}
+			t.Logf("depth-16 fan-out: %s wall, %s CPU", time.Since(start), cpu)
+			findings := explicitnessFindings(t, string(out))
 			want := test.want
 			for i := 0; i <= 16; i++ {
 				want = append(want, fmt.Sprintf("ImplicitOutput f%d: write through parameter t", i))

@@ -57,6 +57,9 @@ func projectedAddress(base, container storage, key string, current state) storag
 }
 
 func appendCell(path, key string) string {
+	if path == recursiveStoragePath {
+		return path
+	}
 	if path == "" {
 		return key
 	}
@@ -71,6 +74,9 @@ func allocationCells(fact storage, ref reference, current state) map[string]stor
 }
 
 func referenceCells(fact storage, ref reference, current state) map[string]storage {
+	if ref.path == recursiveStoragePath {
+		return map[string]storage{addressCell: recursiveStorageContents(fact, current)}
+	}
 	cells := allocationCells(fact, ref, current)
 	if ref.path == "" {
 		return cells
@@ -83,11 +89,15 @@ func referenceCells(fact storage, ref reference, current state) map[string]stora
 }
 
 func writeReference(current state, fact storage, ref reference, key string, incoming storage, strong bool) state {
+	if ref.path == recursiveStoragePath {
+		return writeRecursiveStorage(current, ref, incoming)
+	}
 	cells := allocationCells(fact, ref, current)
+	strong = strong && !ref.summary
 	if ref.path == "" {
 		current.heap = maps.Clone(current.heap)
 		current.heap[ref.allocation] = updatedCells(cells, key, incoming, strong)
-		return publishAddress(current, ref, key, incoming)
+		return publishAddress(current, ref, key, current.heap[ref.allocation][key])
 	}
 	path := ref.path
 	if key != addressCell {

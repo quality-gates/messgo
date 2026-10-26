@@ -95,6 +95,7 @@ func markStorageMutation(w *ownershipFlow, target ast.Expr) {
 		w.s.mutations.mutatedContents[id.Obj] = true
 	}
 	for reference := range fact.references {
+		markRecursiveStorageMutation(w, reference)
 		w.s.mutations.mutatedAllocations[reference.allocation] = true
 		if reference.binding != nil {
 			w.s.mutations.mutatedObjects[reference.binding] = true

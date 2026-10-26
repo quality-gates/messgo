@@ -30,20 +30,42 @@ func executeStorageCall(w *ownershipFlow, call *ast.CallExpr) bool {
 }
 
 func executeKnownStorageCall(w *ownershipFlow, call *ast.CallExpr, callee *model.Function) {
-	if w.active[callee.Body] {
-		recordCallResult(w, call, ambientStorage)
-		return
-	}
-	child := untrackedScope(callee, w.s.strict, w.s.mutations)
+	child := untrackedScope(callee, w.s.strict, newStorageMutations())
 	child.captures = cloneState(w.current)
-	child.invocation, child.context = call, callContext(w.s, call)
-	flow := &ownershipFlow{s: child, current: initialState(child), labels: map[string]state{}, active: maps.Clone(w.active)}
-	flow.active[callee.Body] = true
+	flow := &ownershipFlow{s: child, current: initialState(child), labels: map[string]state{}, summaries: w.summaries}
 	bindCallArguments(w, flow, call, callee)
-	recordSnapshot(flow, callee.Body.Pos())
-	walkBlock(flow, callee.Body.List)
+	entry, _ := storageEntry(w.summaries, callee, flow.current)
+	recursiveEntry := w.summaries.recursiveCall(callee)
+	if recursiveEntry {
+		entry = w.summaries.graphStorageEntry(entry)
+	}
+	entry, inverse := abstractStorageEntry(entry, w.s, call, recursiveEntry)
+	summary, recursive := w.summaries.summarize(callee, entry, w.s.strict)
+	var mutations *storageMutations
+	flow.current, flow.result, mutations = instantiateStorageSummary(summary, inverse, w.s, call, recursive, w.current)
+	publishStorageMutations(w.s.mutations, mutations)
+	// The summary contains only reachable entry storage. Preserve unrelated heap.
+	heap := maps.Clone(w.current.heap)
+	if heap == nil {
+		heap = map[allocation]map[string]storage{}
+	}
+	maps.Copy(heap, flow.current.heap)
+	flow.current.heap = heap
 	publishCallState(w, flow, callee)
 	recordCallResult(w, call, flow.result)
+}
+
+func computeStorageSummary(flow *ownershipFlow, callee *model.Function, entry state) *storageSummary {
+	// Each computation uses an allocation namespace distinct from its inputs.
+	flow.s.context = storageSummaryContext
+	flow.current = cloneState(entry)
+	recordSnapshot(flow, callee.Body.Pos())
+	walkBlock(flow, callee.Body.List)
+	// Heap identities alone are not a finite abstraction if frozen inline cells
+	// still duplicate each recursive return. Reuse the loop graph compaction.
+	exit := compactState(storageSummaryExit(flow, callee, entry))
+	result := compactStorage(flow.result, exit)
+	return &storageSummary{entry: entry, strict: flow.s.strict, exit: exit, result: result, mutations: visibleStorageMutations(flow.s.mutations, exit), context: flow.s.context}
 }
 
 func recordCallResult(w *ownershipFlow, call *ast.CallExpr, fact storage) {

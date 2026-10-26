@@ -6,9 +6,8 @@ import (
 	"maps"
 )
 
-func trackOwnership(s *scope) {
-	w := &ownershipFlow{s: s, current: initialState(s), labels: map[string]state{}}
-	w.active = map[*ast.BlockStmt]bool{s.fn.Body: true}
+func trackOwnership(s *scope, summaries *storageSummaryCache) {
+	w := &ownershipFlow{s: s, current: initialState(s), labels: map[string]state{}, summaries: summaries}
 	s.ownership = nil
 	recordSnapshot(w, s.fn.Body.Pos())
 	initial := cloneState(w.current)
@@ -37,12 +36,12 @@ func sameLabels(a, b map[string]state) bool {
 }
 
 type ownershipFlow struct {
-	s       *scope
-	current state
-	result  storage
-	active  map[*ast.BlockStmt]bool
-	labels  map[string]state
-	jumps   []*[]state
+	s         *scope
+	summaries *storageSummaryCache
+	current   state
+	result    storage
+	labels    map[string]state
+	jumps     []*[]state
 }
 
 func recordSnapshot(w *ownershipFlow, position token.Pos) {

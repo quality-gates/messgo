@@ -7,6 +7,10 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 ## [Unreleased]
 
 ### Changed
+- Reuse callee storage summaries in `explicitness` instead of expanding the
+  call tree at every call site. Summaries preserve argument aliases, captures,
+  caller-specific allocations, named-result types, and strict receiver policy;
+  recursive summaries converge through dependency-driven fixed points (#292).
 - Derived the built-in ruleset catalogue from embedded XML for loading, help,
   and rule-owner resolution. Removed stale repo-root `rulesets/` copies so
   canonical references use current built-ins when run from this repository (#290).

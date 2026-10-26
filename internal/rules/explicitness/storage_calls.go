@@ -30,25 +30,15 @@ func executeStorageCall(w *ownershipFlow, call *ast.CallExpr) bool {
 }
 
 func executeKnownStorageCall(w *ownershipFlow, call *ast.CallExpr, callee *model.Function) {
-	if w.active[callee.Body] {
-		recordCallResult(w, call, ambientStorage)
-		return
-	}
 	child := untrackedScope(callee, w.s.strict, newStorageMutations())
 	child.captures = cloneState(w.current)
-	flow := &ownershipFlow{s: child, current: initialState(child), labels: map[string]state{}, active: maps.Clone(w.active), summaries: w.summaries}
+	flow := &ownershipFlow{s: child, current: initialState(child), labels: map[string]state{}, summaries: w.summaries}
 	bindCallArguments(w, flow, call, callee)
-	entry, dependencies := storageEntry(w.summaries, callee, flow.current)
+	entry, _ := storageEntry(w.summaries, callee, flow.current)
 	entry, inverse := abstractStorageEntry(entry, w.s, call)
-	active := map[*ast.BlockStmt]bool{}
-	for body := range w.active {
-		if dependencies.bodies[body] {
-			active[body] = true
-		}
-	}
-	summary := w.summaries.summarize(flow, callee, entry, active)
+	summary, recursive := w.summaries.summarize(callee, entry, w.s.strict)
 	var mutations *storageMutations
-	flow.current, flow.result, mutations = instantiateStorageSummary(summary, inverse, w.s, call)
+	flow.current, flow.result, mutations = instantiateStorageSummary(summary, inverse, w.s, call, recursive)
 	publishStorageMutations(w.s.mutations, mutations)
 	// The summary contains only reachable entry storage. Preserve unrelated heap.
 	heap := maps.Clone(w.current.heap)
@@ -61,15 +51,14 @@ func executeKnownStorageCall(w *ownershipFlow, call *ast.CallExpr, callee *model
 	recordCallResult(w, call, flow.result)
 }
 
-func computeStorageSummary(flow *ownershipFlow, callee *model.Function, entry state, active map[*ast.BlockStmt]bool) *storageSummary {
+func computeStorageSummary(flow *ownershipFlow, callee *model.Function, entry state) *storageSummary {
 	// Each computation uses an allocation namespace distinct from its inputs.
 	flow.s.context = storageSummaryContext
 	flow.current = cloneState(entry)
-	flow.active[callee.Body] = true
 	recordSnapshot(flow, callee.Body.Pos())
 	walkBlock(flow, callee.Body.List)
 	exit := storageSummaryExit(flow, callee, entry)
-	return &storageSummary{entry: entry, active: active, strict: flow.s.strict, exit: exit, result: flow.result, mutations: visibleStorageMutations(flow.s.mutations, exit), context: flow.s.context}
+	return &storageSummary{entry: entry, strict: flow.s.strict, exit: exit, result: flow.result, mutations: visibleStorageMutations(flow.s.mutations, exit), context: flow.s.context}
 }
 
 func recordCallResult(w *ownershipFlow, call *ast.CallExpr, fact storage) {

@@ -68,6 +68,19 @@ func storageReportFindings(t *testing.T, data []byte) string {
 	return strings.Join(findings, "\n") + "\n"
 }
 
+func TestExplicitnessStorageSummaryKeepsNamedResultTypes(t *testing.T) {
+	const source = `package p
+type S struct { B []int }
+func zero() (s S) { return }
+func Zero() { x := zero(); x.B[0] = 1 }
+`
+	code, findings, stderr := runAddressChild(t, "explicitness", source, "")
+	if code != ExitViolation || stderr != "" {
+		t.Fatalf("exit = %d, stderr = %q", code, stderr)
+	}
+	assertFindings(t, findings, "ImplicitOutput Zero: write through local x")
+}
+
 func TestExplicitnessStorageSummaryKeepsAddressedCaptures(t *testing.T) {
 	const source = `package p
 func set(slot *[]int, items []int) { *slot = items }
@@ -149,6 +162,12 @@ func Loop(items []int) {
  for i:=0;i<2;i++ { node(b,items) }
  b.Next.Next.Items[0]=1
 }
+func allocate(n int) *Box { x := &Box{}; if n > 0 { x.Next = allocate(n-1) }; return x }
+func RecursiveInstances(items []int) {
+ a, b := allocate(2), allocate(2)
+ a.Items = items
+ b.Items[0]++
+}
 `
 	code, findings, stderr := runAddressChild(t, "explicitness", source, "")
 	if code != ExitViolation || stderr != "" {
@@ -160,6 +179,7 @@ func Loop(items []int) {
 		"ImplicitOutput Alias: write through parameter items",
 		"ImplicitOutput node: write through parameter b",
 		"ImplicitOutput Loop: write through local b",
+		"ImplicitOutput RecursiveInstances: write through local b",
 	)
 }
 
@@ -186,30 +206,7 @@ func TestExplicitnessCallFanoutCompletes(t *testing.T) {
 				fmt.Fprintf(&source, "func f%d(%s) { %s f%d(%s); f%d(%s) }\n", i, test.params, test.prolog, i+1, test.args, i+1, test.args)
 			}
 			fmt.Fprintf(&source, "func f16(%s) { %s }\n", test.params, test.leaf)
-			path := filepath.Join(t.TempDir(), "fan.go")
-			if err := os.WriteFile(path, []byte(source.String()), 0o644); err != nil {
-				t.Fatal(err)
-			}
-			ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
-			defer cancel()
-			cmd := exec.CommandContext(ctx, binary, path, "json", "explicitness")
-			cmd.Env = append(os.Environ(), "GOMAXPROCS=1")
-			var stderr bytes.Buffer
-			cmd.Stderr = &stderr
-			start := time.Now()
-			out, err := cmd.Output()
-			var exit *exec.ExitError
-			if !errors.As(err, &exit) || exit.ExitCode() != ExitViolation || stderr.Len() != 0 {
-				t.Fatalf("CLI: %v\nstdout: %s\nstderr: %s", err, out, stderr.String())
-			}
-			// Bound CPU work separately from scheduling delays on shared CI hosts.
-			// The context above also enforces an 8s wall-clock completion deadline.
-			cpu := cmd.ProcessState.UserTime() + cmd.ProcessState.SystemTime()
-			if cpu > time.Second {
-				t.Fatalf("depth-16 fan-out used %s CPU, want under 1s", cpu)
-			}
-			t.Logf("depth-16 fan-out: %s wall, %s CPU", time.Since(start), cpu)
-			findings := explicitnessFindings(t, string(out))
+			findings := storageFanoutFindings(t, binary, source.String())
 			want := test.want
 			for i := 0; i <= 16; i++ {
 				want = append(want, fmt.Sprintf("ImplicitOutput f%d: write through parameter t", i))
@@ -217,4 +214,54 @@ func TestExplicitnessCallFanoutCompletes(t *testing.T) {
 			assertFindings(t, findings, want...)
 		})
 	}
+	for _, graph := range []struct {
+		name, prefixes string
+		last           int
+	}{{"diamond", "ab", 12}, {"ring", "f", 15}} {
+		t.Run(graph.name, func(t *testing.T) {
+			source, err := os.ReadFile(filepath.Join("testdata", "explicitness-summary-"+graph.name+".go"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			findings := storageFanoutFindings(t, binary, string(source))
+			var want []string
+			if graph.name == "diamond" {
+				want = append(want, "ImplicitOutput Run: write through parameter t")
+			}
+			for _, prefix := range graph.prefixes {
+				for i := 0; i <= graph.last; i++ {
+					want = append(want, fmt.Sprintf("ImplicitOutput %c%d: write through parameter t", prefix, i))
+				}
+			}
+			assertFindings(t, findings, want...)
+		})
+	}
+}
+
+func storageFanoutFindings(t *testing.T, binary, source string) []string {
+	t.Helper()
+	path := filepath.Join(t.TempDir(), "fan.go")
+	if err := os.WriteFile(path, []byte(source), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, binary, path, "json", "explicitness")
+	cmd.Env = append(os.Environ(), "GOMAXPROCS=1")
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
+	start := time.Now()
+	out, err := cmd.Output()
+	var exit *exec.ExitError
+	if !errors.As(err, &exit) || exit.ExitCode() != ExitViolation || stderr.Len() != 0 {
+		t.Fatalf("CLI: %v\nstdout: %s\nstderr: %s", err, out, stderr.String())
+	}
+	// Bound work separately from scheduling delays on shared CI hosts. The
+	// context above also enforces an 8s wall-clock completion deadline.
+	cpu := cmd.ProcessState.UserTime() + cmd.ProcessState.SystemTime()
+	if cpu > time.Second {
+		t.Fatalf("call graph used %s CPU, want under 1s", cpu)
+	}
+	t.Logf("call graph: %s wall, %s CPU", time.Since(start), cpu)
+	return explicitnessFindings(t, string(out))
 }

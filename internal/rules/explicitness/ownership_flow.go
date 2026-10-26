@@ -8,7 +8,6 @@ import (
 
 func trackOwnership(s *scope, summaries *storageSummaryCache) {
 	w := &ownershipFlow{s: s, current: initialState(s), labels: map[string]state{}, summaries: summaries}
-	w.active = map[*ast.BlockStmt]bool{s.fn.Body: true}
 	s.ownership = nil
 	recordSnapshot(w, s.fn.Body.Pos())
 	initial := cloneState(w.current)
@@ -41,7 +40,6 @@ type ownershipFlow struct {
 	summaries *storageSummaryCache
 	current   state
 	result    storage
-	active    map[*ast.BlockStmt]bool
 	labels    map[string]state
 	jumps     []*[]state
 }

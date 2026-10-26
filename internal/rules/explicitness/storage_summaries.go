@@ -15,16 +15,22 @@ type storageSummaryCache struct {
 	file         *model.File
 	entries      map[*ast.BlockStmt][]*storageSummary
 	dependencies map[*ast.BlockStmt]*storageDependencies
+	current      *storageSummary
+	stack        []*storageSummary
+	pending      []*storageSummary
+	queued       map[*storageSummary]bool
 }
 
 type storageSummary struct {
-	entry     state
-	active    map[*ast.BlockStmt]bool
-	strict    bool
-	exit      state
-	result    storage
-	mutations *storageMutations
-	context   string
+	entry                  state
+	fn                     *model.Function
+	computing, initialized bool
+	callees, callers       map[*storageSummary]bool
+	strict                 bool
+	exit                   state
+	result                 storage
+	mutations              *storageMutations
+	context                string
 }
 
 type storageDependencies struct {
@@ -37,6 +43,8 @@ func (c *storageSummaryCache) forFile(file *model.File) *storageSummaryCache {
 		c.file = file
 		c.entries = map[*ast.BlockStmt][]*storageSummary{}
 		c.dependencies = map[*ast.BlockStmt]*storageDependencies{}
+		c.queued = map[*storageSummary]bool{}
+		c.current, c.stack, c.pending = nil, nil, nil
 	}
 	return c
 }
@@ -61,11 +69,7 @@ func collectStorageDependencies(fn *model.Function, d *storageDependencies) {
 	ast.Inspect(fn.Body, func(n ast.Node) bool {
 		switch n := n.(type) {
 		case *ast.Ident:
-			if n.Obj != nil {
-				d.objects[n.Obj] = true
-			}
-			// Function values can be bound locally before they are called.
-			collectStorageDependencies(model.ResolveCall(fn, &ast.CallExpr{Fun: n}), d)
+			collectStorageIdentifier(fn, n, d)
 		case *ast.SelectorExpr:
 			// Method values introduce the same recursive dependencies as calls.
 			collectStorageDependencies(model.ResolveCall(fn, &ast.CallExpr{Fun: n}), d)
@@ -80,15 +84,31 @@ func collectStorageDependencies(fn *model.Function, d *storageDependencies) {
 func storageEntry(cache *storageSummaryCache, fn *model.Function, current state) (state, *storageDependencies) {
 	base := cache.depends(fn)
 	d := &storageDependencies{objects: maps.Clone(base.objects), bodies: maps.Clone(base.bodies)}
-	// Callable values can introduce captures outside the statically resolved graph.
-	for _, fact := range current.bindings {
-		addStorageTargets(fact, d)
-	}
-	for _, cells := range current.heap {
-		for _, fact := range cells {
+	// Only this invocation's parameters/results are roots. Transitive callee
+	// locals and parameters are freshly initialized, not inherited captures.
+	addStorageFields(d, fn.Decl.Type.Params)
+	addStorageFields(d, fn.Decl.Type.Results)
+	addStorageFields(d, fn.Decl.Recv)
+	// Discover dynamic callbacks only from storage the callee can reach. An
+	// unrelated inherited function value must not pull in its entire graph.
+	for {
+		entry := projectStorageEntry(current, d)
+		objects, bodies := len(d.objects), len(d.bodies)
+		for _, fact := range entry.bindings {
 			addStorageTargets(fact, d)
 		}
+		for _, cells := range entry.heap {
+			for _, fact := range cells {
+				addStorageTargets(fact, d)
+			}
+		}
+		if objects == len(d.objects) && bodies == len(d.bodies) {
+			return entry, d
+		}
 	}
+}
+
+func projectStorageEntry(current state, d *storageDependencies) state {
 	entry := state{bindings: map[*ast.Object]storage{}, heap: map[allocation]map[string]storage{}, addresses: map[*ast.Object]map[reference]bool{}}
 	for object, fact := range current.bindings {
 		if d.objects[object] {
@@ -100,7 +120,7 @@ func storageEntry(cache *storageSummaryCache, fn *model.Function, current state)
 			}
 		}
 	}
-	return entry, d
+	return entry
 }
 
 func addStorageTargets(fact storage, d *storageDependencies) {
@@ -227,18 +247,9 @@ func sameStorageType(a, b ast.Expr) bool {
 	return false
 }
 
-func (c *storageSummaryCache) summarize(flow *ownershipFlow, callee *model.Function, entry state, active map[*ast.BlockStmt]bool) *storageSummary {
-	if summary := c.lookup(callee.Body, entry, active, flow.s.strict); summary != nil {
-		return summary
-	}
-	summary := computeStorageSummary(flow, callee, entry, active)
-	c.entries[callee.Body] = append(c.entries[callee.Body], summary)
-	return summary
-}
-
-func (c *storageSummaryCache) lookup(body *ast.BlockStmt, entry state, active map[*ast.BlockStmt]bool, strict bool) *storageSummary {
+func (c *storageSummaryCache) lookup(body *ast.BlockStmt, entry state, strict bool) *storageSummary {
 	for _, summary := range c.entries[body] {
-		if summary.strict == strict && maps.Equal(summary.active, active) && sameStorageEntry(summary.entry, entry) {
+		if summary.strict == strict && sameStorageEntry(summary.entry, entry) {
 			return summary
 		}
 	}
@@ -265,13 +276,19 @@ func storageSummaryExit(flow *ownershipFlow, callee *model.Function, entry state
 	return exit
 }
 
-func instantiateStorageSummary(summary *storageSummary, inverse map[allocation]allocation, s *scope, call *ast.CallExpr) (state, storage, *storageMutations) {
+func instantiateStorageSummary(summary *storageSummary, inverse map[allocation]allocation, s *scope, call *ast.CallExpr, recursive bool) (state, storage, *storageMutations) {
 	rename := func(a allocation) allocation {
 		if original, ok := inverse[a]; ok {
 			return original
 		}
 		if strings.HasPrefix(a.context, summary.context) {
-			a.context = callContext(s, call) + strings.TrimPrefix(a.context, summary.context)
+			if recursive {
+				// Recursive SCCs share allocation sites instead of growing an
+				// unbounded invocation string on every fixed-point iteration.
+				a.context = callContext(s, call) + "/recursive"
+			} else {
+				a.context = callContext(s, call) + strings.TrimPrefix(a.context, summary.context)
+			}
 			if a.invocation == nil {
 				a.invocation = call
 			}

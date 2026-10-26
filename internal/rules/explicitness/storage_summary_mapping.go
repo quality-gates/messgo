@@ -52,10 +52,12 @@ func mapStorageState(current state, rename func(allocation) allocation) state {
 	}
 	for _, a := range storageKeys(current.heap) {
 		mapped := rename(a)
-		out.heap[mapped] = map[string]storage{}
+		cells := map[string]storage{}
 		for _, key := range storageKeys(current.heap[a]) {
-			out.heap[mapped][key] = mapStorage(current.heap[a][key], rename)
+			cells[key] = mapStorage(current.heap[a][key], rename)
 		}
+		// Recursive allocation abstraction may merge contexts of one site.
+		out.heap[mapped] = joinCells(out.heap[mapped], cells)
 	}
 	for _, call := range storageKeys(current.calls) {
 		out.calls[call] = mapStorage(current.calls[call], rename)

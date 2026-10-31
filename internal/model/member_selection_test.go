@@ -56,6 +56,10 @@ func use(t T) {
 	if !f.MemberSelectedForType("S", "secret") || f.MemberSelectedForType("T", "secret") {
 		t.Fatal("package selection index was not preferred by typed selection query")
 	}
+	f.PackageMemberSelections = map[MemberKey]bool{}
+	if f.MemberSelectedForType("T", "secret") {
+		t.Fatal("empty package selections should override the file cache")
+	}
 }
 
 func TestSelectedMemberUsesTrackPromotedMembers(t *testing.T) {
@@ -420,9 +424,8 @@ type Chained Leaves
 			if !ok {
 				t.Fatalf("ParseExpr(%q) = %T, want composite literal", tc.expr, expr)
 			}
-			names := map[string]bool{}
 			uses := map[MemberKey]bool{}
-			recorder.recordComposite(lit, names, uses)
+			recorder.recordComposite(lit, uses)
 			if len(uses) != len(tc.want) {
 				t.Fatalf("recordComposite(%q) = %v, want %v", tc.expr, uses, tc.want)
 			}
@@ -515,9 +518,8 @@ func TestUnderlyingTypeEdgeCases(t *testing.T) {
 
 func TestMemberSelectionHelpersHandleMissingSyntax(t *testing.T) {
 	collector := newMemberSelectionCollector(&File{Syntax: &ast.File{}})
-	names := map[string]bool{}
 	uses := map[MemberKey]bool{}
-	collector.collectFunc(&ast.FuncDecl{Type: &ast.FuncType{}}, nil, names, uses)
+	collector.collectFunc(&ast.FuncDecl{Type: &ast.FuncType{}}, nil, uses)
 	collector.scope.addFuncParameters(&ast.FuncDecl{}, map[string]memberVarType{})
 	collector.scope.addFuncLiteralParameters(&ast.FuncLit{}, map[string]memberVarType{})
 	collector.scope.addDeclaration(&ast.DeclStmt{}, map[string]memberVarType{})

@@ -7,6 +7,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 ## [Unreleased]
 
 ### Changed
+- Removed the unused name-only member index and interface-method name cache. Typed member analysis and interface signature matching are unchanged (#165).
 - Reuse callee storage summaries in `explicitness` instead of expanding the
   call tree at every call site. Summaries preserve argument aliases, captures,
   caller-specific allocations, named-result types, and strict receiver policy;

@@ -115,14 +115,12 @@ func annotatePackageGroup(group []*model.File) {
 	sharedGlobals := util.SharedGlobalNames(asts, pkgTypeDefs)
 	globalSharings := util.GlobalSharings(asts, pkgTypeDefs)
 	globalTypes := util.GlobalValueTypes(asts, pkgTypeDefs)
-	pkgMembers := collectPackageMemberNames(group)
 	pkgMemberSelections := collectPackageMemberSelections(group)
 	for _, f := range group {
 		f.MutatedGlobals = mutated
 		f.SharedGlobals = sharedGlobals
 		f.PackageGlobalSharings = globalSharings
 		f.PackageGlobalTypes = globalTypes
-		f.PackageMembers = pkgMembers
 		f.PackageMemberSelections = pkgMemberSelections
 	}
 }
@@ -198,16 +196,6 @@ func hasMethod(methods []*model.Function, fn *model.Function) bool {
 		}
 	}
 	return false
-}
-
-func collectPackageMemberNames(group []*model.File) map[string]bool {
-	members := map[string]bool{}
-	for _, f := range group {
-		for name := range f.SelectedMemberNames() {
-			members[name] = true
-		}
-	}
-	return members
 }
 
 func collectPackageMemberSelections(group []*model.File) map[model.MemberKey]bool {

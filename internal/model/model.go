@@ -102,10 +102,6 @@ type PackageScope struct {
 	// enabling cross-file call return-type resolution. When nil (file analyzed
 	// in isolation), rules fall back to this file's own free functions.
 	PackageFunctions []*Function
-	// PackageMembers holds the legacy name-only selection index across every
-	// file in this file's package. It is populated by the runner for callers
-	// that need the historical name-only query.
-	PackageMembers map[string]bool
 	// PackageMemberSelections holds type-qualified member selections across
 	// every file in this file's package. It is populated by the runner after
 	// parsing, enabling cross-file unused member analysis without collisions
@@ -114,43 +110,14 @@ type PackageScope struct {
 }
 
 type fileAnalysisCache struct {
-	selectedMembersOnce  sync.Once
-	selectedMembers      map[string]bool
-	selectedMemberUses   map[MemberKey]bool
-	packageTypeIndexOnce sync.Once
-	packageTypeIndex     *PackageTypeIndex
-	ifaceMethodsOnce     sync.Once
-	ifaceMethods         map[string]bool
-	ifaceMethodSigs      map[string][]*Function
-	effectiveLOCOnce     sync.Once
-	effectiveLOC         *metrics.EffectiveLOCIndex
-}
-
-// SelectedMemberNames returns a snapshot of field or method names selected or
-// used in struct literals anywhere in this file.
-func (f *File) SelectedMemberNames() map[string]bool {
-	f.collectSelectedMemberNames()
-	return maps.Clone(f.analysis.selectedMembers)
-}
-
-// PackageMemberNames returns a snapshot of field or method names selected
-// anywhere across this file's package (or this file if analyzed in isolation).
-func (f *File) PackageMemberNames() map[string]bool {
-	if f.PackageMembers != nil {
-		return maps.Clone(f.PackageMembers)
-	}
-	return f.SelectedMemberNames()
-}
-
-// MemberSelected reports whether name is selected or used in a struct literal
-// anywhere in this file (or in this file's package if PackageMembers is
-// populated). The file-wide AST scan runs once.
-func (f *File) MemberSelected(name string) bool {
-	if f.PackageMembers != nil {
-		return f.PackageMembers[name]
-	}
-	f.collectSelectedMemberNames()
-	return f.analysis.selectedMembers[name]
+	selectedMemberUsesOnce sync.Once
+	selectedMemberUses     map[MemberKey]bool
+	packageTypeIndexOnce   sync.Once
+	packageTypeIndex       *PackageTypeIndex
+	ifaceMethodsOnce       sync.Once
+	ifaceMethodSigs        map[string][]*Function
+	effectiveLOCOnce       sync.Once
+	effectiveLOC           *metrics.EffectiveLOCIndex
 }
 
 // MemberSelectedForType reports whether name is selected on typeName anywhere
@@ -160,34 +127,22 @@ func (f *File) MemberSelectedForType(typeName, name string) bool {
 	if f.PackageMemberSelections != nil {
 		return f.PackageMemberSelections[key]
 	}
-	f.collectSelectedMemberNames()
+	f.collectSelectedMemberUses()
 	return f.analysis.selectedMemberUses[key]
 }
 
 // SelectedMemberUses returns type-qualified member selections for a file.
 func SelectedMemberUses(f *File) map[MemberKey]bool {
-	f.collectSelectedMemberNames()
+	f.collectSelectedMemberUses()
 	return maps.Clone(f.analysis.selectedMemberUses)
 }
 
-func (f *File) collectSelectedMemberNames() {
-	f.analysis.selectedMembersOnce.Do(func() {
-		f.analysis.selectedMembers, f.analysis.selectedMemberUses = collectSelectedMemberUses(f)
+func (f *File) collectSelectedMemberUses() {
+	f.analysis.selectedMemberUsesOnce.Do(func() {
+		f.analysis.selectedMemberUses = collectSelectedMemberUses(f)
 	})
 }
 
-// InterfaceMethodNames returns the set of method names declared by any
-// interface in this file's package (or this file if analyzed in isolation),
-// including methods inherited through embedded interfaces resolved within the
-// same package. The set is computed at most once per file.
-func (f *File) InterfaceMethodNames() map[string]bool {
-	f.collectInterfaceMethods()
-	return f.analysis.ifaceMethods
-}
-
-// collectInterfaceMethods builds, at most once per file, the set of method
-// names declared by any interface in this file's package, plus the declared
-// methods grouped by name for signature matching.
 func (f *File) collectInterfaceMethods() {
 	f.analysis.ifaceMethodsOnce.Do(func() {
 		ifaces := f.Interfaces
@@ -199,7 +154,6 @@ func (f *File) collectInterfaceMethods() {
 			byName[i.Name] = i
 		}
 		visited := map[string]bool{}
-		names := map[string]bool{}
 		sigs := map[string][]*Function{}
 		var visit func(i *Interface)
 		visit = func(i *Interface) {
@@ -208,7 +162,6 @@ func (f *File) collectInterfaceMethods() {
 			}
 			visited[i.Name] = true
 			for _, m := range i.Methods {
-				names[m.Name] = true
 				sigs[m.Name] = append(sigs[m.Name], m)
 			}
 			for _, e := range i.Embeds {
@@ -220,7 +173,6 @@ func (f *File) collectInterfaceMethods() {
 		for _, i := range ifaces {
 			visit(i)
 		}
-		f.analysis.ifaceMethods = names
 		f.analysis.ifaceMethodSigs = sigs
 	})
 }

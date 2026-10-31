@@ -26,8 +26,7 @@ type memberUseRecorder struct {
 	resolver *memberTypeResolver
 }
 
-func collectSelectedMemberUses(f *File) (map[string]bool, map[MemberKey]bool) {
-	names := map[string]bool{}
+func collectSelectedMemberUses(f *File) map[MemberKey]bool {
 	uses := map[MemberKey]bool{}
 	collector := newMemberSelectionCollector(f)
 	packageTypes := collector.packageTypes(f)
@@ -35,16 +34,16 @@ func collectSelectedMemberUses(f *File) (map[string]bool, map[MemberKey]bool) {
 	ast.Inspect(f.Syntax, func(n ast.Node) bool {
 		switch node := n.(type) {
 		case *ast.FuncDecl:
-			collector.collectFunc(node, packageTypes, names, uses)
+			collector.collectFunc(node, packageTypes, uses)
 			return false
 		case *ast.SelectorExpr:
-			collector.recorder.recordSelector(node, packageTypes, names, uses)
+			collector.recorder.recordSelector(node, packageTypes, uses)
 		case *ast.CompositeLit:
-			collector.recorder.recordComposite(node, names, uses)
+			collector.recorder.recordComposite(node, uses)
 		}
 		return true
 	})
-	return names, uses
+	return uses
 }
 
 func newMemberSelectionCollector(f *File) *memberSelectionCollector {
@@ -112,14 +111,14 @@ func (c *memberSelectionCollector) packageTypes(f *File) map[string]memberVarTyp
 	return types
 }
 
-func (c *memberSelectionCollector) collectFunc(decl *ast.FuncDecl, packageTypes map[string]memberVarType, names map[string]bool, uses map[MemberKey]bool) {
+func (c *memberSelectionCollector) collectFunc(decl *ast.FuncDecl, packageTypes map[string]memberVarType, uses map[MemberKey]bool) {
 	types := cloneMemberTypes(packageTypes)
 	c.scope.addFuncParameters(decl, types)
 	if decl.Body == nil {
 		return
 	}
 	c.scope.collectLocalTypes(decl.Body, types)
-	c.collectBody(decl.Body, types, names, uses)
+	c.collectBody(decl.Body, types, uses)
 }
 
 func cloneMemberTypes(source map[string]memberVarType) map[string]memberVarType {
@@ -276,22 +275,22 @@ func bindRangeVar(target ast.Expr, varType memberVarType, types map[string]membe
 	types[id.Name] = varType
 }
 
-func (c *memberSelectionCollector) collectBody(body ast.Node, types map[string]memberVarType, names map[string]bool, uses map[MemberKey]bool) {
+func (c *memberSelectionCollector) collectBody(body ast.Node, types map[string]memberVarType, uses map[MemberKey]bool) {
 	ast.Inspect(body, func(n ast.Node) bool {
 		switch node := n.(type) {
 		case *ast.FuncLit:
 			nestedTypes := cloneMemberTypes(types)
 			c.scope.addFuncLiteralParameters(node, nestedTypes)
 			c.scope.collectLocalTypes(node.Body, nestedTypes)
-			c.collectBody(node.Body, nestedTypes, names, uses)
+			c.collectBody(node.Body, nestedTypes, uses)
 			return false
 		case *ast.TypeSwitchStmt:
-			c.collectTypeSwitch(node, types, names, uses)
+			c.collectTypeSwitch(node, types, uses)
 			return false
 		case *ast.SelectorExpr:
-			c.recorder.recordSelector(node, types, names, uses)
+			c.recorder.recordSelector(node, types, uses)
 		case *ast.CompositeLit:
-			c.recorder.recordComposite(node, names, uses)
+			c.recorder.recordComposite(node, uses)
 		}
 		return true
 	})
@@ -300,15 +299,15 @@ func (c *memberSelectionCollector) collectBody(body ast.Node, types map[string]m
 // collectTypeSwitch binds the switch variable of `switch v := x.(type)` to the
 // case type inside each single-type clause; in any other clause v keeps the
 // type of x, which is unknown here, so it is unbound.
-func (c *memberSelectionCollector) collectTypeSwitch(stmt *ast.TypeSwitchStmt, types map[string]memberVarType, names map[string]bool, uses map[MemberKey]bool) {
+func (c *memberSelectionCollector) collectTypeSwitch(stmt *ast.TypeSwitchStmt, types map[string]memberVarType, uses map[MemberKey]bool) {
 	if stmt.Init != nil {
-		c.collectBody(stmt.Init, types, names, uses)
+		c.collectBody(stmt.Init, types, uses)
 	}
-	c.collectBody(stmt.Assign, types, names, uses)
+	c.collectBody(stmt.Assign, types, uses)
 	bound := typeSwitchVar(stmt)
 	for _, clause := range stmt.Body.List {
 		cc := clause.(*ast.CaseClause)
-		c.collectBody(cc, clauseTypes(types, bound, cc), names, uses)
+		c.collectBody(cc, clauseTypes(types, bound, cc), uses)
 	}
 }
 
@@ -335,9 +334,8 @@ func (c *memberScopeCollector) addFuncLiteralParameters(lit *ast.FuncLit, types 
 	addNamedFieldTypes(lit.Type.Params.List, types)
 }
 
-func (c *memberUseRecorder) recordSelector(sel *ast.SelectorExpr, types map[string]memberVarType, names map[string]bool, uses map[MemberKey]bool) {
+func (c *memberUseRecorder) recordSelector(sel *ast.SelectorExpr, types map[string]memberVarType, uses map[MemberKey]bool) {
 	name := sel.Sel.Name
-	names[name] = true
 	if typeName := c.resolver.expressionType(sel.X, types); typeName != "" {
 		uses[MemberKey{Type: typeName, Name: name}] = true
 		for _, key := range c.resolver.promotedMemberPath(typeName, name) {
@@ -346,37 +344,37 @@ func (c *memberUseRecorder) recordSelector(sel *ast.SelectorExpr, types map[stri
 	}
 }
 
-func (c *memberUseRecorder) recordComposite(lit *ast.CompositeLit, names map[string]bool, uses map[MemberKey]bool) {
-	c.recordCompositeWithType(lit, lit.Type, names, uses)
+func (c *memberUseRecorder) recordComposite(lit *ast.CompositeLit, uses map[MemberKey]bool) {
+	c.recordCompositeWithType(lit, lit.Type, uses)
 }
 
-func (c *memberUseRecorder) recordChildElement(expr ast.Expr, expectedType ast.Expr, names map[string]bool, uses map[MemberKey]bool) {
+func (c *memberUseRecorder) recordChildElement(expr ast.Expr, expectedType ast.Expr, uses map[MemberKey]bool) {
 	if childLit, ok := expr.(*ast.CompositeLit); ok && childLit.Type == nil {
-		c.recordCompositeWithType(childLit, expectedType, names, uses)
+		c.recordCompositeWithType(childLit, expectedType, uses)
 	}
 }
 
-func (c *memberUseRecorder) recordCompositeWithType(lit *ast.CompositeLit, typeExpr ast.Expr, names map[string]bool, uses map[MemberKey]bool) {
-	if c.recordCollection(lit, typeExpr, names, uses) {
+func (c *memberUseRecorder) recordCompositeWithType(lit *ast.CompositeLit, typeExpr ast.Expr, uses map[MemberKey]bool) {
+	if c.recordCollection(lit, typeExpr, uses) {
 		return
 	}
 	typeName := memberTypeName(typeExpr)
-	if recordKeyedMembers(lit, typeName, names, uses) {
+	if recordKeyedMembers(lit, typeName, uses) {
 		return
 	}
 	if len(lit.Elts) == 0 || typeName == "" {
 		return
 	}
-	c.recordUnkeyedMembers(typeName, lit, names, uses)
+	c.recordUnkeyedMembers(typeName, lit, uses)
 }
 
-func (c *memberUseRecorder) recordCollection(lit *ast.CompositeLit, typeExpr ast.Expr, names map[string]bool, uses map[MemberKey]bool) bool {
+func (c *memberUseRecorder) recordCollection(lit *ast.CompositeLit, typeExpr ast.Expr, uses map[MemberKey]bool) bool {
 	switch t := c.underlyingType(typeExpr).(type) {
 	case *ast.ArrayType:
-		c.recordArrayElements(lit, t.Elt, names, uses)
+		c.recordArrayElements(lit, t.Elt, uses)
 		return true
 	case *ast.MapType:
-		c.recordMapElements(lit, t.Key, t.Value, names, uses)
+		c.recordMapElements(lit, t.Key, t.Value, uses)
 		return true
 	default:
 		return false
@@ -423,25 +421,25 @@ func collectFromFile(syntax *ast.File, defs map[string]ast.Expr) {
 	}
 }
 
-func (c *memberUseRecorder) recordArrayElements(lit *ast.CompositeLit, eltType ast.Expr, names map[string]bool, uses map[MemberKey]bool) {
+func (c *memberUseRecorder) recordArrayElements(lit *ast.CompositeLit, eltType ast.Expr, uses map[MemberKey]bool) {
 	for _, elt := range lit.Elts {
 		if kv, ok := elt.(*ast.KeyValueExpr); ok {
 			elt = kv.Value
 		}
-		c.recordChildElement(elt, eltType, names, uses)
+		c.recordChildElement(elt, eltType, uses)
 	}
 }
 
-func (c *memberUseRecorder) recordMapElements(lit *ast.CompositeLit, keyType, valType ast.Expr, names map[string]bool, uses map[MemberKey]bool) {
+func (c *memberUseRecorder) recordMapElements(lit *ast.CompositeLit, keyType, valType ast.Expr, uses map[MemberKey]bool) {
 	for _, elt := range lit.Elts {
 		if kv, ok := elt.(*ast.KeyValueExpr); ok {
-			c.recordChildElement(kv.Key, keyType, names, uses)
-			c.recordChildElement(kv.Value, valType, names, uses)
+			c.recordChildElement(kv.Key, keyType, uses)
+			c.recordChildElement(kv.Value, valType, uses)
 		}
 	}
 }
 
-func recordKeyedMembers(lit *ast.CompositeLit, typeName string, names map[string]bool, uses map[MemberKey]bool) bool {
+func recordKeyedMembers(lit *ast.CompositeLit, typeName string, uses map[MemberKey]bool) bool {
 	keyed := false
 	for _, elt := range lit.Elts {
 		kv, ok := elt.(*ast.KeyValueExpr)
@@ -449,29 +447,27 @@ func recordKeyedMembers(lit *ast.CompositeLit, typeName string, names map[string
 			continue
 		}
 		keyed = true
-		recordKeyedMember(kv, typeName, names, uses)
+		recordKeyedMember(kv, typeName, uses)
 	}
 	return keyed
 }
 
-func recordKeyedMember(kv *ast.KeyValueExpr, typeName string, names map[string]bool, uses map[MemberKey]bool) {
+func recordKeyedMember(kv *ast.KeyValueExpr, typeName string, uses map[MemberKey]bool) {
 	id, ok := kv.Key.(*ast.Ident)
 	if !ok {
 		return
 	}
-	names[id.Name] = true
 	if typeName != "" {
 		uses[MemberKey{Type: typeName, Name: id.Name}] = true
 	}
 }
 
-func (c *memberUseRecorder) recordUnkeyedMembers(typeName string, lit *ast.CompositeLit, names map[string]bool, uses map[MemberKey]bool) {
+func (c *memberUseRecorder) recordUnkeyedMembers(typeName string, lit *ast.CompositeLit, uses map[MemberKey]bool) {
 	class := c.resolver.classes[typeName]
 	if class == nil {
 		return
 	}
 	for _, field := range class.Fields {
-		names[field.Name] = true
 		uses[MemberKey{Type: typeName, Name: field.Name}] = true
 	}
 }

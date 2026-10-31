@@ -248,13 +248,12 @@ func use(x int) {
 	if !mutated["global"] {
 		t.Fatalf("MutatedPackageGlobals() = %v, want global", mutated)
 	}
-	selected := f.SelectedMemberNames()
-	if !selected["used"] {
-		t.Fatalf("SelectedMemberNames() = %v, want used", selected)
+	if !f.MemberSelectedForType("item", "used") {
+		t.Fatal("item.used should be selected")
 	}
 }
 
-func TestSelectedMemberNamesIgnoresMapKeys(t *testing.T) {
+func TestSelectedMemberUsesIgnoresMapKeys(t *testing.T) {
 	f, err := ParseSource("query.go", []byte(`package sample
 const key = 1
 type T struct { key int }
@@ -263,12 +262,12 @@ func f() { _ = map[int]int{key: 2} }
 	if err != nil {
 		t.Fatal(err)
 	}
-	if f.SelectedMemberNames()["key"] {
+	if f.MemberSelectedForType("T", "key") {
 		t.Fatal("map key counted as a struct member use")
 	}
 }
 
-func TestSelectedMemberNamesTracksUnkeyedLocalStructFields(t *testing.T) {
+func TestSelectedMemberUsesTracksUnkeyedLocalStructFields(t *testing.T) {
 	f, err := ParseSource("query.go", []byte(`package sample
 import "image"
 
@@ -308,20 +307,19 @@ var _ = unknown{1}
 	if err != nil {
 		t.Fatal(err)
 	}
-	selected := f.SelectedMemberNames()
-	for _, name := range []string{"typ", "ptr", "first", "second", "left", "right"} {
-		if !selected[name] {
-			t.Errorf("SelectedMemberNames()[%q] = false, want true", name)
+	for _, key := range []MemberKey{{"key", "typ"}, {"key", "ptr"}, {"generic", "first"}, {"generic", "second"}, {"pair", "left"}, {"pair", "right"}} {
+		if !f.MemberSelectedForType(key.Type, key.Name) {
+			t.Errorf("%v should be selected", key)
 		}
 	}
-	for _, name := range []string{"otherField", "field"} {
-		if selected[name] {
-			t.Errorf("SelectedMemberNames()[%q] = true, want false", name)
+	for _, key := range []MemberKey{{"other", "otherField"}, {"empty", "field"}} {
+		if f.MemberSelectedForType(key.Type, key.Name) {
+			t.Errorf("%v should not be selected", key)
 		}
 	}
 }
 
-func TestSelectedMemberNamesUsesPackageStructsForUnkeyedLiterals(t *testing.T) {
+func TestSelectedMemberUsesUsesPackageStructsForUnkeyedLiterals(t *testing.T) {
 	use, err := ParseSource("use.go", []byte(`package sample
 var _ = key{1, 2}
 `))
@@ -338,9 +336,8 @@ type key struct {
 		t.Fatal(err)
 	}
 	use.PackageClasses = declaration.Classes
-	selected := use.SelectedMemberNames()
-	if !selected["first"] || !selected["second"] {
-		t.Fatalf("SelectedMemberNames() = %v, want package-declared key fields", selected)
+	if !use.MemberSelectedForType("key", "first") || !use.MemberSelectedForType("key", "second") {
+		t.Fatal("package-declared key fields should be selected")
 	}
 }
 

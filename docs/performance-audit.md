@@ -3,6 +3,8 @@
 Audit date: 2026-08-27
 Audited revision: `aa0f132` (`Fix silent gates, false findings, and broken report contracts (#37)`)
 
+The findings and call paths below describe that revision, not the current code.
+
 ## Scope and seams
 
 The audit follows the caller-visible `messgo <paths> <format> <ruleset>` path. It

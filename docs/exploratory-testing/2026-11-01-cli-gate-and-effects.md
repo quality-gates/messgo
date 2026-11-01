@@ -15,23 +15,24 @@ bash docs/exploratory-testing/evidence-2026-11-01/replay.sh /absolute/path/to/me
 ```
 
 Two runs in separate empty directories produced identical output after
-normalizing the JSON timestamps. The script runs commands in the foreground
-and removes any jobs it starts on exit.
+normalizing the JSON timestamps. The [second capture](evidence-2026-11-01/output-second.txt)
+and [comparison](evidence-2026-11-01/comparison.txt) preserve that check.
+The script runs commands in the foreground.
 
 ## Gate a Go module
 
 The goal was to run the recommended `go` policy before a PR, as described in
 [the README](../../README.md). The fixture included a normal file, a test, a
-Windows-only file, and a generated subdirectory.
+Windows-only file, and a subdirectory named `gen`.
 
-- `./... text go --ignore-tests` reported the ordinary and generated files,
+- `./... text go --ignore-tests` reported the ordinary file and `gen/code.go`,
   skipped the test and Windows file, and exited 2.
 - Removing `--ignore-tests` added the test finding. Naming the Windows file
   explicitly reported its finding despite the host build constraint.
 - A team ruleset excluded `DevelopmentCodeFragment` and returned exit 0.
   A second ruleset kept that rule but excluded `*/gen/*`. The directory scan
-  reported only the ordinary file, and the explicitly named generated file was
-  also excluded.
+  reported only the ordinary file, and the explicitly named `gen/code.go` was
+  also excluded. The fixture does not contain a Go generated-code marker.
 
 ## Write and replace a CI report
 
@@ -39,12 +40,12 @@ The goal was to save a machine-readable report with `--reportfile`, as
 [usage](../usage.md) describes. JSON output created a missing `reports`
 directory, left stdout empty, contained both findings, and exited 2. After the
 ordinary file was corrected, a second invocation replaced the report. The new
-file contained only the generated-file finding.
+file contained only the `gen/code.go` finding.
 
 A malformed Go file produced a JSON `errors` entry and exit 3, even with a
 separate finding. Adding `--ignore-errors-on-exit` retained the error in the
-report and returned exit 2 for the remaining violation. The observed result
-matches the documented exit precedence.
+report and returned exit 2 for the remaining violation. The documented exit
+precedence puts parse errors ahead of findings.
 
 ## Classify implicit effects
 
@@ -63,14 +64,17 @@ receiver methods.
 
 These observations also exercise the previously reported receiver and alias
 cases in [#277](https://github.com/quality-gates/messgo/issues/277) and
-[#279](https://github.com/quality-gates/messgo/issues/279). They do not
-reproduce those closed issues on this build.
+[#279](https://github.com/quality-gates/messgo/issues/279). The receiver
+and alias examples in this pass did not reproduce those closed issues.
 
 ## Findings and limits
 
 No bugs were confirmed, and no new issues were filed. The open and closed issue
-list and the `wontfix` label were checked before reporting. There were no
-unresolved product observations in the exercised cases.
+list and the `wontfix` label were checked before reporting. One documentation
+ambiguity remains unresolved. The options table says `--ignore-errors-on-exit`
+returns 0 even if parse errors occur, while the run returned 2 because a finding
+remained. The table does not say whether violations still affect that exit code.
+This was not filed as a confirmed bug.
 
 The initial `go mod download -mod=readonly` attempt failed because `download`
 does not accept that flag. Retrying with `GOFLAGS=-mod=readonly` succeeded.
@@ -82,7 +86,14 @@ original run. An attempt to use the host `/tmp` for Go build files hit its
 user quota. The compiled hook tests instead used a temporary directory in
 `/dev/shm`, which was removed after the run. Build and module caches remained
 inside the worktree. `go build ./...` and self-analysis with
-`go,codesize --ignore-tests` passed.
+`go,codesize --ignore-tests` passed. [Verification output](evidence-2026-11-01/verification.txt)
+records the Go version, test results, and self-analysis result. The hook test's
+sensitivity to a temporary directory inside a Git repository remains a testing
+tool observation, not a CLI finding.
+
+The local commit and push hooks were bypassed because `gocyclo`, `ineffassign`,
+and `mutago` were absent and are not locked project dependencies. The PR's CI
+checks provide the remote verification.
 
 The Homebrew release, Docker image, remote CI annotation upload, other report
 formats, and broad third-party codebases were not exercised. No servers,

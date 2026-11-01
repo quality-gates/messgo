@@ -1,0 +1,36 @@
+$ go version
+go version go1.26.8 linux/amd64
+$ git rev-parse origin/main
+f929dc84effb8a0797579f878001cd14b2f98af0
+$ go test ./... with GOTMPDIR inside worktree
+?   	github.com/quality-gates/messgo/cmd/messgo	[no test files]
+--- FAIL: TestPreCommitClearsGitEnvironment (0.08s)
+    pre_commit_test.go:88: hook rejected a clean staged tree with hook git variables: exit status 1
+        git environment leaked
+FAIL
+FAIL	github.com/quality-gates/messgo/githooks	0.682s
+ok  	github.com/quality-gates/messgo/internal/cli	25.909s
+ok  	github.com/quality-gates/messgo/internal/metrics	0.017s
+ok  	github.com/quality-gates/messgo/internal/model	0.020s
+ok  	github.com/quality-gates/messgo/internal/model/controlflow	0.013s
+ok  	github.com/quality-gates/messgo/internal/report	0.017s
+ok  	github.com/quality-gates/messgo/internal/rule	0.006s
+ok  	github.com/quality-gates/messgo/internal/rules	0.264s
+ok  	github.com/quality-gates/messgo/internal/rules/cleancode	0.007s
+ok  	github.com/quality-gates/messgo/internal/rules/codesize	0.012s
+ok  	github.com/quality-gates/messgo/internal/rules/controversial	0.009s
+ok  	github.com/quality-gates/messgo/internal/rules/design	0.007s
+?   	github.com/quality-gates/messgo/internal/rules/explicitness	[no test files]
+ok  	github.com/quality-gates/messgo/internal/rules/naming	0.012s
+ok  	github.com/quality-gates/messgo/internal/rules/opinionated	0.013s
+ok  	github.com/quality-gates/messgo/internal/rules/unusedcode	0.018s
+ok  	github.com/quality-gates/messgo/internal/ruleset	0.616s
+ok  	github.com/quality-gates/messgo/internal/runner	0.056s
+ok  	github.com/quality-gates/messgo/internal/util	0.008s
+?   	github.com/quality-gates/messgo/internal/version	[no test files]
+FAIL
+$ compiled githooks.test with TMPDIR outside worktree
+    --- PASS: TestPreCommitBlocksStagedFailures/go_test (0.11s)
+PASS
+$ messgo ./internal text go,codesize --ignore-tests
+exit=0 stdout_bytes=0

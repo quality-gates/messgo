@@ -56,6 +56,11 @@ EOF
 run ./... text filter.xml --ignore-tests
 run gen/code.go text filter.xml
 run ./... json go --ignore-tests --reportfile reports/result.json
+set +e
+"$binary" ./... json go --ignore-tests --reportfile reports/result.json > "$root/stdout.txt" 2> "$root/stderr.txt"
+status=$?
+set -e
+printf 'separate streams: exit=%s stdout_bytes=%s stderr_bytes=%s\n' "$status" "$(wc -c < "$root/stdout.txt")" "$(wc -c < "$root/stderr.txt")"
 printf '\n$ python3 inspect report\n'
 python3 - <<'PY'
 import json

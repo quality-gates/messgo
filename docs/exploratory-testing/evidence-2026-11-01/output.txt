@@ -26,12 +26,13 @@ exit=0
 
 $ messgo ./... json go --ignore-tests --reportfile reports/result.json
 exit=2
+separate streams: exit=2 stdout_bytes=0 stderr_bytes=0
 
 $ python3 inspect report
 {
   "version": "dev",
   "package": "messgo",
-  "timestamp": "2026-11-01T17:31:29Z",
+  "timestamp": "2026-11-01T17:36:09Z",
   "files": [
     {
       "file": "gen/code.go",
@@ -79,7 +80,7 @@ $ python3 inspect overwritten report
 {
   "version": "dev",
   "package": "messgo",
-  "timestamp": "2026-11-01T17:31:29Z",
+  "timestamp": "2026-11-01T17:36:09Z",
   "files": [
     {
       "file": "gen/code.go",
@@ -106,7 +107,7 @@ $ messgo ./... json go --ignore-tests
 {
     "version": "dev",
     "package": "messgo",
-    "timestamp": "2026-11-01T17:31:29Z",
+    "timestamp": "2026-11-01T17:36:09Z",
     "files": [
         {
             "file": "gen/code.go",
@@ -140,7 +141,7 @@ $ messgo ./... json go --ignore-tests --ignore-errors-on-exit
 {
     "version": "dev",
     "package": "messgo",
-    "timestamp": "2026-11-01T17:31:29Z",
+    "timestamp": "2026-11-01T17:36:10Z",
     "files": [
         {
             "file": "gen/code.go",

@@ -1,0 +1,202 @@
+
+$ messgo ./... text go --ignore-tests
+gen/code.go:2  DevelopmentCodeFragment  The function Generated() calls the typical debug function println() which is mostly only used during development.
+main.go:3      DevelopmentCodeFragment  The function Work() calls the typical debug function println() which is mostly only used during development.
+exit=2
+
+$ messgo ./... text go
+gen/code.go:2   DevelopmentCodeFragment  The function Generated() calls the typical debug function println() which is mostly only used during development.
+main.go:3       DevelopmentCodeFragment  The function Work() calls the typical debug function println() which is mostly only used during development.
+main_test.go:2  DevelopmentCodeFragment  The function TestDebug() calls the typical debug function println() which is mostly only used during development.
+exit=2
+
+$ messgo os_windows.go text go
+os_windows.go:2  DevelopmentCodeFragment  The function Windows() calls the typical debug function println() which is mostly only used during development.
+exit=2
+
+$ messgo ./... text policy.xml --ignore-tests
+exit=0
+
+$ messgo ./... text filter.xml --ignore-tests
+main.go:3  DevelopmentCodeFragment  The function Work() calls the typical debug function println() which is mostly only used during development.
+exit=2
+
+$ messgo gen/code.go text filter.xml
+exit=0
+
+$ messgo ./... json go --ignore-tests --reportfile reports/result.json
+exit=2
+separate streams: exit=2 stdout_bytes=0 stderr_bytes=0
+
+$ python3 inspect report
+{
+  "version": "dev",
+  "package": "messgo",
+  "timestamp": "2026-11-01T17:36:09Z",
+  "files": [
+    {
+      "file": "gen/code.go",
+      "violations": [
+        {
+          "beginLine": 2,
+          "endLine": 2,
+          "package": "gen",
+          "function": "Generated",
+          "class": "",
+          "method": "",
+          "description": "The function Generated() calls the typical debug function println() which is mostly only used during development.",
+          "rule": "DevelopmentCodeFragment",
+          "ruleSet": "Design Rules",
+          "externalInfoUrl": "https://phpmd.org/rules/design.html#developmentcodefragment",
+          "priority": 2
+        }
+      ]
+    },
+    {
+      "file": "main.go",
+      "violations": [
+        {
+          "beginLine": 3,
+          "endLine": 3,
+          "package": "quality",
+          "function": "Work",
+          "class": "",
+          "method": "",
+          "description": "The function Work() calls the typical debug function println() which is mostly only used during development.",
+          "rule": "DevelopmentCodeFragment",
+          "ruleSet": "Design Rules",
+          "externalInfoUrl": "https://phpmd.org/rules/design.html#developmentcodefragment",
+          "priority": 2
+        }
+      ]
+    }
+  ]
+}
+
+$ messgo ./... json go --ignore-tests --reportfile reports/result.json
+exit=2
+
+$ python3 inspect overwritten report
+{
+  "version": "dev",
+  "package": "messgo",
+  "timestamp": "2026-11-01T17:36:09Z",
+  "files": [
+    {
+      "file": "gen/code.go",
+      "violations": [
+        {
+          "beginLine": 2,
+          "endLine": 2,
+          "package": "gen",
+          "function": "Generated",
+          "class": "",
+          "method": "",
+          "description": "The function Generated() calls the typical debug function println() which is mostly only used during development.",
+          "rule": "DevelopmentCodeFragment",
+          "ruleSet": "Design Rules",
+          "externalInfoUrl": "https://phpmd.org/rules/design.html#developmentcodefragment",
+          "priority": 2
+        }
+      ]
+    }
+  ]
+}
+
+$ messgo ./... json go --ignore-tests
+{
+    "version": "dev",
+    "package": "messgo",
+    "timestamp": "2026-11-01T17:36:09Z",
+    "files": [
+        {
+            "file": "gen/code.go",
+            "violations": [
+                {
+                    "beginLine": 2,
+                    "endLine": 2,
+                    "package": "gen",
+                    "function": "Generated",
+                    "class": "",
+                    "method": "",
+                    "description": "The function Generated() calls the typical debug function println() which is mostly only used during development.",
+                    "rule": "DevelopmentCodeFragment",
+                    "ruleSet": "Design Rules",
+                    "externalInfoUrl": "https://phpmd.org/rules/design.html#developmentcodefragment",
+                    "priority": 2
+                }
+            ]
+        }
+    ],
+    "errors": [
+        {
+            "fileName": "bad.go",
+            "message": "bad.go:2:14: expected ')', found '{' (and 3 more errors)"
+        }
+    ]
+}
+exit=3
+
+$ messgo ./... json go --ignore-tests --ignore-errors-on-exit
+{
+    "version": "dev",
+    "package": "messgo",
+    "timestamp": "2026-11-01T17:36:10Z",
+    "files": [
+        {
+            "file": "gen/code.go",
+            "violations": [
+                {
+                    "beginLine": 2,
+                    "endLine": 2,
+                    "package": "gen",
+                    "function": "Generated",
+                    "class": "",
+                    "method": "",
+                    "description": "The function Generated() calls the typical debug function println() which is mostly only used during development.",
+                    "rule": "DevelopmentCodeFragment",
+                    "ruleSet": "Design Rules",
+                    "externalInfoUrl": "https://phpmd.org/rules/design.html#developmentcodefragment",
+                    "priority": 2
+                }
+            ]
+        }
+    ],
+    "errors": [
+        {
+            "fileName": "bad.go",
+            "message": "bad.go:2:14: expected ')', found '{' (and 3 more errors)"
+        }
+    ]
+}
+exit=2
+
+$ messgo ./... text go --only DevelopmentCodeFragment --ignore-tests
+gen/code.go:2  DevelopmentCodeFragment  The function Generated() calls the typical debug function println() which is mostly only used during development.
+exit=2
+
+$ messgo effects.go text explicitness
+effects.go:4   ImplicitOutput  The function Set() has an implicit output: package variable global. Return it instead.
+effects.go:5   ImplicitInput   The function Get() has an implicit input: package variable global. Pass it in as an argument.
+effects.go:7   ImplicitOutput  The function Alias() has an implicit output: write through parameter p. Return it instead.
+effects.go:9   UnknownEffect   The function Apply() has an unknown effect: unresolved call. Analyze the callee before classifying it as a calculation.
+effects.go:11  UnknownEffect   The method Inc() has an unknown effect: receiver effect. Analyze the callee before classifying it as a calculation.
+effects.go:12  UnknownEffect   The method Read() has an unknown effect: receiver effect. Analyze the callee before classifying it as a calculation.
+exit=2
+
+$ messgo effects.go text explicitness-strict
+effects.go:4   ImplicitOutput  The function Set() has an implicit output: package variable global. Return it instead.
+effects.go:5   ImplicitInput   The function Get() has an implicit input: package variable global. Pass it in as an argument.
+effects.go:7   ImplicitOutput  The function Alias() has an implicit output: write through parameter p. Return it instead.
+effects.go:9   UnknownEffect   The function Apply() has an unknown effect: unresolved call. Analyze the callee before classifying it as a calculation.
+effects.go:11  ImplicitInput   The method Inc() has an implicit input: receiver field N. Pass it in as an argument.
+effects.go:11  ImplicitOutput  The method Inc() has an implicit output: receiver field N. Return it instead.
+effects.go:12  ImplicitInput   The method Read() has an implicit input: receiver field N. Pass it in as an argument.
+exit=2
+
+$ messgo effects.go json explicitness --only ImplicitOutput --reportfile result.json
+exit=2
+
+$ python3 inspect effect report
+Set ImplicitOutput The function Set() has an implicit output: package variable global. Return it instead.
+Alias ImplicitOutput The function Alias() has an implicit output: write through parameter p. Return it instead.

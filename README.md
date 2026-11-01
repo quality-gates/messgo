@@ -146,7 +146,8 @@ Exploratory testing: [2026-09-19 CLI journeys](docs/exploratory-testing/2026-09-
 [2026-09-26 rules and metrics](docs/exploratory-testing/2026-09-26-rules-and-metrics.md),
 [2026-10-03 type semantics and metrics](docs/exploratory-testing/2026-10-03-type-semantics-and-metrics.md),
 [2026-10-10 naming and report context](docs/exploratory-testing/2026-10-10-naming-and-report-context.md),
-[2026-10-17 gate, explicitness, and Docker](docs/exploratory-testing/2026-10-17-gate-explicitness-docker.md).
+[2026-10-17 gate, explicitness, and Docker](docs/exploratory-testing/2026-10-17-gate-explicitness-docker.md),
+[2026-11-01 CLI gate and effects](docs/exploratory-testing/2026-11-01-cli-gate-and-effects.md).
 
 Development checks:
 

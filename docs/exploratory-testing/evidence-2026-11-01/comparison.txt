@@ -1,0 +1,4 @@
+Normalize ISO 8601 timestamps in output.txt and output-second.txt.
+output.txt sha256: 610f47e7d017b8dab6944521d3dd9e712592d7d4d0d4b3e0a8970a2b875bf48f
+output-second.txt sha256: 610f47e7d017b8dab6944521d3dd9e712592d7d4d0d4b3e0a8970a2b875bf48f
+equal: True

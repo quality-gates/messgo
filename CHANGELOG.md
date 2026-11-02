@@ -6,6 +6,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 
 ## [Unreleased]
 
+## [0.5.12] - 2026-11-02
+
 ### Added
 - Added an exploratory report and replay for the CLI gate, JSON reports, and explicitness rulesets.
 

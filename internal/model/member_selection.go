@@ -597,55 +597,136 @@ func resolveSelectorCall(r *memberTypeResolver, sel *ast.SelectorExpr, types map
 	return functionResultTypes(method)
 }
 
+type selectedMember struct {
+	memberType memberVarType
+	method     *Function
+	path       []MemberKey
+}
+
+type embeddedMemberSearch struct {
+	typeName string
+	path     []MemberKey
+	multiple bool
+}
+
+type selectionState int
+
+const (
+	selectionAbsent selectionState = iota
+	selectionFound
+	selectionAmbiguous
+)
+
+type selectionLevel struct {
+	selected selectedMember
+	state    selectionState
+	next     []embeddedMemberSearch
+}
+
 func lookupMethod(classes map[string]*Class, ifaces map[string]*Interface, typeName, methodName string, visiting map[string]bool) *Function {
-	if visiting[typeName] {
+	selected, ok := selectMember(classes, ifaces, typeName, methodName, visiting)
+	if !ok {
+		return nil
+	}
+	return selected.method
+}
+
+func selectMember(classes map[string]*Class, ifaces map[string]*Interface, typeName, memberName string, visiting map[string]bool) (selectedMember, bool) {
+	queue := []embeddedMemberSearch{{typeName: typeName}}
+	for len(queue) > 0 {
+		level := selectMemberLevel(classes, ifaces, queue, memberName, visiting)
+		switch level.state {
+		case selectionAmbiguous:
+			return selectedMember{}, false
+		case selectionFound:
+			return level.selected, true
+		}
+		queue = level.next
+	}
+	return selectedMember{}, false
+}
+
+func selectMemberLevel(classes map[string]*Class, ifaces map[string]*Interface, queue []embeddedMemberSearch, memberName string, visiting map[string]bool) selectionLevel {
+	var level selectionLevel
+	nextIndex := map[string]int{}
+	for _, node := range queue {
+		if visiting[node.typeName] {
+			continue
+		}
+		visiting[node.typeName] = true
+		if member, ok := directSelection(classes, ifaces, node, memberName); ok {
+			if level.state == selectionFound || node.multiple {
+				return selectionLevel{state: selectionAmbiguous}
+			}
+			level.selected, level.state = member, selectionFound
+			continue
+		}
+		level.next = appendEmbeddedSearches(classes[node.typeName], node, level.next, nextIndex)
+	}
+	return level
+}
+
+func directSelection(classes map[string]*Class, ifaces map[string]*Interface, node embeddedMemberSearch, memberName string) (selectedMember, bool) {
+	if class := classes[node.typeName]; class != nil {
+		for _, field := range class.Fields {
+			if field.Name == memberName {
+				return selectedMember{memberType: memberVarTypeOf(field.TypeExpr), path: memberPath(node, memberName)}, true
+			}
+		}
+		for _, method := range class.Methods {
+			if method.Name == memberName {
+				return selectedMember{memberType: functionResultType(method), method: method, path: memberPath(node, memberName)}, true
+			}
+		}
+	}
+	if method := interfaceMethod(ifaces, node.typeName, memberName, map[string]bool{}); method != nil {
+		return selectedMember{memberType: functionResultType(method), method: method, path: memberPath(node, memberName)}, true
+	}
+	return selectedMember{}, false
+}
+
+func interfaceMethod(ifaces map[string]*Interface, typeName, methodName string, visiting map[string]bool) *Function {
+	iface := ifaces[typeName]
+	if iface == nil || visiting[typeName] {
 		return nil
 	}
 	visiting[typeName] = true
-
-	if class := classes[typeName]; class != nil {
-		if method := classMethod(classes, ifaces, class, methodName, visiting); method != nil {
-			return method
-		}
-	}
-	if iface := ifaces[typeName]; iface != nil {
-		if method := interfaceMethod(classes, ifaces, iface, methodName, visiting); method != nil {
-			return method
-		}
-	}
-	return nil
-}
-
-func classMethod(classes map[string]*Class, ifaces map[string]*Interface, class *Class, methodName string, visiting map[string]bool) *Function {
-	for _, method := range class.Methods {
-		if method.Name == methodName {
-			return method
-		}
-	}
-	for _, field := range class.Fields {
-		if field.Ident != nil {
-			continue
-		}
-		embeddedType := memberTypeName(field.TypeExpr)
-		if method := lookupMethod(classes, ifaces, embeddedType, methodName, visiting); method != nil {
-			return method
-		}
-	}
-	return nil
-}
-
-func interfaceMethod(classes map[string]*Class, ifaces map[string]*Interface, iface *Interface, methodName string, visiting map[string]bool) *Function {
 	for _, method := range iface.Methods {
 		if method.Name == methodName {
 			return method
 		}
 	}
 	for _, embed := range iface.Embeds {
-		if method := lookupMethod(classes, ifaces, embed, methodName, visiting); method != nil {
+		if method := interfaceMethod(ifaces, embed, methodName, visiting); method != nil {
 			return method
 		}
 	}
 	return nil
+}
+
+func memberPath(node embeddedMemberSearch, name string) []MemberKey {
+	path := make([]MemberKey, len(node.path), len(node.path)+1)
+	copy(path, node.path)
+	return append(path, MemberKey{Type: node.typeName, Name: name})
+}
+
+func appendEmbeddedSearches(class *Class, node embeddedMemberSearch, next []embeddedMemberSearch, index map[string]int) []embeddedMemberSearch {
+	if class == nil {
+		return next
+	}
+	for _, field := range class.Fields {
+		if field.Ident != nil {
+			continue
+		}
+		typeName := memberTypeName(field.TypeExpr)
+		if pos, ok := index[typeName]; ok {
+			next[pos].multiple = true
+			continue
+		}
+		index[typeName] = len(next)
+		next = append(next, embeddedMemberSearch{typeName: typeName, path: memberPath(node, field.Name), multiple: node.multiple})
+	}
+	return next
 }
 
 func (c *memberTypeResolver) classMemberType(typeName, memberName string) memberVarType {
@@ -665,45 +746,8 @@ func (c *memberTypeResolver) promotedMemberPath(typeName, memberName string) []M
 }
 
 func (c *memberTypeResolver) lookupMember(typeName, memberName string, visiting map[string]bool) (memberVarType, []MemberKey, bool) {
-	class := c.classes[typeName]
-	if class == nil || visiting[typeName] {
-		return memberVarType{}, nil, false
-	}
-	visiting[typeName] = true
-	if memberType, ok := directMemberType(class, memberName); ok {
-		return memberType, []MemberKey{{Type: typeName, Name: memberName}}, true
-	}
-	return c.lookupEmbeddedMember(class, typeName, memberName, visiting)
-}
-
-func directMemberType(class *Class, memberName string) (memberVarType, bool) {
-	for _, field := range class.Fields {
-		if field.Name == memberName {
-			return memberVarTypeOf(field.TypeExpr), true
-		}
-	}
-	for _, method := range class.Methods {
-		if method.Name == memberName {
-			return functionResultType(method), true
-		}
-	}
-	return memberVarType{}, false
-}
-
-func (c *memberTypeResolver) lookupEmbeddedMember(class *Class, typeName, memberName string, visiting map[string]bool) (memberVarType, []MemberKey, bool) {
-	for _, field := range class.Fields {
-		if field.Ident != nil {
-			continue
-		}
-		embeddedType := memberTypeName(field.TypeExpr)
-		memberType, path, ok := c.lookupMember(embeddedType, memberName, visiting)
-		if !ok {
-			continue
-		}
-		path = append([]MemberKey{{Type: typeName, Name: field.Name}}, path...)
-		return memberType, path, true
-	}
-	return memberVarType{}, nil, false
+	selected, ok := selectMember(c.classes, c.interfaces, typeName, memberName, visiting)
+	return selected.memberType, selected.path, ok
 }
 
 func functionResultTypes(fn *Function) []memberVarType {

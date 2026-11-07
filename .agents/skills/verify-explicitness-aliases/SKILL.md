@@ -29,7 +29,7 @@ For any other failure, inspect the error and reproduce the failed build, runtime
 
 ## Keep coverage in step with the code
 
-Last confirmed against commit `8466f6fac6c8bd7c1ad2a6ff72431f4f93b4db8c`.
+Last confirmed against commit `320beba74f06c7995b9042f67e751a17a757ec89`.
 
 The checked path includes these functions and files:
 
@@ -42,7 +42,7 @@ The checked path includes these functions and files:
 Inspect changes since the sync commit, including uncommitted changes:
 
 ```sh
-git diff 8466f6fac6c8bd7c1ad2a6ff72431f4f93b4db8c -- internal/rules/explicitness internal/model internal/runner internal/rule internal/report internal/ruleset internal/cli/cli.go cmd/messgo go.mod
+git diff 320beba74f06c7995b9042f67e751a17a757ec89 -- internal/rules/explicitness internal/model internal/runner internal/rule internal/report internal/ruleset internal/cli/cli.go cmd/messgo go.mod
 ```
 
 When a covered path changes, trace the generated syntax through the changed code. Update the grammar or checker if the intended behavior changes, then rerun the check. Move the sync commit forward only after confirming that the coverage record and checker describe the code at the new commit. Use `/maintain-formal-verification-skill` when changes have accumulated without that review.

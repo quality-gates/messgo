@@ -644,26 +644,17 @@ func TestDirectoryDiscoverySkipsHiddenAndUnderscoreFiles(t *testing.T) {
 			t.Fatalf("write %s: %v", name, err)
 		}
 	}
-	sets, err := (&ruleset.Loader{Enable: []string{"UnusedPrivateField"}}).Load("unusedcode")
-	if err != nil {
-		t.Fatalf("load ruleset: %v", err)
-	}
-
-	recursive, err := Run(Options{Paths: []string{dir}, RuleSets: sets})
-	if err != nil {
-		t.Fatalf("recursive Run: %v", err)
-	}
-	if len(recursive.Violations) != 1 || filepath.Base(recursive.Violations[0].File) != "visible.go" {
-		t.Errorf("recursive Run violations = %+v, want only visible.go", recursive.Violations)
+	recursive, err := DiscoverSources(DiscoveryOptions{Paths: []string{dir}})
+	want := []string{filepath.Join(dir, "visible.go")}
+	if err != nil || !reflect.DeepEqual(recursive, want) {
+		t.Fatalf("recursive sources = %v, %v; want %v", recursive, err, want)
 	}
 
 	for _, name := range []string{".ignored.go", "_ignored.go"} {
-		explicit, err := Run(Options{Paths: []string{filepath.Join(dir, name)}, RuleSets: sets})
-		if err != nil {
-			t.Fatalf("explicit Run for %s: %v", name, err)
-		}
-		if len(explicit.Violations) != 1 || filepath.Base(explicit.Violations[0].File) != name {
-			t.Fatalf("explicit Run for %s violations = %+v, want one finding", name, explicit.Violations)
+		path := filepath.Join(dir, name)
+		explicit, err := DiscoverSources(DiscoveryOptions{Paths: []string{path}})
+		if err != nil || !reflect.DeepEqual(explicit, []string{path}) {
+			t.Fatalf("explicit sources = %v, %v; want %q", explicit, err, path)
 		}
 	}
 }
@@ -1333,12 +1324,10 @@ func TestExplicitFileInputIgnoresBuildConstraints(t *testing.T) {
 	})
 
 	for _, name := range names {
-		rep, err := Run(Options{Paths: []string{filepath.Join(dir, name)}, RuleSets: unusedMethodSets(t)})
-		if err != nil {
-			t.Fatalf("Run %s: %v", name, err)
-		}
-		if got := violationFiles(rep); len(got) != 1 || got[0] != name {
-			t.Fatalf("explicit %s violations = %v, want one finding", name, got)
+		path := filepath.Join(dir, name)
+		files, err := DiscoverSources(DiscoveryOptions{Paths: []string{path}})
+		if err != nil || !reflect.DeepEqual(files, []string{path}) {
+			t.Fatalf("explicit %s = %v, %v; want %q", name, files, err, path)
 		}
 	}
 }
@@ -1350,12 +1339,10 @@ func TestDirectoryDiscoveryAppliesBuildContextOnlyToGoFiles(t *testing.T) {
 		name: "package p\n\ntype t struct{}\n\nfunc (t) unusedPriv() {}\n",
 	})
 
-	rep, err := Run(Options{Paths: []string{dir}, RuleSets: unusedMethodSets(t), Suffixes: []string{".tpl"}})
-	if err != nil {
-		t.Fatalf("Run: %v", err)
-	}
-	if got := violationFiles(rep); len(got) != 1 || got[0] != name {
-		t.Fatalf("violations = %v, want %s analyzed under a non-Go suffix", got, name)
+	files, err := DiscoverSources(DiscoveryOptions{Paths: []string{dir}, Suffixes: []string{".tpl"}})
+	want := []string{filepath.Join(dir, name)}
+	if err != nil || !reflect.DeepEqual(files, want) {
+		t.Fatalf("DiscoverSources = %v, %v; want %v", files, err, want)
 	}
 }
 

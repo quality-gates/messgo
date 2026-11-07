@@ -49,6 +49,19 @@ func probe(r Root) { r.Run() }
 			unused: []MemberKey{{Type: "Root", Name: "Left"}, {Type: "Root", Name: "Right"}, {Type: "Base", Name: "Run"}},
 		},
 		{
+			name: "ambiguous diamond above the method",
+			source: `package p
+type Base struct{}
+func (Base) Run() {}
+type Shared struct{ Base }
+type Left struct{ Shared }
+type Right struct{ Shared }
+type Root struct{ Left; Right }
+func probe(r Root) { r.Run() }
+`,
+			unused: []MemberKey{{Type: "Root", Name: "Left"}, {Type: "Root", Name: "Right"}, {Type: "Shared", Name: "Base"}, {Type: "Base", Name: "Run"}},
+		},
+		{
 			name: "shared embedded type has a unique shallower path",
 			source: `package p
 type Base struct{}

@@ -262,20 +262,12 @@ func TestDiamondMemberAndMethodLookupVisitsEachTypeOnce(t *testing.T) {
 		t.Fatalf("lookupMethod visited %d types, want %d: %v", len(methodVisited), levels+1, methodVisited)
 	}
 
-	_, path, ok := collector.types.lookupMember(root, "Z", map[string]bool{})
-	if !ok {
-		t.Fatal("lookupMember did not find promoted Z")
+	visited := map[string]bool{}
+	if _, path, ok := collector.types.lookupMember(root, "Z", visited); ok || path != nil {
+		t.Fatalf("lookupMember(%s, Z) = (path %v, ok %v), want an ambiguous lookup", root, path, ok)
 	}
-	wantPath := make([]MemberKey, 0, levels+1)
-	for level := levels; level > 0; level-- {
-		wantPath = append(wantPath, MemberKey{
-			Type: fmt.Sprintf("F%d", level),
-			Name: fmt.Sprintf("F%d", level-1),
-		})
-	}
-	wantPath = append(wantPath, MemberKey{Type: "F0", Name: "Z"})
-	if !slices.Equal(path, wantPath) {
-		t.Fatalf("lookupMember(%s, Z) path = %v, want %v", root, path, wantPath)
+	if len(visited) != levels+1 {
+		t.Fatalf("ambiguous lookup visited %d types, want %d: %v", len(visited), levels+1, visited)
 	}
 }
 

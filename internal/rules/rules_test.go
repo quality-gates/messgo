@@ -2250,6 +2250,62 @@ func (w widget) method() {
 	}
 }
 
+func TestLengthRulesIgnoreCommentLinesWithCRLF(t *testing.T) {
+	tests := []struct {
+		name          string
+		rule          string
+		src           string
+		wantViolation bool
+	}{
+		{
+			name: "method with comment only",
+			rule: "LongMethod",
+			src:  "func f() {\n/* head\ntail */\n}\n",
+		},
+		{
+			name:          "method with code after comment",
+			rule:          "LongMethod",
+			src:           "func f() {\n/* head\ntail */ println(1)\n}\n",
+			wantViolation: true,
+		},
+		{
+			name: "class with comment only",
+			rule: "LongClass",
+			src:  "type widget struct {\n/* head\ntail */\n}\n",
+		},
+		{
+			name:          "class with field after comment",
+			rule:          "LongClass",
+			src:           "type widget struct {\n/* head\ntail */ field int\n}\n",
+			wantViolation: true,
+		},
+		{
+			name: "line comment with carriage return",
+			rule: "LongMethod",
+			src:  "func f() {\n// head\rcomment\n}\n",
+		},
+		{
+			name: "block comment with carriage return inside apparent terminator",
+			rule: "LongMethod",
+			src:  "func f() {\n/* head *\r/ not closed\ntail */\n}\n",
+		},
+	}
+	for _, tc := range tests {
+		for _, ending := range []struct {
+			name string
+			text string
+		}{{"LF", "\n"}, {"CRLF", "\r\n"}} {
+			t.Run(tc.name+"/"+ending.name, func(t *testing.T) {
+				src := strings.ReplaceAll(tc.src, "\n", ending.text)
+				hits := analyze(t, src, codesizeRuleset(t, tc.rule, 3, true))
+				if got := has(hits, tc.rule); got != tc.wantViolation {
+					t.Fatalf("%s violation = %t, want %t; hits = %v", tc.rule, got, tc.wantViolation, hits)
+				}
+			})
+		}
+	}
+}
+
 func codesizeRuleset(t *testing.T, ruleName string, minimum int, ignoreWhitespace bool) string {
 	t.Helper()
 	path := filepath.Join(t.TempDir(), "ruleset.xml")

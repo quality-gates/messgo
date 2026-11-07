@@ -271,6 +271,65 @@ func second() {}
 	}
 }
 
+func TestEffectiveLOCIndexCountsCodeAroundComments(t *testing.T) {
+	cases := []struct {
+		name string
+		src  string
+		want int
+	}{
+		{
+			name: "CRLF block comment",
+			src:  "package p\r\nfunc f() {\r\n/* head\r\ntail */\r\n}\r\n",
+			want: 3,
+		},
+		{
+			name: "empty comment before closing brace",
+			src:  "package p\nfunc f() {\n/**/}\n",
+			want: 3,
+		},
+		{
+			name: "multiline comment before closing brace",
+			src:  "package p\nfunc f() {\n/* head\ntail */}\n",
+			want: 3,
+		},
+		{
+			name: "multiline comment before code",
+			src:  "package p\nfunc f() {\n/* head\ntail */println(1)\n}\n",
+			want: 4,
+		},
+		{
+			name: "line comment after star",
+			src:  "package p\nfunc f() {\n_ = *// line comment\r\nnew(int)\r\n}\r\n",
+			want: 5,
+		},
+		{
+			name: "carriage return inside apparent block terminator",
+			src:  "package p\nfunc f() {\n/* head *\r/ still comment\r\ntail */\n}\n",
+			want: 3,
+		},
+		{
+			name: "line comment at EOF",
+			src:  "package p\n// comment without newline",
+			want: 1,
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			src := []byte(tc.src)
+			fset := token.NewFileSet()
+			parsed, err := parser.ParseFile(fset, "x.go", src, parser.ParseComments)
+			if err != nil {
+				t.Fatal(err)
+			}
+			file := fset.File(parsed.Package)
+			index := NewEffectiveLOCIndex(src)
+			if got := index.LinesOfCode(fset, file.Pos(0), file.Pos(len(src))); got != tc.want {
+				t.Fatalf("effective LOC = %d, want %d", got, tc.want)
+			}
+		})
+	}
+}
+
 func TestEffectiveLOCIndexClampsQueriesToIndexedSource(t *testing.T) {
 	indexedSource := []byte("code\n")
 	positionSource := []byte("code\noutside\nmore outside\n")

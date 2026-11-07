@@ -3,6 +3,7 @@
 package metrics
 
 import (
+	"bytes"
 	"go/ast"
 	"go/scanner"
 	"go/token"
@@ -756,7 +757,7 @@ func maskComments(src []byte) []byte {
 	var s scanner.Scanner
 	s.Init(file, src, nil /* eh */, scanner.ScanComments)
 	for {
-		pos, tok, lit := s.Scan()
+		pos, tok, _ := s.Scan()
 		if tok == token.EOF {
 			return masked
 		}
@@ -764,7 +765,15 @@ func maskComments(src []byte) []byte {
 			continue
 		}
 		start := file.Offset(pos)
-		for i := start; i < start+len(lit) && i < len(masked); i++ {
+		terminator := []byte("\n")
+		if src[start+1] == '*' {
+			terminator = []byte("*/")
+		}
+		end := len(src)
+		if offset := bytes.Index(src[start+2:], terminator); offset >= 0 {
+			end = start + 2 + offset + len(terminator)
+		}
+		for i := start; i < end; i++ {
 			if masked[i] != '\n' {
 				masked[i] = ' '
 			}

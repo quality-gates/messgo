@@ -106,13 +106,13 @@ func probe(r Root) { r.Run() }
 			unused:   []MemberKey{{Type: "Root", Name: "Left"}, {Type: "Left", Name: "Shared"}, {Type: "Right", Name: "Shared"}},
 		},
 		{
-			name: "external embedding does not hide a deeper local method",
+			name: "embedded interface does not hide a deeper method",
 			source: `package p
-import "io"
 type Worker struct{}
 func (Worker) Run() {}
 type Branch struct{ Worker }
-type Root struct{ Branch; io.Reader }
+type Reader interface{ Read([]byte) (int, error) }
+type Root struct{ Branch; Reader }
 func probe(r Root) { r.Run() }
 `,
 			receiver: "Worker",

@@ -77,6 +77,35 @@ func probe(r Root) { r.Run() }
 			unused:   []MemberKey{{Type: "Root", Name: "Left"}, {Type: "Left", Name: "Shared"}},
 		},
 		{
+			name: "previously visited embedded type does not hide a sibling",
+			source: `package p
+type Shared struct{}
+type Other struct{}
+func (Other) Run() {}
+type Middle struct{ Shared; Other }
+type Root struct{ Shared; Middle }
+func probe(r Root) { r.Run() }
+`,
+			receiver: "Other",
+			used:     []MemberKey{{Type: "Root", Name: "Middle"}, {Type: "Middle", Name: "Other"}, {Type: "Other", Name: "Run"}},
+			unused:   []MemberKey{{Type: "Root", Name: "Shared"}, {Type: "Middle", Name: "Shared"}},
+		},
+		{
+			name: "duplicate embedded type does not hide a later field",
+			source: `package p
+type Shared struct{}
+type Writer struct{}
+func (Writer) Run() {}
+type Left struct{ Shared }
+type Right struct{ Shared; Writer }
+type Root struct{ Left; Right }
+func probe(r Root) { r.Run() }
+`,
+			receiver: "Writer",
+			used:     []MemberKey{{Type: "Root", Name: "Right"}, {Type: "Right", Name: "Writer"}, {Type: "Writer", Name: "Run"}},
+			unused:   []MemberKey{{Type: "Root", Name: "Left"}, {Type: "Left", Name: "Shared"}, {Type: "Right", Name: "Shared"}},
+		},
+		{
 			name: "embedded interface competes with a concrete method",
 			source: `package p
 type Action interface{ Run() }

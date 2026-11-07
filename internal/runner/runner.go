@@ -3,14 +3,8 @@ package runner
 
 import (
 	"go/ast"
-	"go/build"
 	"go/token"
-	"io/fs"
-	"os"
 	"path/filepath"
-	"regexp"
-	"sort"
-	"strings"
 
 	"github.com/quality-gates/messgo/internal/model"
 	"github.com/quality-gates/messgo/internal/report"
@@ -29,10 +23,16 @@ type Options struct {
 
 // Run discovers files, parses and analyzes them, and returns a Report.
 func Run(opts Options) (*report.Report, error) {
-	if len(opts.Suffixes) == 0 {
-		opts.Suffixes = []string{".go"}
+	var patterns []string
+	for _, set := range opts.RuleSets {
+		if set != nil {
+			patterns = append(patterns, set.ExcludePatterns...)
+		}
 	}
-	files, err := discover(opts)
+	files, err := DiscoverSources(DiscoveryOptions{
+		Paths: opts.Paths, Suffixes: opts.Suffixes, Exclude: opts.Exclude,
+		ExcludePatterns: patterns, IgnoreTests: opts.IgnoreTests,
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -217,202 +217,4 @@ func packageKeyOf(f *model.File) packageKey {
 		dir = real
 	}
 	return packageKey{dir: dir, name: f.Package}
-}
-
-func walkDirFunc(root string, opts Options, add func(string)) fs.WalkDirFunc {
-	return func(path string, d fs.DirEntry, err error) error {
-		if err != nil {
-			return err
-		}
-		if d.IsDir() {
-			if path != root && shouldSkipDir(d.Name()) {
-				return filepath.SkipDir
-			}
-			return nil
-		}
-		if shouldSkipFile(d.Name()) {
-			return nil
-		}
-		if !inBuildContext(path) || !shouldIncludeFile(path, opts) {
-			return nil
-		}
-		add(path)
-		return nil
-	}
-}
-
-// inBuildContext reports whether a Go file found by a directory walk belongs to
-// the default build context, honouring //go:build lines and GOOS/GOARCH
-// filename suffixes. Non-Go files and files whose header cannot be read are
-// kept so that suffix filters and parse error reporting still apply to them.
-func inBuildContext(path string) bool {
-	if filepath.Ext(path) != ".go" {
-		return true
-	}
-	match, err := build.Default.MatchFile(filepath.Dir(path), filepath.Base(path))
-	return match || err != nil
-}
-
-func discover(opts Options) ([]string, error) {
-	var out []string
-	seen := map[string]bool{}
-	add := func(p string) {
-		p = normalizePath(p)
-		identity := pathIdentity(p)
-		if seen[identity] {
-			return
-		}
-		seen[identity] = true
-		out = append(out, p)
-	}
-	for _, p := range opts.Paths {
-		root := discoveryRoot(p)
-		info, err := os.Stat(root)
-		if err != nil {
-			return nil, err
-		}
-		if !info.IsDir() {
-			if !shouldIncludeFile(root, opts) {
-				continue
-			}
-			add(root)
-			continue
-		}
-		root, err = filepath.EvalSymlinks(root)
-		if err != nil {
-			return nil, err
-		}
-		root = normalizePath(root)
-		err = filepath.WalkDir(root, walkDirFunc(root, opts, add))
-		if err != nil {
-			return nil, err
-		}
-	}
-	sort.Strings(out)
-	return out, nil
-}
-
-func pathIdentity(p string) string {
-	abs, err := filepath.Abs(p)
-	if err != nil {
-		return p
-	}
-	if resolved, err := filepath.EvalSymlinks(abs); err == nil {
-		return normalizePath(resolved)
-	}
-	return normalizePath(abs)
-}
-
-func discoveryRoot(p string) string {
-	if filepath.Base(p) != "..." {
-		return p
-	}
-	return filepath.Dir(p)
-}
-
-func shouldIncludeFile(path string, opts Options) bool {
-	if !hasSuffix(path, opts.Suffixes) {
-		return false
-	}
-	if opts.IgnoreTests && strings.HasSuffix(path, "_test.go") {
-		return false
-	}
-	if isExcluded(path, opts.Exclude) {
-		return false
-	}
-	return !excludedByRuleset(path, opts.RuleSets)
-}
-
-func excludedByRuleset(path string, sets []*rule.RuleSet) bool {
-	for _, set := range sets {
-		if set == nil {
-			continue
-		}
-		for _, pattern := range set.ExcludePatterns {
-			if matchesIgnorePattern(path, pattern) {
-				return true
-			}
-		}
-	}
-	return false
-}
-
-func matchesIgnorePattern(path, pattern string) bool {
-	re := ignorePatternRegexp(pattern)
-	if re == nil {
-		return false
-	}
-	if abs, err := filepath.Abs(path); err == nil {
-		path = abs
-	}
-	return matchIgnorePath(re, path)
-}
-
-func ignorePatternRegexp(pattern string) *regexp.Regexp {
-	pattern = strings.TrimSpace(pattern)
-	if pattern == "" {
-		return nil
-	}
-	quoted := regexp.QuoteMeta(slashPath(pattern))
-	quoted = strings.ReplaceAll(quoted, `\*`, `.*`)
-	return regexp.MustCompile("(?i)^(?:" + quoted + ")")
-}
-
-func matchIgnorePath(re *regexp.Regexp, path string) bool {
-	path = slashPath(path)
-	for {
-		if re.MatchString(path) || re.MatchString("/"+path) {
-			return true
-		}
-		slash := strings.Index(path, "/")
-		if slash < 0 {
-			return false
-		}
-		path = path[slash+1:]
-	}
-}
-
-func slashPath(p string) string {
-	return strings.ReplaceAll(p, "\\", "/")
-}
-
-func shouldSkipDir(name string) bool {
-	if name == "." || name == ".." {
-		return false
-	}
-	if strings.HasPrefix(name, ".") || strings.HasPrefix(name, "_") {
-		return true
-	}
-	switch name {
-	case "vendor", "node_modules", "testdata":
-		return true
-	}
-	return false
-}
-
-func shouldSkipFile(name string) bool {
-	return strings.HasPrefix(name, ".") || strings.HasPrefix(name, "_")
-}
-
-func hasSuffix(path string, suffixes []string) bool {
-	for _, s := range suffixes {
-		if strings.HasSuffix(path, s) {
-			return true
-		}
-	}
-	return false
-}
-
-func isExcluded(path string, exclude []string) bool {
-	path = normalizePath(path)
-	for _, e := range exclude {
-		if e != "" && strings.Contains(path, normalizePath(e)) {
-			return true
-		}
-	}
-	return false
-}
-
-func normalizePath(p string) string {
-	return filepath.Clean(p)
 }

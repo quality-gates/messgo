@@ -29,7 +29,7 @@ func TestDiscoverSourcesSelection(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := []string{filepath.Join(dir, "a.go")}
+	want := []string{filepath.Join(canonicalDir(t, dir), "a.go")}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("DiscoverSources = %v, want %v", got, want)
 	}
@@ -56,6 +56,15 @@ func TestDiscoverSourcesSelection(t *testing.T) {
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("aliases = %v, want %v", got, want)
 	}
+}
+
+func canonicalDir(t *testing.T, dir string) string {
+	t.Helper()
+	canonical, err := filepath.EvalSymlinks(dir)
+	if err != nil {
+		t.Fatalf("resolve directory: %v", err)
+	}
+	return canonical
 }
 
 func TestDiscoveryFilterCompilesPatternsOnce(t *testing.T) {

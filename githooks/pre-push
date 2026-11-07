@@ -24,11 +24,12 @@ command -v mutago >/dev/null 2>&1 || fail "mutago not found. Install with: go in
 echo "pre-push: mutation testing (diff vs origin/main)"
 mutago \
     --workers=1 \
+    --exec-timeout 30 \
     --git-diff-lines \
     --git-diff-base origin/main \
     --ignore-msi-with-no-mutations \
     --coverage \
     --min-covered-msi 80 \
-    ./... || fail "mutation testing failed (covered-MSI below 80%)"
+    ./... || fail "mutation testing failed"
 
 echo "pre-push: all checks passed"

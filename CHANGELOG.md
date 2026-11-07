@@ -7,6 +7,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 ## [Unreleased]
 
 ### Fixed
+- Reject conflicting explicit rule overrides regardless of inherited-rule order (#309).
 - Fixed effective line counts for block and line comments containing carriage returns (#311).
 - Fixed CLI and source-discovery tests when the temporary directory has a symlinked path (#305, #306).
 

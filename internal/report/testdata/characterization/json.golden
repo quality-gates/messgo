@@ -1,0 +1,136 @@
+{
+    "version": "test-version",
+    "package": "messgo",
+    "timestamp": "TIMESTAMP",
+    "files": [
+        {
+            "file": "a.go",
+            "violations": [
+                {
+                    "beginLine": 1,
+                    "endLine": 2,
+                    "package": "pkg",
+                    "function": "fn",
+                    "class": "",
+                    "method": "",
+                    "description": "first & <tag> \"'",
+                    "rule": "Repeat<&",
+                    "ruleSet": "Set&One",
+                    "externalInfoUrl": "https://example.test/rule?a=1&b=2",
+                    "priority": 1
+                },
+                {
+                    "beginLine": 3,
+                    "endLine": 4,
+                    "package": "",
+                    "function": "",
+                    "class": "C",
+                    "method": "M",
+                    "description": "duplicate",
+                    "rule": "Repeat<&",
+                    "ruleSet": "OtherSet",
+                    "externalInfoUrl": "https://other.test/",
+                    "priority": 3
+                },
+                {
+                    "beginLine": 5,
+                    "endLine": 5,
+                    "package": "",
+                    "function": "",
+                    "class": "",
+                    "method": "",
+                    "description": "five",
+                    "rule": "Other",
+                    "ruleSet": "",
+                    "externalInfoUrl": "relative",
+                    "priority": 5
+                },
+                {
+                    "beginLine": 6,
+                    "endLine": 6,
+                    "package": "",
+                    "function": "",
+                    "class": "",
+                    "method": "",
+                    "description": "zero",
+                    "rule": "Other",
+                    "ruleSet": "",
+                    "externalInfoUrl": "relative",
+                    "priority": 0
+                },
+                {
+                    "beginLine": 7,
+                    "endLine": 7,
+                    "package": "",
+                    "function": "",
+                    "class": "",
+                    "method": "",
+                    "description": "negative",
+                    "rule": "Other",
+                    "ruleSet": "",
+                    "externalInfoUrl": "relative",
+                    "priority": -1
+                },
+                {
+                    "beginLine": 8,
+                    "endLine": 8,
+                    "package": "",
+                    "function": "",
+                    "class": "",
+                    "method": "",
+                    "description": "high",
+                    "rule": "Other",
+                    "ruleSet": "",
+                    "externalInfoUrl": "relative",
+                    "priority": 6
+                }
+            ]
+        },
+        {
+            "file": "b,:%.go",
+            "violations": [
+                {
+                    "beginLine": 0,
+                    "endLine": 0,
+                    "package": "",
+                    "function": "",
+                    "class": "",
+                    "method": "",
+                    "description": "line\nnext %\r",
+                    "rule": "Other",
+                    "ruleSet": "Set",
+                    "externalInfoUrl": "relative",
+                    "priority": 2
+                }
+            ]
+        },
+        {
+            "file": "",
+            "violations": [
+                {
+                    "beginLine": 4,
+                    "endLine": 4,
+                    "package": "",
+                    "function": "",
+                    "class": "",
+                    "method": "",
+                    "description": "empty file",
+                    "rule": "Repeat<&",
+                    "ruleSet": "",
+                    "externalInfoUrl": "https://example.test/rule?a=1&b=2",
+                    "priority": 4
+                }
+            ]
+        }
+    ],
+    "errors": [
+        {
+            "fileName": "bad<&\".go",
+            "message": "parse & <failed>\nnext"
+        },
+        {
+            "fileName": "",
+            "message": "empty error"
+        }
+    ]
+}

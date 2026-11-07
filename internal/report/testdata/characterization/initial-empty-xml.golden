@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<pmd version="test-version" tool="messgo" timestamp="TIMESTAMP">
+    <violation beginline="0" endline="0" rule="R" ruleset="" priority="0">
+      empty
+    </violation>
+  <file name="a">
+    <violation beginline="1" endline="0" rule="R" ruleset="" priority="0">
+      named
+    </violation>
+  </file>
+</pmd>

@@ -1,0 +1,12 @@
+a.go:1     Repeat<&  first & <tag> "'
+b,:%.go:0  Other     line
+next %<CR>
+a.go:3     Repeat<&  duplicate
+:4         Repeat<&  empty file
+a.go:5     Other     five
+a.go:6     Other     zero
+a.go:7     Other     negative
+a.go:8     Other     high
+bad<&".go	-	parse & <failed>
+next
+	-	empty error

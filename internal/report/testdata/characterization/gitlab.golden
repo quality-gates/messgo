@@ -1,0 +1,132 @@
+[
+    {
+        "type": "issue",
+        "check_name": "Repeat\u003c\u0026",
+        "description": "first \u0026 \u003ctag\u003e \"'",
+        "fingerprint": "612e676f3a313a5265706561743c263a66697273742026203c7461673e202227",
+        "severity": "blocker",
+        "location": {
+            "path": "a.go",
+            "lines": {
+                "begin": 1
+            }
+        }
+    },
+    {
+        "type": "issue",
+        "check_name": "Other",
+        "description": "line\nnext %\r",
+        "fingerprint": "622c3a252e676f3a303a4f746865723a6c696e650a6e65787420250d",
+        "severity": "critical",
+        "location": {
+            "path": "b,:%.go",
+            "lines": {
+                "begin": 0
+            }
+        }
+    },
+    {
+        "type": "issue",
+        "check_name": "Repeat\u003c\u0026",
+        "description": "duplicate",
+        "fingerprint": "612e676f3a333a5265706561743c263a6475706c6963617465",
+        "severity": "major",
+        "location": {
+            "path": "a.go",
+            "lines": {
+                "begin": 3
+            }
+        }
+    },
+    {
+        "type": "issue",
+        "check_name": "Repeat\u003c\u0026",
+        "description": "empty file",
+        "fingerprint": "3a343a5265706561743c263a656d7074792066696c65",
+        "severity": "minor",
+        "location": {
+            "path": "",
+            "lines": {
+                "begin": 4
+            }
+        }
+    },
+    {
+        "type": "issue",
+        "check_name": "Other",
+        "description": "five",
+        "fingerprint": "612e676f3a353a4f746865723a66697665",
+        "severity": "info",
+        "location": {
+            "path": "a.go",
+            "lines": {
+                "begin": 5
+            }
+        }
+    },
+    {
+        "type": "issue",
+        "check_name": "Other",
+        "description": "zero",
+        "fingerprint": "612e676f3a363a4f746865723a7a65726f",
+        "severity": "info",
+        "location": {
+            "path": "a.go",
+            "lines": {
+                "begin": 6
+            }
+        }
+    },
+    {
+        "type": "issue",
+        "check_name": "Other",
+        "description": "negative",
+        "fingerprint": "612e676f3a373a4f746865723a6e65676174697665",
+        "severity": "info",
+        "location": {
+            "path": "a.go",
+            "lines": {
+                "begin": 7
+            }
+        }
+    },
+    {
+        "type": "issue",
+        "check_name": "Other",
+        "description": "high",
+        "fingerprint": "612e676f3a383a4f746865723a68696768",
+        "severity": "info",
+        "location": {
+            "path": "a.go",
+            "lines": {
+                "begin": 8
+            }
+        }
+    },
+    {
+        "type": "issue",
+        "check_name": "parse-error",
+        "description": "parse \u0026 \u003cfailed\u003e\nnext",
+        "fingerprint": "6261643c26222e676f3a70617273652026203c6661696c65643e0a6e657874",
+        "severity": "blocker",
+        "location": {
+            "path": "bad\u003c\u0026\".go",
+            "lines": {
+                "begin": 0
+            }
+        }
+    },
+    {
+        "type": "issue",
+        "check_name": "parse-error",
+        "description": "empty error",
+        "fingerprint": "3a656d707479206572726f72",
+        "severity": "blocker",
+        "location": {
+            "path": "",
+            "lines": {
+                "begin": 0
+            }
+        }
+    }
+]

@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<checkstyle version="test-version">
+  <file name="a.go">
+    <error line="1" column="1" severity="error" message="first &amp; &lt;tag&gt; &quot;&#039;" source="Set&amp;One/Repeat&lt;&amp;"/>
+  </file>
+  <file name="b,:%.go">
+    <error line="0" column="1" severity="error" message="line
+next %<CR>" source="Set/Other"/>
+  </file>
+  <file name="a.go">
+    <error line="3" column="1" severity="warning" message="duplicate" source="OtherSet/Repeat&lt;&amp;"/>
+  </file>
+  <file name="">
+    <error line="4" column="1" severity="info" message="empty file" source="/Repeat&lt;&amp;"/>
+  </file>
+  <file name="a.go">
+    <error line="5" column="1" severity="info" message="five" source="/Other"/>
+    <error line="6" column="1" severity="error" message="zero" source="/Other"/>
+    <error line="7" column="1" severity="error" message="negative" source="/Other"/>
+    <error line="8" column="1" severity="info" message="high" source="/Other"/>
+  </file>
+  <file name="bad&lt;&amp;&quot;.go">
+    <error line="0" column="1" severity="error" message="parse &amp; &lt;failed&gt;
+next" source="messgo/parse-error"/>
+  </file>
+  <file name="">
+    <error line="0" column="1" severity="error" message="empty error" source="messgo/parse-error"/>
+  </file>
+</checkstyle>

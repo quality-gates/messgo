@@ -1,0 +1,10 @@
+::warning file=a.go,line=1,col=1::first & <tag> "' (Repeat<&)
+::warning file=b%2C%3A%25.go,line=0,col=1::line%0Anext %25%0D (Other)
+::warning file=a.go,line=3,col=1::duplicate (Repeat<&)
+::warning file=,line=4,col=1::empty file (Repeat<&)
+::warning file=a.go,line=5,col=1::five (Other)
+::warning file=a.go,line=6,col=1::zero (Other)
+::warning file=a.go,line=7,col=1::negative (Other)
+::warning file=a.go,line=8,col=1::high (Other)
+::error file=bad<&".go::parse & <failed>%0Anext
+::error file=::empty error

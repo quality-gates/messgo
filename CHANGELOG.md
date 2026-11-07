@@ -7,6 +7,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 ## [Unreleased]
 
 ### Fixed
+- Resolve promoted selectors by Go embedding depth and field shadowing (#308, #310).
 - The pre-push mutation check now allows 30 seconds for each test execution,
   matching CI. Coverage failures no longer report a low mutation score (#316).
 - Reject conflicting explicit rule overrides regardless of inherited-rule order (#309).

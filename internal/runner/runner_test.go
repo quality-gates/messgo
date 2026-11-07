@@ -645,7 +645,7 @@ func TestDirectoryDiscoverySkipsHiddenAndUnderscoreFiles(t *testing.T) {
 		}
 	}
 	recursive, err := DiscoverSources(DiscoveryOptions{Paths: []string{dir}})
-	want := []string{filepath.Join(dir, "visible.go")}
+	want := []string{filepath.Join(canonicalDir(t, dir), "visible.go")}
 	if err != nil || !reflect.DeepEqual(recursive, want) {
 		t.Fatalf("recursive sources = %v, %v; want %v", recursive, err, want)
 	}
@@ -1122,19 +1122,29 @@ func TestDiscoverSourcesFollowsSymlinkRootsAndDeduplicatesAliases(t *testing.T) 
 	if err := os.Symlink(file, alias); err != nil {
 		t.Fatal(err)
 	}
+	linkedParent := filepath.Join(t.TempDir(), "linked-parent")
+	if err := os.Symlink(filepath.Dir(dir), linkedParent); err != nil {
+		t.Fatal(err)
+	}
+	linkedDir := filepath.Join(linkedParent, filepath.Base(dir))
+	linkedFile := filepath.Join(linkedDir, "fixture.go")
+	canonicalFile := filepath.Join(canonicalDir(t, dir), "fixture.go")
 	cases := []struct {
 		name  string
 		paths []string
+		want  string
 	}{
-		{name: "target directory", paths: []string{dir}},
-		{name: "symlink root", paths: []string{root}},
-		{name: "target plus symlink alias", paths: []string{file, alias}},
+		{name: "target directory", paths: []string{dir}, want: canonicalFile},
+		{name: "symlink root", paths: []string{root}, want: canonicalFile},
+		{name: "target plus symlink alias", paths: []string{file, alias}, want: file},
+		{name: "directory under symlinked parent", paths: []string{linkedDir}, want: canonicalFile},
+		{name: "file under symlinked parent", paths: []string{linkedFile, file}, want: linkedFile},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			files, err := DiscoverSources(DiscoveryOptions{Paths: tc.paths})
-			if err != nil || !reflect.DeepEqual(files, []string{file}) {
-				t.Fatalf("DiscoverSources = %v, %v; want %q", files, err, file)
+			if err != nil || !reflect.DeepEqual(files, []string{tc.want}) {
+				t.Fatalf("DiscoverSources = %v, %v; want %q", files, err, tc.want)
 			}
 		})
 	}
@@ -1260,7 +1270,7 @@ func TestDirectoryDiscoverySkipsFilesExcludedByBuildConstraints(t *testing.T) {
 	})
 
 	files, err := DiscoverSources(DiscoveryOptions{Paths: []string{dir}})
-	want := []string{filepath.Join(dir, "a.go")}
+	want := []string{filepath.Join(canonicalDir(t, dir), "a.go")}
 	if err != nil || !reflect.DeepEqual(files, want) {
 		t.Fatalf("DiscoverSources = %v, %v; want %v", files, err, want)
 	}
@@ -1276,7 +1286,8 @@ func TestDirectoryDiscoveryKeepsFilesMatchingBuildContext(t *testing.T) {
 	})
 
 	files, err := DiscoverSources(DiscoveryOptions{Paths: []string{dir}})
-	want := []string{filepath.Join(dir, "a.go"), filepath.Join(dir, name)}
+	canonical := canonicalDir(t, dir)
+	want := []string{filepath.Join(canonical, "a.go"), filepath.Join(canonical, name)}
 	if err != nil || !reflect.DeepEqual(files, want) {
 		t.Fatalf("DiscoverSources = %v, %v; want %v", files, err, want)
 	}
@@ -1292,7 +1303,8 @@ func TestDirectoryDiscoveryKeepsFilesMatchingGOARCHContext(t *testing.T) {
 	})
 
 	files, err := DiscoverSources(DiscoveryOptions{Paths: []string{dir}})
-	want := []string{filepath.Join(dir, "a.go"), filepath.Join(dir, name)}
+	canonical := canonicalDir(t, dir)
+	want := []string{filepath.Join(canonical, "a.go"), filepath.Join(canonical, name)}
 	if err != nil || !reflect.DeepEqual(files, want) {
 		t.Fatalf("DiscoverSources = %v, %v; want %v", files, err, want)
 	}
@@ -1340,7 +1352,7 @@ func TestDirectoryDiscoveryAppliesBuildContextOnlyToGoFiles(t *testing.T) {
 	})
 
 	files, err := DiscoverSources(DiscoveryOptions{Paths: []string{dir}, Suffixes: []string{".tpl"}})
-	want := []string{filepath.Join(dir, name)}
+	want := []string{filepath.Join(canonicalDir(t, dir), name)}
 	if err != nil || !reflect.DeepEqual(files, want) {
 		t.Fatalf("DiscoverSources = %v, %v; want %v", files, err, want)
 	}

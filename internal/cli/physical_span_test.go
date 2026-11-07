@@ -95,32 +95,50 @@ func TestLineDirectiveInsideFunctionUsesPhysicalLength(t *testing.T) {
 }
 
 func TestClassSpanAndCrossFileMethodUsePhysicalLines(t *testing.T) {
-	dir := t.TempDir()
-	typesPath := filepath.Join(dir, "types.go")
-	methodsPath := filepath.Join(dir, "methods.go")
-	writeFile(t, typesPath, "package widgets\n//line generated.go:900\ntype Widget struct {\n\tName string\n}\n")
-	for _, directive := range []string{"gen.go:1", "other.go:400"} {
-		t.Run(directive, func(t *testing.T) {
-			writeFile(t, methodsPath, "package widgets\nfunc (w *Widget) Save() int {\n\ta := 1\n//line "+directive+"\n\tb := 2\n\treturn a + b\n}\n")
+	for _, variant := range []struct {
+		name    string
+		symlink bool
+	}{{"directory", false}, {"symlink", true}} {
+		t.Run(variant.name, func(t *testing.T) {
+			dir := t.TempDir()
+			if variant.symlink {
+				link := filepath.Join(t.TempDir(), "source")
+				if err := os.Symlink(dir, link); err != nil {
+					t.Skipf("symlink unavailable: %v", err)
+				}
+				dir = link
+			}
+			typesPath := filepath.Join(dir, "types.go")
+			methodsPath := filepath.Join(dir, "methods.go")
+			writeFile(t, typesPath, "package widgets\n//line generated.go:900\ntype Widget struct {\n\tName string\n}\n")
+			reportedTypesPath, err := filepath.EvalSymlinks(typesPath)
+			if err != nil {
+				t.Fatal(err)
+			}
+			for _, directive := range []string{"gen.go:1", "other.go:400"} {
+				t.Run(directive, func(t *testing.T) {
+					writeFile(t, methodsPath, "package widgets\nfunc (w *Widget) Save() int {\n\ta := 1\n//line "+directive+"\n\tb := 2\n\treturn a + b\n}\n")
 
-			ordinary := writeRulesetFile(t, classRuleset(9, false))
-			code, out, errOut := runMain(t, dir, "json", ordinary)
-			if code != ExitViolation {
-				t.Fatalf("ordinary exit = %d, want %d, stderr = %s", code, ExitViolation, errOut)
-			}
-			class := requireRule(t, violationsFor(t, out, typesPath), "ExcessiveClassLength")
-			if class.BeginLine != 3 || class.EndLine != 5 || class.Class != "Widget" {
-				t.Fatalf("class span = %d-%d class %q, want 3-5 Widget", class.BeginLine, class.EndLine, class.Class)
-			}
-			const wantOrdinary = "The class Widget has 9 lines of code. Current threshold is 9."
-			if class.Description != wantOrdinary {
-				t.Fatalf("ordinary description = %q, want %q", class.Description, wantOrdinary)
-			}
+					ordinary := writeRulesetFile(t, classRuleset(9, false))
+					code, out, errOut := runMain(t, dir, "json", ordinary)
+					if code != ExitViolation {
+						t.Fatalf("ordinary exit = %d, want %d, stderr = %s", code, ExitViolation, errOut)
+					}
+					class := requireRule(t, violationsFor(t, out, reportedTypesPath), "ExcessiveClassLength")
+					if class.BeginLine != 3 || class.EndLine != 5 || class.Class != "Widget" {
+						t.Fatalf("class span = %d-%d class %q, want 3-5 Widget", class.BeginLine, class.EndLine, class.Class)
+					}
+					const wantOrdinary = "The class Widget has 9 lines of code. Current threshold is 9."
+					if class.Description != wantOrdinary {
+						t.Fatalf("ordinary description = %q, want %q", class.Description, wantOrdinary)
+					}
 
-			spaced := writeRulesetFile(t, classRuleset(9, true))
-			code, out, errOut = runMain(t, dir, "json", spaced)
-			if code != ExitSuccess {
-				t.Fatalf("ignore-whitespace exit = %d, want %d, output = %s, stderr = %s", code, ExitSuccess, out, errOut)
+					spaced := writeRulesetFile(t, classRuleset(9, true))
+					code, out, errOut = runMain(t, dir, "json", spaced)
+					if code != ExitSuccess {
+						t.Fatalf("ignore-whitespace exit = %d, want %d, output = %s, stderr = %s", code, ExitSuccess, out, errOut)
+					}
+				})
 			}
 		})
 	}

@@ -6,6 +6,9 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 
 ## [Unreleased]
 
+### Fixed
+- Fixed CLI and source-discovery tests when the temporary directory has a symlinked path (#305, #306).
+
 ## [0.5.13] - 2026-11-07
 
 ### Changed

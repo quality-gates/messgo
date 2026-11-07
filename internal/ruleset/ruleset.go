@@ -314,6 +314,10 @@ func fallbackCandidates(rules []rule.Rule) []ruleCandidate {
 
 func mergeCandidates(existing, incoming ruleCandidate) (ruleCandidate, bool, error) {
 	if sameRuleDefinition(existing, incoming) {
+		if incoming.kind == candidateOverride && existing.kind != candidateOverride {
+			existing.kind = candidateOverride
+			return existing, true, nil
+		}
 		return existing, false, nil
 	}
 	if existing.kind == candidateOverride {

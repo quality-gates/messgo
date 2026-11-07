@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<pmd version="test-version" tool="messgo" timestamp="TIMESTAMP">
+  <file name="a.go">
+    <violation beginline="1" endline="2" rule="Repeat&lt;&amp;" ruleset="Set&amp;One" package="pkg" externalInfoUrl="https://example.test/rule?a=1&amp;b=2" function="fn" priority="1">
+      first &amp; &lt;tag&gt; &quot;&#039;
+    </violation>
+  </file>
+  <file name="b,:%.go">
+    <violation beginline="0" endline="0" rule="Other" ruleset="Set" externalInfoUrl="relative" priority="2">
+      line
+next %<CR>
+    </violation>
+  </file>
+  <file name="a.go">
+    <violation beginline="3" endline="4" rule="Repeat&lt;&amp;" ruleset="OtherSet" externalInfoUrl="https://other.test/" class="C" method="M" priority="3">
+      duplicate
+    </violation>
+  </file>
+  <file name="">
+    <violation beginline="4" endline="4" rule="Repeat&lt;&amp;" ruleset="" externalInfoUrl="https://example.test/rule?a=1&amp;b=2" priority="4">
+      empty file
+    </violation>
+  </file>
+  <file name="a.go">
+    <violation beginline="5" endline="5" rule="Other" ruleset="" externalInfoUrl="relative" priority="5">
+      five
+    </violation>
+    <violation beginline="6" endline="6" rule="Other" ruleset="" externalInfoUrl="relative" priority="0">
+      zero
+    </violation>
+    <violation beginline="7" endline="7" rule="Other" ruleset="" externalInfoUrl="relative" priority="-1">
+      negative
+    </violation>
+    <violation beginline="8" endline="8" rule="Other" ruleset="" externalInfoUrl="relative" priority="6">
+      high
+    </violation>
+  </file>
+  <error filename="bad&lt;&amp;&quot;.go" msg="parse &amp; &lt;failed&gt;
+next" />
+  <error filename="" msg="empty error" />
+</pmd>

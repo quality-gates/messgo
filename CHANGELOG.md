@@ -7,6 +7,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 ## [Unreleased]
 
 ### Changed
+- Centralized report file grouping and format-specific severity mappings without changing output (#168).
 - Extracted source discovery from the runner and compiled ruleset exclude patterns once per discovery call (#221).
 
 ## [0.5.12] - 2026-11-02

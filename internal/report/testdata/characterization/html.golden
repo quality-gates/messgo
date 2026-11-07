@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>messgo report</title></head><body>
+<h1>messgo report</h1>
+<h2>a.go</h2>
+<table border="1" cellspacing="0" cellpadding="3">
+<tr><th>Line</th><th>Rule</th><th>Description</th></tr>
+<tr><td>1</td><td>Repeat&lt;&amp;</td><td>first &amp; &lt;tag&gt; &quot;&#039;</td></tr>
+</table>
+<h2>b,:%.go</h2>
+<table border="1" cellspacing="0" cellpadding="3">
+<tr><th>Line</th><th>Rule</th><th>Description</th></tr>
+<tr><td>0</td><td>Other</td><td>line
+next %<CR></td></tr>
+</table>
+<h2>a.go</h2>
+<table border="1" cellspacing="0" cellpadding="3">
+<tr><th>Line</th><th>Rule</th><th>Description</th></tr>
+<tr><td>3</td><td>Repeat&lt;&amp;</td><td>duplicate</td></tr>
+</table>
+<h2></h2>
+<table border="1" cellspacing="0" cellpadding="3">
+<tr><th>Line</th><th>Rule</th><th>Description</th></tr>
+<tr><td>4</td><td>Repeat&lt;&amp;</td><td>empty file</td></tr>
+</table>
+<h2>a.go</h2>
+<table border="1" cellspacing="0" cellpadding="3">
+<tr><th>Line</th><th>Rule</th><th>Description</th></tr>
+<tr><td>5</td><td>Other</td><td>five</td></tr>
+<tr><td>6</td><td>Other</td><td>zero</td></tr>
+<tr><td>7</td><td>Other</td><td>negative</td></tr>
+<tr><td>8</td><td>Other</td><td>high</td></tr>
+</table>
+<p>bad&lt;&amp;&quot;.go: parse &amp; &lt;failed&gt;
+next</p>
+<p>: empty error</p>
+</body></html>

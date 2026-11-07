@@ -1,0 +1,221 @@
+{
+  "$schema": "https://json.schemastore.org/sarif-2.1.0.json",
+  "version": "2.1.0",
+  "runs": [
+    {
+      "tool": {
+        "driver": {
+          "name": "messgo",
+          "version": "test-version",
+          "rules": [
+            {
+              "id": "Repeat\u003c\u0026",
+              "name": "Repeat\u003c\u0026",
+              "helpUri": "https://example.test/rule?a=1\u0026b=2",
+              "shortDescription": {
+                "text": "first \u003cdescription\u003e"
+              }
+            },
+            {
+              "id": "Other",
+              "name": "Other",
+              "shortDescription": {
+                "text": "other rule"
+              }
+            }
+          ]
+        }
+      },
+      "results": [
+        {
+          "ruleId": "Repeat\u003c\u0026",
+          "level": "error",
+          "message": {
+            "text": "first \u0026 \u003ctag\u003e \"'"
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "a.go"
+                },
+                "region": {
+                  "startLine": 1,
+                  "endLine": 2
+                }
+              }
+            }
+          ]
+        },
+        {
+          "ruleId": "Other",
+          "level": "error",
+          "message": {
+            "text": "line\nnext %\r"
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "b,:%.go"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "ruleId": "Repeat\u003c\u0026",
+          "level": "warning",
+          "message": {
+            "text": "duplicate"
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "a.go"
+                },
+                "region": {
+                  "startLine": 3,
+                  "endLine": 4
+                }
+              }
+            }
+          ]
+        },
+        {
+          "ruleId": "Repeat\u003c\u0026",
+          "level": "warning",
+          "message": {
+            "text": "empty file"
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": ""
+                },
+                "region": {
+                  "startLine": 4,
+                  "endLine": 4
+                }
+              }
+            }
+          ]
+        },
+        {
+          "ruleId": "Other",
+          "level": "warning",
+          "message": {
+            "text": "five"
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "a.go"
+                },
+                "region": {
+                  "startLine": 5,
+                  "endLine": 5
+                }
+              }
+            }
+          ]
+        },
+        {
+          "ruleId": "Other",
+          "level": "error",
+          "message": {
+            "text": "zero"
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "a.go"
+                },
+                "region": {
+                  "startLine": 6,
+                  "endLine": 6
+                }
+              }
+            }
+          ]
+        },
+        {
+          "ruleId": "Other",
+          "level": "error",
+          "message": {
+            "text": "negative"
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "a.go"
+                },
+                "region": {
+                  "startLine": 7,
+                  "endLine": 7
+                }
+              }
+            }
+          ]
+        },
+        {
+          "ruleId": "Other",
+          "level": "warning",
+          "message": {
+            "text": "high"
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "a.go"
+                },
+                "region": {
+                  "startLine": 8,
+                  "endLine": 8
+                }
+              }
+            }
+          ]
+        },
+        {
+          "ruleId": "",
+          "level": "error",
+          "message": {
+            "text": "parse \u0026 \u003cfailed\u003e\nnext"
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "bad\u003c\u0026\".go"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "ruleId": "",
+          "level": "error",
+          "message": {
+            "text": "empty error"
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": ""
+                }
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

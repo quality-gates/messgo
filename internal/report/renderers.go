@@ -41,10 +41,11 @@ func (w *checkedWriter) Write(p []byte) (int, error) {
 
 func (t *TextRenderer) Render(w io.Writer, r *Report) error {
 	out := &checkedWriter{Writer: w}
+	view := NewView(r)
 	longestLoc, longestRule := 0, 0
 	type row struct{ loc, name, desc string }
-	rows := make([]row, 0, len(r.Violations))
-	for _, v := range r.Violations {
+	rows := make([]row, 0, len(view.Violations))
+	for _, v := range view.Violations {
 		loc := fmt.Sprintf("%s:%d", v.File, v.BeginLine)
 		name := v.Rule.Name()
 		if len(loc) > longestLoc {
@@ -63,7 +64,7 @@ func (t *TextRenderer) Render(w io.Writer, r *Report) error {
 		fmt.Fprint(out, t.color(rw.desc, "31"))
 		fmt.Fprint(out, "\n")
 	}
-	for _, e := range r.Errors {
+	for _, e := range view.Errors {
 		fmt.Fprintf(out, "%s\t-\t%s\n", e.File, e.Message)
 	}
 	return out.err
@@ -83,38 +84,34 @@ type XMLRenderer struct{}
 
 func (XMLRenderer) Render(w io.Writer, r *Report) error {
 	out := &checkedWriter{Writer: w}
+	view := NewView(r)
 	fmt.Fprint(out, "<?xml version=\"1.0\" encoding=\"UTF-8\" ?>\n")
 	fmt.Fprintf(out, "<pmd version=\"%s\" tool=\"messgo\" timestamp=\"%s\">\n", Version, time.Now().Format(time.RFC3339))
-	var curFile string
-	open := false
-	for _, v := range r.Violations {
-		if v.File != curFile {
-			if open {
-				fmt.Fprint(out, "  </file>\n")
-			}
-			curFile = v.File
-			fmt.Fprintf(out, "  <file name=\"%s\">\n", xmlEscape(curFile))
-			open = true
+	for run := range view.fileRuns() {
+		if run.wrapped {
+			fmt.Fprintf(out, "  <file name=\"%s\">\n", xmlEscape(run.file))
 		}
-		fmt.Fprint(out, "    <violation")
-		fmt.Fprintf(out, " beginline=\"%d\"", v.BeginLine)
-		fmt.Fprintf(out, " endline=\"%d\"", v.EndLine)
-		fmt.Fprintf(out, " rule=\"%s\"", xmlEscape(v.Rule.Name()))
-		fmt.Fprintf(out, " ruleset=\"%s\"", xmlEscape(v.RuleSetName))
-		maybeAttr(out, "package", v.Package)
-		maybeAttr(out, "externalInfoUrl", v.Rule.ExternalURL())
-		maybeAttr(out, "function", v.Function)
-		maybeAttr(out, "class", v.Class)
-		maybeAttr(out, "method", v.Method)
-		fmt.Fprintf(out, " priority=\"%d\"", v.Priority)
-		fmt.Fprint(out, ">\n")
-		fmt.Fprintf(out, "      %s\n", xmlEscape(v.Description))
-		fmt.Fprint(out, "    </violation>\n")
+		for v := range run.violations {
+			fmt.Fprint(out, "    <violation")
+			fmt.Fprintf(out, " beginline=\"%d\"", v.BeginLine)
+			fmt.Fprintf(out, " endline=\"%d\"", v.EndLine)
+			fmt.Fprintf(out, " rule=\"%s\"", xmlEscape(v.Rule.Name()))
+			fmt.Fprintf(out, " ruleset=\"%s\"", xmlEscape(v.RuleSetName))
+			maybeAttr(out, "package", v.Package)
+			maybeAttr(out, "externalInfoUrl", v.Rule.ExternalURL())
+			maybeAttr(out, "function", v.Function)
+			maybeAttr(out, "class", v.Class)
+			maybeAttr(out, "method", v.Method)
+			fmt.Fprintf(out, " priority=\"%d\"", v.Priority)
+			fmt.Fprint(out, ">\n")
+			fmt.Fprintf(out, "      %s\n", xmlEscape(v.Description))
+			fmt.Fprint(out, "    </violation>\n")
+		}
+		if run.wrapped {
+			fmt.Fprint(out, "  </file>\n")
+		}
 	}
-	if open {
-		fmt.Fprint(out, "  </file>\n")
-	}
-	for _, e := range r.Errors {
+	for _, e := range view.Errors {
 		fmt.Fprintf(out, "  <error filename=\"%s\" msg=\"%s\" />\n", xmlEscape(e.File), xmlEscape(e.Message))
 	}
 	fmt.Fprint(out, "</pmd>\n")
@@ -196,18 +193,15 @@ type jsonError struct {
 
 func (JSONRenderer) Render(w io.Writer, r *Report) error {
 	out := &checkedWriter{Writer: w}
+	view := NewView(r)
 	rep := jsonReport{
 		Version:   Version,
 		Package:   "messgo",
 		Timestamp: time.Now().Format(time.RFC3339),
 		Files:     []jsonFile{},
 	}
-	idx := map[string]int{}
-	for _, v := range r.Violations {
-		i, ok := idx[v.File]
-		if !ok {
-			i = len(rep.Files)
-			idx[v.File] = i
+	for i, v := range view.indexedViolations() {
+		if i == len(rep.Files) {
 			rep.Files = append(rep.Files, jsonFile{File: v.File})
 		}
 		rep.Files[i].Violations = append(rep.Files[i].Violations, jsonViolation{
@@ -224,7 +218,7 @@ func (JSONRenderer) Render(w io.Writer, r *Report) error {
 			Priority:        v.Priority,
 		})
 	}
-	for _, e := range r.Errors {
+	for _, e := range view.Errors {
 		rep.Errors = append(rep.Errors, jsonError{FileName: e.File, Message: e.Message})
 	}
 	enc := json.NewEncoder(out)
@@ -243,12 +237,13 @@ type GitHubRenderer struct{}
 
 func (GitHubRenderer) Render(w io.Writer, r *Report) error {
 	out := &checkedWriter{Writer: w}
-	for _, v := range r.Violations {
+	view := NewView(r)
+	for _, v := range view.Violations {
 		fmt.Fprintf(out, "::warning file=%s,line=%d,col=1::%s (%s)\n",
 			githubEscapeProperty(v.File), v.BeginLine,
 			githubEscape(v.Description), githubEscape(v.Rule.Name()))
 	}
-	for _, e := range r.Errors {
+	for _, e := range view.Errors {
 		fmt.Fprintf(out, "::error file=%s::%s\n", githubEscapeProperty(e.File), githubEscape(e.Message))
 	}
 	return out.err
@@ -273,6 +268,7 @@ type GitLabRenderer struct{}
 
 func (GitLabRenderer) Render(w io.Writer, r *Report) error {
 	out := &checkedWriter{Writer: w}
+	view := NewView(r)
 	type loc struct {
 		Path  string `json:"path"`
 		Lines struct {
@@ -287,19 +283,19 @@ func (GitLabRenderer) Render(w io.Writer, r *Report) error {
 		Severity    string `json:"severity"`
 		Location    loc    `json:"location"`
 	}
-	entries := make([]entry, 0, len(r.Violations))
-	for _, v := range r.Violations {
+	entries := make([]entry, 0, len(view.Violations))
+	for _, v := range view.Violations {
 		var e entry
 		e.Type = "issue"
 		e.CheckName = v.Rule.Name()
 		e.Description = v.Description
-		e.Severity = gitlabSeverity(v.Priority)
+		e.Severity = view.gitlabSeverity(v.Priority)
 		e.Fingerprint = fingerprint(v)
 		e.Location.Path = v.File
 		e.Location.Lines.Begin = v.BeginLine
 		entries = append(entries, e)
 	}
-	for _, errItem := range r.Errors {
+	for _, errItem := range view.Errors {
 		var e entry
 		e.Type = "issue"
 		e.CheckName = "parse-error"
@@ -317,21 +313,6 @@ func (GitLabRenderer) Render(w io.Writer, r *Report) error {
 	return out.err
 }
 
-func gitlabSeverity(priority int) string {
-	switch priority {
-	case 1:
-		return "blocker"
-	case 2:
-		return "critical"
-	case 3:
-		return "major"
-	case 4:
-		return "minor"
-	default:
-		return "info"
-	}
-}
-
 func fingerprint(v *rule.Violation) string {
 	return fmt.Sprintf("%x", fmt.Appendf(nil, "%s:%d:%s:%s", v.File, v.BeginLine, v.Rule.Name(), v.Description))
 }
@@ -343,42 +324,28 @@ type CheckStyleRenderer struct{}
 
 func (CheckStyleRenderer) Render(w io.Writer, r *Report) error {
 	out := &checkedWriter{Writer: w}
+	view := NewView(r)
 	fmt.Fprint(out, "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n")
 	fmt.Fprintf(out, "<checkstyle version=\"%s\">\n", Version)
-	var curFile string
-	open := false
-	for _, v := range r.Violations {
-		if v.File != curFile {
-			if open {
-				fmt.Fprint(out, "  </file>\n")
-			}
-			curFile = v.File
-			fmt.Fprintf(out, "  <file name=\"%s\">\n", xmlEscape(curFile))
-			open = true
+	for run := range view.fileRuns() {
+		if run.wrapped {
+			fmt.Fprintf(out, "  <file name=\"%s\">\n", xmlEscape(run.file))
 		}
-		fmt.Fprintf(out, "    <error line=\"%d\" column=\"1\" severity=\"%s\" message=\"%s\" source=\"%s\"/>\n",
-			v.BeginLine, checkstyleSeverity(v.Priority), xmlEscape(v.Description), xmlEscape(v.RuleSetName+"/"+v.Rule.Name()))
+		for v := range run.violations {
+			fmt.Fprintf(out, "    <error line=\"%d\" column=\"1\" severity=\"%s\" message=\"%s\" source=\"%s\"/>\n",
+				v.BeginLine, view.checkstyleSeverity(v.Priority), xmlEscape(v.Description), xmlEscape(v.RuleSetName+"/"+v.Rule.Name()))
+		}
+		if run.wrapped {
+			fmt.Fprint(out, "  </file>\n")
+		}
 	}
-	if open {
-		fmt.Fprint(out, "  </file>\n")
-	}
-	for _, e := range r.Errors {
+	for _, e := range view.Errors {
 		fmt.Fprintf(out, "  <file name=\"%s\">\n", xmlEscape(e.File))
 		fmt.Fprintf(out, "    <error line=\"0\" column=\"1\" severity=\"error\" message=\"%s\" source=\"messgo/parse-error\"/>\n", xmlEscape(e.Message))
 		fmt.Fprint(out, "  </file>\n")
 	}
 	fmt.Fprint(out, "</checkstyle>\n")
 	return out.err
-}
-
-func checkstyleSeverity(priority int) string {
-	if priority <= 2 {
-		return "error"
-	}
-	if priority == 3 {
-		return "warning"
-	}
-	return "info"
 }
 
 // ----- SARIF --------------------------------------------------------------
@@ -439,10 +406,11 @@ type SARIFRenderer struct{}
 
 func (SARIFRenderer) Render(w io.Writer, r *Report) error {
 	out := &checkedWriter{Writer: w}
+	view := NewView(r)
 	seen := map[string]bool{}
 	rules := make([]sarifDriverRule, 0)
 	results := make([]sarifResult, 0)
-	for _, v := range r.Violations {
+	for _, v := range view.Violations {
 		id := v.Rule.Name()
 		if !seen[id] {
 			seen[id] = true
@@ -455,7 +423,7 @@ func (SARIFRenderer) Render(w io.Writer, r *Report) error {
 		}
 		var res sarifResult
 		res.RuleID = id
-		res.Level = sarifLevel(v.Priority)
+		res.Level = view.sarifLevel(v.Priority)
 		res.Message.Text = v.Description
 		var l sarifLocation
 		l.PhysicalLocation.ArtifactLocation.URI = v.File
@@ -468,7 +436,7 @@ func (SARIFRenderer) Render(w io.Writer, r *Report) error {
 		res.Locations = []sarifLocation{l}
 		results = append(results, res)
 	}
-	for _, e := range r.Errors {
+	for _, e := range view.Errors {
 		var res sarifResult
 		res.Level = "error"
 		res.Message.Text = e.Message
@@ -507,13 +475,6 @@ func sarifHelpURI(raw string) string {
 	return raw
 }
 
-func sarifLevel(priority int) string {
-	if priority <= 2 {
-		return "error"
-	}
-	return "warning"
-}
-
 // ----- HTML ---------------------------------------------------------------
 
 // HTMLRenderer emits a simple HTML table report.
@@ -521,27 +482,23 @@ type HTMLRenderer struct{}
 
 func (HTMLRenderer) Render(w io.Writer, r *Report) error {
 	out := &checkedWriter{Writer: w}
+	view := NewView(r)
 	fmt.Fprint(out, "<!DOCTYPE html>\n<html><head><meta charset=\"utf-8\"><title>messgo report</title></head><body>\n")
 	fmt.Fprint(out, "<h1>messgo report</h1>\n")
-	var curFile string
-	open := false
-	for _, v := range r.Violations {
-		if v.File != curFile {
-			if open {
-				fmt.Fprint(out, "</table>\n")
-			}
-			curFile = v.File
-			fmt.Fprintf(out, "<h2>%s</h2>\n<table border=\"1\" cellspacing=\"0\" cellpadding=\"3\">\n", htmlEscape(curFile))
+	for run := range view.fileRuns() {
+		if run.wrapped {
+			fmt.Fprintf(out, "<h2>%s</h2>\n<table border=\"1\" cellspacing=\"0\" cellpadding=\"3\">\n", htmlEscape(run.file))
 			fmt.Fprint(out, "<tr><th>Line</th><th>Rule</th><th>Description</th></tr>\n")
-			open = true
 		}
-		fmt.Fprintf(out, "<tr><td>%d</td><td>%s</td><td>%s</td></tr>\n",
-			v.BeginLine, htmlEscape(v.Rule.Name()), htmlEscape(v.Description))
+		for v := range run.violations {
+			fmt.Fprintf(out, "<tr><td>%d</td><td>%s</td><td>%s</td></tr>\n",
+				v.BeginLine, htmlEscape(v.Rule.Name()), htmlEscape(v.Description))
+		}
+		if run.wrapped {
+			fmt.Fprint(out, "</table>\n")
+		}
 	}
-	if open {
-		fmt.Fprint(out, "</table>\n")
-	}
-	for _, e := range r.Errors {
+	for _, e := range view.Errors {
 		fmt.Fprintf(out, "<p>%s: %s</p>\n", htmlEscape(e.File), htmlEscape(e.Message))
 	}
 	fmt.Fprint(out, "</body></html>\n")

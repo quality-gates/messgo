@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<checkstyle version="test-version">
+    <error line="0" column="1" severity="error" message="empty" source="/R"/>
+  <file name="a">
+    <error line="1" column="1" severity="error" message="named" source="/R"/>
+  </file>
+</checkstyle>

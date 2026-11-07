@@ -1,0 +1,10 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>messgo report</title></head><body>
+<h1>messgo report</h1>
+<tr><td>0</td><td>R</td><td>empty</td></tr>
+<h2>a</h2>
+<table border="1" cellspacing="0" cellpadding="3">
+<tr><th>Line</th><th>Rule</th><th>Description</th></tr>
+<tr><td>1</td><td>R</td><td>named</td></tr>
+</table>
+</body></html>

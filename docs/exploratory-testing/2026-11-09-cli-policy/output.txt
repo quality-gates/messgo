@@ -1,0 +1,117 @@
+
+$ messgo ./... text go --ignore-tests --only DevelopmentCodeFragment
+generated/gen.go:2  DevelopmentCodeFragment  The function Generated() calls the typical debug function println() which is mostly only used during development.
+main.go:2           DevelopmentCodeFragment  The function Work() calls the typical debug function println() which is mostly only used during development.
+exit=2
+
+$ messgo ./... text go --only DevelopmentCodeFragment
+generated/gen.go:2  DevelopmentCodeFragment  The function Generated() calls the typical debug function println() which is mostly only used during development.
+main.go:2           DevelopmentCodeFragment  The function Work() calls the typical debug function println() which is mostly only used during development.
+main_test.go:2      DevelopmentCodeFragment  The function TestDebug() calls the typical debug function println() which is mostly only used during development.
+exit=2
+
+$ messgo feature_windows.go text go --only DevelopmentCodeFragment
+feature_windows.go:4  DevelopmentCodeFragment  The function Windows() calls the typical debug function println() which is mostly only used during development.
+exit=2
+
+$ messgo ./... text ../team.xml --ignore-tests --only DevelopmentCodeFragment
+main.go:2  DevelopmentCodeFragment  The function Work() calls the typical debug function println() which is mostly only used during development.
+exit=2
+
+$ messgo ./... json go --ignore-tests --only DevelopmentCodeFragment --reportfile reports/result.json
+exit=2
+
+Saved JSON findings:
+{
+  "files": [
+    {
+      "file": "generated/gen.go",
+      "violations": [
+        {
+          "beginLine": 2,
+          "class": "",
+          "description": "The function Generated() calls the typical debug function println() which is mostly only used during development.",
+          "endLine": 2,
+          "externalInfoUrl": "https://phpmd.org/rules/design.html#developmentcodefragment",
+          "function": "Generated",
+          "method": "",
+          "package": "generated",
+          "priority": 2,
+          "rule": "DevelopmentCodeFragment",
+          "ruleSet": "Design Rules"
+        }
+      ]
+    },
+    {
+      "file": "main.go",
+      "violations": [
+        {
+          "beginLine": 2,
+          "class": "",
+          "description": "The function Work() calls the typical debug function println() which is mostly only used during development.",
+          "endLine": 2,
+          "externalInfoUrl": "https://phpmd.org/rules/design.html#developmentcodefragment",
+          "function": "Work",
+          "method": "",
+          "package": "app",
+          "priority": 2,
+          "rule": "DevelopmentCodeFragment",
+          "ruleSet": "Design Rules"
+        }
+      ]
+    }
+  ],
+  "package": "messgo",
+  "timestamp": "2026-11-09T17:32:59Z",
+  "version": "dev"
+}
+
+$ messgo ./... json go --ignore-tests --only DevelopmentCodeFragment --reportfile reports/result.json
+exit=2
+
+Replaced JSON findings:
+{
+  "files": [
+    {
+      "file": "generated/gen.go",
+      "violations": [
+        {
+          "beginLine": 2,
+          "class": "",
+          "description": "The function Generated() calls the typical debug function println() which is mostly only used during development.",
+          "endLine": 2,
+          "externalInfoUrl": "https://phpmd.org/rules/design.html#developmentcodefragment",
+          "function": "Generated",
+          "method": "",
+          "package": "generated",
+          "priority": 2,
+          "rule": "DevelopmentCodeFragment",
+          "ruleSet": "Design Rules"
+        }
+      ]
+    }
+  ],
+  "package": "messgo",
+  "timestamp": "2026-11-09T17:32:59Z",
+  "version": "dev"
+}
+
+$ messgo ./... text go --ignore-tests --only DevelopmentCodeFragment
+generated/gen.go:2  DevelopmentCodeFragment  The function Generated() calls the typical debug function println() which is mostly only used during development.
+broken.go	-	broken.go:2:14: expected ')', found 'EOF' (and 1 more errors)
+exit=3
+
+$ messgo ./... text go --ignore-tests --only DevelopmentCodeFragment --ignore-errors-on-exit
+generated/gen.go:2  DevelopmentCodeFragment  The function Generated() calls the typical debug function println() which is mostly only used during development.
+broken.go	-	broken.go:2:14: expected ')', found 'EOF' (and 1 more errors)
+exit=2
+
+Custom threshold and selection:
+
+$ messgo names.go text ../threshold.xml
+names.go:2  LongVariable  Avoid excessively long variable names like veryLongVariableName. Keep variable name length under 8.
+exit=2
+
+$ messgo names.go text ../threshold.xml --disable LongVariable
+warning: no rules selected (check --enable/--only/--disable)
+exit=0

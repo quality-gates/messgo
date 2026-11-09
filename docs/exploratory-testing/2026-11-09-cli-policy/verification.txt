@@ -1,0 +1,43 @@
+Go: go version go1.26.8 linux/amd64
+Module download: GOFLAGS=-mod=readonly go mod download => no module dependencies to download
+go build -o .scratch/messgo ./cmd/messgo => passed
+go build ./... => passed
+messgo ./internal text go --ignore-tests => exit 0, no output
+
+First go test ./... with TMPDIR inside worktree:
+--- FAIL: TestPreCommitClearsGitEnvironment (0.06s)
+    pre_commit_test.go:88: hook rejected a clean staged tree with hook git variables: exit status 1
+        pre-commit: gofmt -s
+        pre-commit: go vet
+        pre-commit: gocyclo
+        git environment leaked
+        pre-commit: functions over cyclomatic complexity 15 found
+FAIL
+FAIL	github.com/quality-gates/messgo/githooks	0.578s
+ok  	github.com/quality-gates/messgo/internal/cli	25.091s
+
+Retry: GIT_CEILING_DIRECTORIES=$PWD/.scratch go test -count=1 ./...
+?   	github.com/quality-gates/messgo/cmd/messgo	[no test files]
+ok  	github.com/quality-gates/messgo/githooks	0.691s
+ok  	github.com/quality-gates/messgo/internal/cli	23.753s
+ok  	github.com/quality-gates/messgo/internal/metrics	0.023s
+ok  	github.com/quality-gates/messgo/internal/model	0.027s
+ok  	github.com/quality-gates/messgo/internal/model/controlflow	0.004s
+ok  	github.com/quality-gates/messgo/internal/report	0.028s
+ok  	github.com/quality-gates/messgo/internal/rule	0.009s
+ok  	github.com/quality-gates/messgo/internal/rules	0.169s
+ok  	github.com/quality-gates/messgo/internal/rules/cleancode	0.005s
+ok  	github.com/quality-gates/messgo/internal/rules/codesize	0.011s
+ok  	github.com/quality-gates/messgo/internal/rules/controversial	0.005s
+ok  	github.com/quality-gates/messgo/internal/rules/design	0.010s
+?   	github.com/quality-gates/messgo/internal/rules/explicitness	[no test files]
+ok  	github.com/quality-gates/messgo/internal/rules/naming	0.007s
+ok  	github.com/quality-gates/messgo/internal/rules/opinionated	0.010s
+ok  	github.com/quality-gates/messgo/internal/rules/unusedcode	0.007s
+ok  	github.com/quality-gates/messgo/internal/ruleset	0.588s
+ok  	github.com/quality-gates/messgo/internal/runner	0.079s
+ok  	github.com/quality-gates/messgo/internal/util	0.008s
+?   	github.com/quality-gates/messgo/internal/version	[no test files]
+
+Two clean replay directories: output matched after JSON timestamp normalization.
+Nonempty directory refused with exit 1; canary preserved.

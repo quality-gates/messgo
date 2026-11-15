@@ -77,6 +77,12 @@ Rules are verified using crafted Go fixture sources in `internal/rules/rules_tes
 - Assert on which rules fire (using `mustHave` and `mustNotHave`).
 - Ensure metrics values correspond to expected outputs of reference tools (like real phpmd).
 
+## Rules and enforcement
+
+| Rule | Enforcement |
+| :--- | :--- |
+| Equivalent parentheses must not change findings in the covered declaration, receiver, range, stream call, and recursion cases. Extend the contract when adding a new supported syntax form. | `TestEquivalentParenthesesPreserveFindings` runs in `go test ./...` and CI. |
+
 ## Agent skills
 
 ### Issue tracker

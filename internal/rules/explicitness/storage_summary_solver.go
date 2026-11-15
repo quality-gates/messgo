@@ -18,10 +18,10 @@ func (c *storageSummaryCache) summarize(fn *model.Function, entry state, strict 
 	}
 	c.link(c.current, summary)
 	recursive := storageSummaryReaches(summary, c.current, map[*storageSummary]bool{})
-	if summary.computing {
+	if summary.phase.evaluating() {
 		return provisionalStorageSummary(entry), true
 	}
-	if !summary.initialized {
+	if summary.phase == summaryNew {
 		c.evaluate(summary)
 	}
 	if c.current == nil {
@@ -60,17 +60,23 @@ func storageSummaryReaches(from, target *storageSummary, seen map[*storageSummar
 
 func (c *storageSummaryCache) evaluate(summary *storageSummary) {
 	previous := c.current
-	c.current, summary.computing = summary, true
+	c.current = summary
+	previousPhase := summary.phase
+	if previousPhase == summaryNew {
+		summary.phase = summaryEvaluating
+	} else {
+		summary.phase = summaryReevaluating
+	}
 	s := untrackedScope(summary.fn, summary.strict, newStorageMutations())
 	flow := &ownershipFlow{s: s, summaries: c, labels: map[string]state{}}
 	next := computeStorageSummary(flow, summary.fn, summary.entry)
-	c.current, summary.computing = previous, false
-	changed := !summary.initialized || !sameStorageSummary(summary, next)
+	c.current = previous
+	changed := previousPhase == summaryNew || !sameStorageSummary(summary, next)
 	summary.exit, summary.result, summary.mutations = next.exit, next.result, next.mutations
-	summary.initialized = true
+	summary.phase = summaryReady
 	if changed {
 		for caller := range summary.callers {
-			if !caller.computing && !c.queued[caller] {
+			if !caller.phase.evaluating() && !c.queued[caller] {
 				c.pending = append(c.pending, caller)
 				c.queued[caller] = true
 			}

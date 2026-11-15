@@ -22,22 +22,25 @@ type fileRun struct {
 	violations iter.Seq[*rule.Violation]
 }
 
+type fileRunCursor struct {
+	violations []*rule.Violation
+	next       int
+	pending    *rule.Violation
+}
+
 func (v *View) fileRuns() iter.Seq[fileRun] {
 	return func(yield func(fileRun) bool) {
-		violations := v.Violations
-		i := 0
-		var pending *rule.Violation
-		for pending != nil || i < len(violations) {
-			first := pending
+		cursor := fileRunCursor{violations: v.Violations}
+		for cursor.pending != nil || cursor.next < len(cursor.violations) {
+			first := cursor.pending
 			if first == nil {
-				first = violations[i]
-				i++
+				first = cursor.violations[cursor.next]
+				cursor.next++
 			}
-			pending = nil
+			cursor.pending = nil
 			file := first.File
-			wrapped := i != 1 || file != ""
-			run := fileRun{file: file, wrapped: wrapped}
-			run.violations = runViolations(violations, &i, &pending, file, first)
+			run := fileRun{file: file, wrapped: cursor.next != 1 || file != ""}
+			run.violations = cursor.runViolations(file, first)
 			if !yield(run) {
 				return
 			}
@@ -45,16 +48,16 @@ func (v *View) fileRuns() iter.Seq[fileRun] {
 	}
 }
 
-func runViolations(violations []*rule.Violation, i *int, pending **rule.Violation, file string, first *rule.Violation) iter.Seq[*rule.Violation] {
+func (c *fileRunCursor) runViolations(file string, first *rule.Violation) iter.Seq[*rule.Violation] {
 	return func(yield func(*rule.Violation) bool) {
 		if !yield(first) {
 			return
 		}
-		for *i < len(violations) {
-			item := violations[*i]
-			*i++
+		for c.next < len(c.violations) {
+			item := c.violations[c.next]
+			c.next++
 			if item.File != file {
-				*pending = item
+				c.pending = item
 				return
 			}
 			if !yield(item) {

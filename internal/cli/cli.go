@@ -154,13 +154,14 @@ func parseArgs(args []string) (options, []string, error) {
 		"--minimumpriority": &opt.minPriority,
 		"--maximumpriority": &opt.maxPriority,
 	}
-	for i := 0; i < len(args); i++ {
-		a := args[i]
+	cursor := argumentCursor{args: args}
+	for cursor.more() {
+		a := cursor.take()
 		switch {
 		case boolFlags[a] != nil:
 			*boolFlags[a] = true
 		case strFlags[a] != nil || intFlags[a] != nil:
-			if err := valueFlag(args, &i, a, valueTarget{str: strFlags[a], pri: intFlags[a]}); err != nil {
+			if err := cursor.valueFlag(a, valueTarget{str: strFlags[a], pri: intFlags[a]}); err != nil {
 				return opt, nil, err
 			}
 		case strings.HasPrefix(a, "--"):
@@ -240,8 +241,8 @@ type valueTarget struct {
 }
 
 // valueFlag consumes the value token following flag and stores it in t.
-func valueFlag(args []string, i *int, flag string, t valueTarget) error {
-	v, err := flagValue(args, i, flag)
+func (c *argumentCursor) valueFlag(flag string, t valueTarget) error {
+	v, err := c.flagValue(flag)
 	if err != nil {
 		return err
 	}
@@ -257,15 +258,26 @@ func valueFlag(args []string, i *int, flag string, t valueTarget) error {
 	return nil
 }
 
-// flagValue consumes the value token following a value-taking flag. A missing
-// token, or one that looks like another option, is a usage error.
-func flagValue(args []string, i *int, flag string) (string, error) {
-	next := *i + 1
-	if next >= len(args) || strings.HasPrefix(args[next], "--") {
+type argumentCursor struct {
+	args []string
+	next int
+}
+
+func (c *argumentCursor) more() bool {
+	return c.next < len(c.args)
+}
+
+func (c *argumentCursor) take() string {
+	value := c.args[c.next]
+	c.next++
+	return value
+}
+
+func (c *argumentCursor) flagValue(flag string) (string, error) {
+	if !c.more() || strings.HasPrefix(c.args[c.next], "--") {
 		return "", fmt.Errorf("%s requires a value", flag)
 	}
-	*i = next
-	return args[next], nil
+	return c.take(), nil
 }
 
 // nonNegativeInt parses a priority value: a whole number >= 0.

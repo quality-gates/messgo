@@ -7,6 +7,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 ## [Unreleased]
 
 ### Added
+- A CLI contract test compares findings for equivalent parenthesized Go forms.
 - An exploratory report and replay cover CLI policy and JSON reports.
 - A verification skill checks bounded promoted selectors against Go's type checker.
 

@@ -74,17 +74,7 @@ func newDiscoveryFilter(opts DiscoveryOptions, compile func(string) *regexp.Rege
 // DiscoverSources returns sorted, deduplicated paths selected by the run's discovery rules.
 func DiscoverSources(opts DiscoveryOptions) ([]string, error) {
 	filter := newDiscoveryFilter(opts, ignorePatternRegexp)
-	var out []string
-	seen := map[string]bool{}
-	add := func(p string) {
-		p = normalizePath(p)
-		identity := pathIdentity(p)
-		if seen[identity] {
-			return
-		}
-		seen[identity] = true
-		out = append(out, p)
-	}
+	files := discoveredSources{seen: map[string]bool{}}
 	for _, p := range opts.Paths {
 		root := discoveryRoot(p)
 		info, err := os.Stat(root)
@@ -95,7 +85,7 @@ func DiscoverSources(opts DiscoveryOptions) ([]string, error) {
 			if !filter.shouldIncludeFile(root) {
 				continue
 			}
-			add(root)
+			files.add(root)
 			continue
 		}
 		root, err = filepath.EvalSymlinks(root)
@@ -103,13 +93,27 @@ func DiscoverSources(opts DiscoveryOptions) ([]string, error) {
 			return nil, err
 		}
 		root = normalizePath(root)
-		err = filepath.WalkDir(root, walkDirFunc(root, filter, add))
+		err = filepath.WalkDir(root, walkDirFunc(root, filter, files.add))
 		if err != nil {
 			return nil, err
 		}
 	}
-	sort.Strings(out)
-	return out, nil
+	sort.Strings(files.paths)
+	return files.paths, nil
+}
+
+type discoveredSources struct {
+	seen  map[string]bool
+	paths []string
+}
+
+func (d *discoveredSources) add(path string) {
+	path = normalizePath(path)
+	identity := pathIdentity(path)
+	if !d.seen[identity] {
+		d.seen[identity] = true
+		d.paths = append(d.paths, path)
+	}
 }
 
 func pathIdentity(p string) string {

@@ -22,16 +22,29 @@ type storageSummaryCache struct {
 	inlineSites  map[string]*ast.Ident
 }
 
+type summaryPhase uint8
+
+const (
+	summaryNew summaryPhase = iota
+	summaryEvaluating
+	summaryReady
+	summaryReevaluating
+)
+
+func (p summaryPhase) evaluating() bool {
+	return p == summaryEvaluating || p == summaryReevaluating
+}
+
 type storageSummary struct {
-	entry                  state
-	fn                     *model.Function
-	computing, initialized bool
-	callees, callers       map[*storageSummary]bool
-	strict                 bool
-	exit                   state
-	result                 storage
-	mutations              *storageMutations
-	context                string
+	entry            state
+	fn               *model.Function
+	phase            summaryPhase
+	callees, callers map[*storageSummary]bool
+	strict           bool
+	exit             state
+	result           storage
+	mutations        *storageMutations
+	context          string
 }
 
 type storageDependencies struct {

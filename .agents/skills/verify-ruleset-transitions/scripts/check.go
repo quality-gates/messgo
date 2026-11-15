@@ -85,6 +85,8 @@ func checkOverrides(dir string) {
 	fmt.Printf("Verified %d override sequences of length 1 through 5.\n", count)
 }
 
+var graphRules = []string{"LongVariable", "ShortVariable", "LongClassName"}
+
 func checkGraphs(dir string) {
 	count := 0
 	for nodes := 1; nodes <= 3; nodes++ {
@@ -96,7 +98,7 @@ func checkGraphs(dir string) {
 						refs = append(refs, fmt.Sprintf(`<rule ref="node%d.xml"/>`, to))
 					}
 				}
-				refs = append(refs, `<rule ref="naming/LongVariable"/>`)
+				refs = append(refs, fmt.Sprintf(`<rule ref="naming/%s"/>`, graphRules[from]))
 				write(filepath.Join(dir, fmt.Sprintf("node%d.xml", from)), `<ruleset name="test">`+strings.Join(refs, "")+`</ruleset>`)
 			}
 			path := filepath.Join(dir, "node0.xml")
@@ -105,8 +107,22 @@ func checkGraphs(dir string) {
 				if err == nil || !strings.Contains(err.Error(), "cyclic ruleset reference") {
 					fail("graph nodes=%d edges=%d: expected cycle error, got %v", nodes, edges, err)
 				}
-			} else if err != nil || len(sets) != 1 || len(sets[0].Rules) != 1 || sets[0].Rules[0].Name() != "LongVariable" {
-				fail("graph nodes=%d edges=%d: expected one LongVariable without error, got %v", nodes, edges, err)
+			} else {
+				expected := reachableRules(nodes, edges)
+				actual := map[string]bool{}
+				if err == nil && len(sets) == 1 {
+					for _, rule := range sets[0].Rules {
+						actual[rule.Name()] = true
+					}
+				}
+				if err != nil || len(sets) != 1 || len(actual) != len(expected) {
+					fail("graph nodes=%d edges=%d: expected rules %v, got %v (error: %v)", nodes, edges, expected, actual, err)
+				}
+				for rule := range expected {
+					if !actual[rule] {
+						fail("graph nodes=%d edges=%d: missing %s", nodes, edges, rule)
+					}
+				}
 			}
 			count++
 		}
@@ -129,4 +145,22 @@ func reachableCycle(nodes, edges int) bool {
 		return false
 	}
 	return visit(0, 0)
+}
+
+func reachableRules(nodes, edges int) map[string]bool {
+	result := map[string]bool{}
+	var visit func(int)
+	visit = func(node int) {
+		if result[graphRules[node]] {
+			return
+		}
+		result[graphRules[node]] = true
+		for next := range nodes {
+			if edges&(1<<(node*nodes+next)) != 0 {
+				visit(next)
+			}
+		}
+	}
+	visit(0)
+	return result
 }

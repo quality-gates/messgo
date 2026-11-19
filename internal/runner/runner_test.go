@@ -1,12 +1,14 @@
 package runner
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"reflect"
 	"runtime"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/quality-gates/messgo/internal/model"
 	"github.com/quality-gates/messgo/internal/report"
@@ -1375,4 +1377,69 @@ func TestDirectoryDiscoveryReportsUnreadableGoFile(t *testing.T) {
 	if len(rep.Errors) != 1 || filepath.Base(rep.Errors[0].File) != "locked.go" {
 		t.Fatalf("Run errors = %+v, want locked.go read error", rep.Errors)
 	}
+}
+
+// TestExplicitnessCallChainCompletesWithinBudget is a performance regression
+// guard for the per-root effect-graph rebuild. A chain of 150 functions
+// each calling the previous one must stay within a small multiple of the
+// same-sized independent functions. The previous implementation rebuilt
+// a graph per function per rule and needed more than twice the budget.
+func TestExplicitnessCallChainCompletesWithinBudget(t *testing.T) {
+	const n = 150
+	chain := callChainSource(n, true)
+	indep := callChainSource(n, false)
+	sets, err := (&ruleset.Loader{}).Load("explicitness")
+	if err != nil {
+		t.Fatal(err)
+	}
+	run := func(src string) (*report.Report, time.Duration) {
+		dir := t.TempDir()
+		if err := os.WriteFile(filepath.Join(dir, "a.go"), []byte(src), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		start := time.Now()
+		rep, err := Run(Options{Paths: []string{dir}, RuleSets: sets})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return rep, time.Since(start)
+	}
+	// Take the minimum of three runs so cold caches and load spikes do
+	// not decide the ratio.
+	mind := func(src string) (*report.Report, time.Duration) {
+		var rep *report.Report
+		best := time.Duration(1 << 62)
+		for range 3 {
+			var elapsed time.Duration
+			rep, elapsed = run(src)
+			if elapsed < best {
+				best = elapsed
+			}
+		}
+		return rep, best
+	}
+	indepRep, indepTime := mind(indep)
+	if len(indepRep.Violations) != n {
+		t.Fatalf("independent: got %d violations, want %d", len(indepRep.Violations), n)
+	}
+	chainRep, chainTime := mind(chain)
+	if len(chainRep.Violations) != n {
+		t.Fatalf("chain: got %d violations, want %d", len(chainRep.Violations), n)
+	}
+	if chainTime > 100*indepTime {
+		t.Fatalf("chain took %v, independent took %v: ratio exceeds 100x budget", chainTime, indepTime)
+	}
+}
+
+func callChainSource(n int, chain bool) string {
+	var src strings.Builder
+	src.WriteString("package p\nimport \"fmt\"\nfunc F0(v int) { fmt.Println(v) }\n")
+	for i := 1; i < n; i++ {
+		if chain {
+			fmt.Fprintf(&src, "func F%d(v int) { F%d(v) }\n", i, i-1)
+		} else {
+			fmt.Fprintf(&src, "func F%d(v int) { fmt.Println(v) }\n", i)
+		}
+	}
+	return src.String()
 }

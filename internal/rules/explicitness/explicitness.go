@@ -31,6 +31,7 @@ type ImplicitInput struct {
 	*rule.Base
 	includeReceiver bool
 	summaries       storageSummaryCache
+	graphCache      sharedGraphCache
 }
 
 func newImplicitInput() rule.Rule { return &ImplicitInput{Base: rule.NewBase(receiverProperty)} }
@@ -41,7 +42,7 @@ func (r *ImplicitInput) Configure(props rule.Properties) error {
 }
 
 func (r *ImplicitInput) ApplyFunc(c *rule.Context, fn *model.Function) {
-	reportFunctions(c, moduleOwner(fn), r.includeReceiver, true, r.summaries.forFile(c.File))
+	reportFunctions(c, moduleOwner(fn), r.includeReceiver, true, r.summaries.forFile(c.File), &r.graphCache)
 }
 
 func (r *ImplicitInput) ApplyFile(c *rule.Context) { applyModule(c, r.ApplyFunc) }
@@ -52,6 +53,7 @@ type ImplicitOutput struct {
 	*rule.Base
 	includeReceiver bool
 	summaries       storageSummaryCache
+	graphCache      sharedGraphCache
 }
 
 func newImplicitOutput() rule.Rule { return &ImplicitOutput{Base: rule.NewBase(receiverProperty)} }
@@ -62,7 +64,7 @@ func (r *ImplicitOutput) Configure(props rule.Properties) error {
 }
 
 func (r *ImplicitOutput) ApplyFunc(c *rule.Context, fn *model.Function) {
-	reportFunctions(c, moduleOwner(fn), r.includeReceiver, false, r.summaries.forFile(c.File))
+	reportFunctions(c, moduleOwner(fn), r.includeReceiver, false, r.summaries.forFile(c.File), &r.graphCache)
 }
 
 func (r *ImplicitOutput) ApplyFile(c *rule.Context) { applyModule(c, r.ApplyFunc) }
@@ -99,8 +101,11 @@ func report(c *rule.Context, fn *model.Function, effects []effect) {
 	}
 }
 
-func reportFunctions(c *rule.Context, fn *model.Function, strict, input bool, summaries *storageSummaryCache) {
-	graph := analyze(c, fn, strict, summaries)
+func reportFunctions(c *rule.Context, fn *model.Function, strict, input bool, summaries *storageSummaryCache, cache *sharedGraphCache) {
+	graph := analyze(c, fn, strict, summaries, cache)
+	if fn.Name == moduleName {
+		fn = canonicalModule(graph, fn)
+	}
 	for _, callable := range graph.owned(fn) {
 		effects := graph.nodes[callable].facts.outputs
 		if input {

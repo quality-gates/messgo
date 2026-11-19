@@ -25,17 +25,44 @@ type callableSummary struct {
 }
 
 type effectGraph struct {
-	ctx       *rule.Context
-	nodes     map[*model.Function]*callableSummary
-	order     []*model.Function
-	literals  map[*ast.FuncLit]*model.Function
-	returning map[*model.Function]bool
-	mutations *storageMutations
-	summaries *storageSummaryCache
-	strict    bool
+	module     *model.Function
+	moduleInit *model.Function
+	ctx        *rule.Context
+	nodes      map[*model.Function]*callableSummary
+	order      []*model.Function
+	literals   map[*ast.FuncLit]*model.Function
+	returning  map[*model.Function]bool
+	mutations  *storageMutations
+	summaries  *storageSummaryCache
+	strict     bool
 }
 
-func analyze(c *rule.Context, root *model.Function, strict bool, summaries *storageSummaryCache) *effectGraph {
+// sharedGraphCache belongs to one rule instance and retains only the
+// current file's effect graph. The engine analyzes files sequentially,
+// so the cache is reset whenever the file or strict mode changes.
+type sharedGraphCache struct {
+	file   *model.File
+	strict bool
+	graph  *effectGraph
+}
+
+func (c *sharedGraphCache) graphFor(ctx *rule.Context, root *model.Function, strict bool, summaries *storageSummaryCache) *effectGraph {
+	if c.file == root.File && c.strict == strict && c.graph != nil {
+		return c.graph
+	}
+	g := buildSharedGraph(ctx, root, strict, summaries)
+	c.file, c.strict, c.graph = root.File, strict, g
+	return g
+}
+
+func analyze(c *rule.Context, root *model.Function, strict bool, summaries *storageSummaryCache, cache *sharedGraphCache) *effectGraph {
+	return cache.graphFor(c, root, strict, summaries)
+}
+
+// buildSharedGraph builds one effect graph for every function in the
+// file, instead of rebuilding a graph per root function. Storage
+// mutations are recorded in source order across the file.
+func buildSharedGraph(c *rule.Context, root *model.Function, strict bool, summaries *storageSummaryCache) *effectGraph {
 	graph := &effectGraph{
 		ctx:       c,
 		nodes:     map[*model.Function]*callableSummary{},
@@ -45,7 +72,15 @@ func analyze(c *rule.Context, root *model.Function, strict bool, summaries *stor
 		summaries: summaries,
 		strict:    strict,
 	}
-	graph.add(c, root, nil, strict)
+	if root.Name == moduleName {
+		root = canonicalModule(graph, root)
+	}
+	addAllFuncs(graph, c, root.File, strict)
+	addModuleInitializer(graph, c, root.File, strict)
+	addModuleInit(graph, c, root.File, strict)
+	if _, ok := graph.nodes[root]; !ok {
+		graph.add(c, root, nil, strict)
+	}
 	for i := 0; i < len(graph.order); i++ {
 		graph.collectCalls(c, graph.order[i], strict)
 	}
@@ -60,6 +95,60 @@ func analyze(c *rule.Context, root *model.Function, strict bool, summaries *stor
 		}
 	}
 	return graph
+}
+
+func addAllFuncs(g *effectGraph, c *rule.Context, file *model.File, strict bool) {
+	for _, fn := range file.AllFuncs {
+		g.add(c, fn, nil, strict)
+	}
+}
+
+func addModuleInitializer(g *effectGraph, c *rule.Context, file *model.File, strict bool) {
+	mod := moduleInitializerFunction(file)
+	if mod == nil {
+		return
+	}
+	g.module = mod
+	g.add(c, mod, nil, strict)
+}
+
+func addModuleInit(g *effectGraph, c *rule.Context, file *model.File, strict bool) {
+	for _, fn := range file.AllFuncs {
+		if isInitFunc(fn) {
+			g.moduleInit = moduleOwner(fn)
+			g.add(c, g.moduleInit, nil, strict)
+			return
+		}
+	}
+}
+
+func isInitFunc(fn *model.Function) bool {
+	return fn.Name == "init" && !fn.IsMethod() && fn.Decl != nil && fn.Decl.Recv == nil
+}
+
+// canonicalModule returns the shared graph's function for a synthetic
+// module function. There are two kinds: the module initializer for
+// package variable initializers, and the module owner for init. Each
+// kind must be a single node in the shared graph, because each call
+// creates a new synthetic function value for the same source.
+func canonicalModule(g *effectGraph, fn *model.Function) *model.Function {
+	if isInitSynthetic(fn) {
+		if g.moduleInit == nil {
+			g.moduleInit = fn
+		}
+		return g.moduleInit
+	}
+	if g.module == nil {
+		g.module = moduleInitializerFunction(fn.File)
+	}
+	if g.module == nil {
+		g.module = fn
+	}
+	return g.module
+}
+
+func isInitSynthetic(fn *model.Function) bool {
+	return fn.Decl != nil && fn.Decl.Name != nil && fn.Decl.Name.Name == "init"
 }
 
 func (g *effectGraph) add(c *rule.Context, fn, parent *model.Function, strict bool) {
@@ -807,6 +896,7 @@ type UnknownEffect struct {
 	*rule.Base
 	includeReceiver bool
 	summaries       storageSummaryCache
+	graphCache      sharedGraphCache
 }
 
 func newUnknownEffect() rule.Rule { return &UnknownEffect{Base: rule.NewBase(receiverProperty)} }
@@ -818,7 +908,10 @@ func (r *UnknownEffect) ApplyFile(c *rule.Context) { applyModule(c, r.ApplyFunc)
 
 func (r *UnknownEffect) ApplyFunc(c *rule.Context, fn *model.Function) {
 	fn = moduleOwner(fn)
-	graph := analyze(c, fn, r.includeReceiver, r.summaries.forFile(c.File))
+	graph := analyze(c, fn, r.includeReceiver, r.summaries.forFile(c.File), &r.graphCache)
+	if fn.Name == moduleName {
+		fn = canonicalModule(graph, fn)
+	}
 	for _, callable := range graph.owned(fn) {
 		facts := graph.nodes[callable].facts
 		unknown := append([]effect(nil), facts.unknown...)

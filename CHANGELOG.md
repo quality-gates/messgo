@@ -18,6 +18,9 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 - Reject conflicting explicit rule overrides regardless of inherited-rule order (#309).
 - Fixed effective line counts for block and line comments containing carriage returns (#311).
 - Fixed CLI and source-discovery tests when the temporary directory has a symlinked path (#305, #306).
+- Fixed explicitness analysis rebuilding the effect graph for every function
+  in a file. One graph per file now serves every function, so long call
+  chains no longer take cubic time.
 
 ## [0.5.13] - 2026-11-07
 

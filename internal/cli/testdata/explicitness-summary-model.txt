@@ -177,14 +177,14 @@ member_selection.go:646:646 ImplicitOutput lookupMethod: The function lookupMeth
 member_selection.go:657:657 ImplicitOutput selectMember: The function selectMember() has an implicit output: write through parameter visiting. Return it instead.
 member_selection.go:676:676 ImplicitOutput selectMemberLevel: The function selectMemberLevel() has an implicit output: write through parameter visiting. Return it instead.
 member_selection.go:68:68 UnknownEffect newMemberSelectionCollector: The function newMemberSelectionCollector() has an unknown effect: unresolved call. Analyze the callee before classifying it as a calculation.
-member_selection.go:713:713 ImplicitOutput interfaceMethod: The function interfaceMethod() has an implicit output: write through parameter visiting. Return it instead.
-member_selection.go:747:747 ImplicitOutput appendEmbeddedSearches: The function appendEmbeddedSearches() has an implicit output: write through parameter index. Return it instead.
-member_selection.go:764:764 UnknownEffect memberTypeResolver.classMemberType: The method classMemberType() has an unknown effect: receiver effect. Analyze the callee before classifying it as a calculation.
-member_selection.go:772:772 UnknownEffect memberTypeResolver.promotedMemberPath: The method promotedMemberPath() has an unknown effect: receiver effect. Analyze the callee before classifying it as a calculation.
-member_selection.go:780:780 ImplicitOutput memberTypeResolver.lookupMember: The method lookupMember() has an implicit output: write through parameter visiting. Return it instead.
-member_selection.go:780:780 UnknownEffect memberTypeResolver.lookupMember: The method lookupMember() has an unknown effect: receiver effect. Analyze the callee before classifying it as a calculation.
+member_selection.go:718:718 ImplicitOutput interfaceMethod: The function interfaceMethod() has an implicit output: write through parameter visiting. Return it instead.
+member_selection.go:752:752 ImplicitOutput appendEmbeddedSearches: The function appendEmbeddedSearches() has an implicit output: write through parameter index. Return it instead.
+member_selection.go:769:769 UnknownEffect memberTypeResolver.classMemberType: The method classMemberType() has an unknown effect: receiver effect. Analyze the callee before classifying it as a calculation.
+member_selection.go:777:777 UnknownEffect memberTypeResolver.promotedMemberPath: The method promotedMemberPath() has an unknown effect: receiver effect. Analyze the callee before classifying it as a calculation.
+member_selection.go:785:785 ImplicitOutput memberTypeResolver.lookupMember: The method lookupMember() has an implicit output: write through parameter visiting. Return it instead.
+member_selection.go:785:785 UnknownEffect memberTypeResolver.lookupMember: The method lookupMember() has an unknown effect: receiver effect. Analyze the callee before classifying it as a calculation.
 member_selection.go:79:79 ImplicitOutput newMemberSelectionCollector: The function newMemberSelectionCollector() has an implicit output: write through parameter f. Return it instead.
-member_selection.go:855:855 UnknownEffect memberVarType.empty: The method empty() has an unknown effect: receiver effect. Analyze the callee before classifying it as a calculation.
+member_selection.go:860:860 UnknownEffect memberVarType.empty: The method empty() has an unknown effect: receiver effect. Analyze the callee before classifying it as a calculation.
 member_selection.go:96:96 UnknownEffect indexMemberAliases: The function indexMemberAliases() has an unknown effect: unresolved call. Analyze the callee before classifying it as a calculation.
 model.go:129:129 UnknownEffect File.MemberSelectedForType: The method MemberSelectedForType() has an unknown effect: receiver effect. Analyze the callee before classifying it as a calculation.
 model.go:132:132 UnknownEffect File.MemberSelectedForType: The method MemberSelectedForType() has an unknown effect: unresolved call. Analyze the callee before classifying it as a calculation.

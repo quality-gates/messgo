@@ -10,8 +10,48 @@ type promotedResolutionCase struct {
 	used, unused           []MemberKey
 }
 
+func TestUnmodelledEmbeddingStopsSelectionAtItsDepth(t *testing.T) {
+	level := selectMemberLevel(nil, nil, []embeddedMemberSearch{{typeName: "bytes.Buffer"}}, "Write", map[string]bool{})
+	if level.state != selectionAmbiguous {
+		t.Fatalf("unmodelled embedding state = %v, want uncertain selection", level.state)
+	}
+}
+
 func TestPromotedCallResolution(t *testing.T) {
 	for _, tc := range []promotedResolutionCase{
+		{
+			name: "imported embedding may hide deeper method",
+			source: `package p
+import "bytes"
+type Deep struct{}
+func (Deep) Write(p []byte) (int, error) { return len(p), nil }
+type Mid struct{ Deep }
+type Root struct{ Mid; bytes.Buffer }
+func probe(r *Root, p []byte) { _, _ = r.Write(p) }
+`,
+			unused: []MemberKey{{Type: "Root", Name: "Mid"}, {Type: "Deep", Name: "Write"}},
+		},
+		{
+			name: "local method shallower than imported embedding",
+			source: `package p
+import "bytes"
+type Mid struct{ bytes.Buffer }
+type Root struct{ Mid }
+func (Root) Write(p []byte) (int, error) { return len(p), nil }
+func probe(r *Root, p []byte) { _, _ = r.Write(p) }
+`,
+			receiver: "Root",
+		},
+		{
+			name: "imported embedding may compete with local method",
+			source: `package p
+import "bytes"
+type Local struct{}
+func (Local) Write(p []byte) (int, error) { return len(p), nil }
+type Root struct{ Local; bytes.Buffer }
+func probe(r *Root, p []byte) { _, _ = r.Write(p) }
+`,
+		},
 		{
 			name: "pointer and generic embedding",
 			source: `package p

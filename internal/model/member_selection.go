@@ -674,6 +674,11 @@ func selectMemberLevel(classes map[string]*Class, ifaces map[string]*Interface, 
 			continue
 		}
 		visiting[node.typeName] = true
+		// An unmodelled embedding may declare this member at this depth.
+		// No candidate at this level or below can be selected with certainty.
+		if classes[node.typeName] == nil && ifaces[node.typeName] == nil {
+			return selectionLevel{state: selectionAmbiguous}
+		}
 		if member, ok := directSelection(classes, ifaces, node, memberName); ok {
 			if level.state == selectionFound || node.multiple {
 				return selectionLevel{state: selectionAmbiguous}

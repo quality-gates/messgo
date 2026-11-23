@@ -204,8 +204,9 @@ type ruleSlot struct {
 }
 
 type selectedCandidate struct {
-	candidate ruleCandidate
-	slot      ruleSlot
+	candidate  ruleCandidate
+	definition *ruleCandidate
+	slot       ruleSlot
 }
 
 func builtinRuleOwner(session *loadSession, name string) string {
@@ -271,7 +272,13 @@ func selectCandidate(selected map[string]selectedCandidate, incoming ruleCandida
 	name := incoming.rule.Name()
 	current, exists := selected[name]
 	if !exists {
-		selected[name] = selectedCandidate{candidate: incoming, slot: slot}
+		current = selectedCandidate{candidate: incoming, slot: slot}
+	}
+	if err := current.recordDefinition(incoming); err != nil {
+		return err
+	}
+	if !exists {
+		selected[name] = current
 		return nil
 	}
 
@@ -281,7 +288,22 @@ func selectCandidate(selected map[string]selectedCandidate, incoming ruleCandida
 	}
 	if replace {
 		current.candidate = winner
-		selected[name] = current
+	}
+	selected[name] = current
+	return nil
+}
+
+// recordDefinition keeps direct definitions visible even when another kind wins.
+func (current *selectedCandidate) recordDefinition(incoming ruleCandidate) error {
+	if incoming.kind != candidateDefinition {
+		return nil
+	}
+	if current.definition == nil {
+		current.definition = &incoming
+		return nil
+	}
+	if !sameRuleDefinition(*current.definition, incoming) {
+		return fmt.Errorf("conflicting definitions for rule %q", incoming.rule.Name())
 	}
 	return nil
 }

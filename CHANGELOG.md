@@ -6,6 +6,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 
 ## [Unreleased]
 
+## [0.5.14] - 2026-11-11
+
 ### Added
 - A CLI contract test compares findings for equivalent parenthesized Go forms.
 - An exploratory report and replay cover CLI policy and JSON reports.

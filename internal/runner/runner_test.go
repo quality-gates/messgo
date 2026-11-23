@@ -1443,3 +1443,40 @@ func callChainSource(n int, chain bool) string {
 	}
 	return src.String()
 }
+
+func TestExplicitnessPromotedGenericAliasAcrossFiles(t *testing.T) {
+	dir := t.TempDir()
+	files := map[string]string{
+		"worker.go": "package p\ntype Worker[T any] struct{}\nfunc (*Worker[T]) Run(s []int) { s[0] = 1 }\n",
+		"alias.go":  "package p\ntype Alias[T any] = Worker[T]\ntype Other[T any] = Alias[T]\n",
+		"use.go":    "package p\ntype Root struct { *Other[int] }\nfunc use(r Root, s []int) { r.Run(s) }\n",
+	}
+	for name, source := range files {
+		if err := os.WriteFile(filepath.Join(dir, name), []byte(source), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	sets, err := (&ruleset.Loader{}).Load("explicitness")
+	if err != nil {
+		t.Fatal(err)
+	}
+	rep, err := Run(Options{Paths: []string{dir}, RuleSets: sets})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var outputs int
+	for _, v := range rep.Violations {
+		if v.Function != "use" {
+			continue
+		}
+		if v.Rule.Name() == "UnknownEffect" {
+			t.Errorf("unexpected unknown effect: %+v", v)
+		}
+		if v.Rule.Name() == "ImplicitOutput" && strings.Contains(v.Description, "write through parameter s") {
+			outputs++
+		}
+	}
+	if outputs != 1 {
+		t.Errorf("got %d caller slice writes, want 1; violations: %+v", outputs, rep.Violations)
+	}
+}

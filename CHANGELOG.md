@@ -12,6 +12,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 - A verification skill checks bounded promoted selectors against Go's type checker.
 
 ### Fixed
+- Resolve promoted methods through same-package generic type aliases, preserving caller-visible effects (#313).
 - Reject conflicting direct rule definitions even when inherited rules or overrides appear first (#312).
 - Resolve promoted selectors by Go embedding depth and field shadowing (#308, #310).
 - The pre-push mutation check now allows 30 seconds for each test execution,

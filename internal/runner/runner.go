@@ -100,6 +100,7 @@ func annotatePackageGroup(group []*model.File) {
 		pkgInterfaces = append(pkgInterfaces, f.Interfaces...)
 		pkgFunctions = append(pkgFunctions, f.Functions...)
 	}
+	pkgAliases := util.TypeAliasNames(asts)
 	pkgTypeDefs := collectPackageTypeExprs(group)
 	pkgTypeIndex := model.NewPackageTypeIndex(pkgClasses, pkgInterfaces)
 	packageMapTypes := collectPackageMapTypes(pkgTypeDefs)
@@ -109,9 +110,10 @@ func annotatePackageGroup(group []*model.File) {
 		f.PackageTypeIndex = pkgTypeIndex
 		f.PackageMapTypes = packageMapTypes
 		f.PackageTypeDefs = pkgTypeDefs
+		f.PackageTypeAliases = pkgAliases
 		f.PackageFunctions = pkgFunctions
 	}
-	attachPackageMethods(group, classByName, util.TypeAliasNames(asts))
+	attachPackageMethods(group, classByName, pkgAliases)
 	sharedGlobals := util.SharedGlobalNames(asts, pkgTypeDefs)
 	globalSharings := util.GlobalSharings(asts, pkgTypeDefs)
 	globalTypes := util.GlobalValueTypes(asts, pkgTypeDefs)

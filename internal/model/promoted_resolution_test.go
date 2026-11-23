@@ -25,6 +25,32 @@ func probe(r Root) { r.Run() }
 			used:     []MemberKey{{Type: "Root", Name: "Middle"}, {Type: "Middle", Name: "Worker"}, {Type: "Worker", Name: "Run"}},
 		},
 		{
+			name: "generic alias chain",
+			source: `package p
+type Worker[T any] struct{}
+func (*Worker[T]) Run() {}
+type Alias[T any] = Worker[T]
+type Other[T any] = Alias[T]
+type Root struct{ *Other[int] }
+func probe(r Root) { r.Run() }
+`,
+			receiver: "Worker",
+			used:     []MemberKey{{Type: "Root", Name: "Other"}, {Type: "Worker", Name: "Run"}},
+		},
+		{
+			name: "ambiguous aliases of same type",
+			source: `package p
+type Worker[T any] struct{}
+func (*Worker[T]) Run() {}
+type Alias[T any] = Worker[T]
+type Left struct{ *Alias[int] }
+type Right struct{ *Worker[int] }
+type Root struct{ Left; Right }
+func probe(r Root) { r.Run() }
+`,
+			unused: []MemberKey{{Type: "Root", Name: "Left"}, {Type: "Root", Name: "Right"}, {Type: "Worker", Name: "Run"}},
+		},
+		{
 			name: "ambiguous siblings",
 			source: `package p
 type Left struct{}

@@ -3,6 +3,8 @@ package model
 import (
 	"go/ast"
 	"go/token"
+
+	"github.com/quality-gates/messgo/internal/util"
 )
 
 type memberSelectionCollector struct {
@@ -63,6 +65,7 @@ func newMemberSelectionCollector(f *File) *memberSelectionCollector {
 	for _, iface := range ifaces {
 		ifaceByName[iface.Name] = iface
 	}
+	indexMemberAliases(f, classByName, ifaceByName)
 	funcs := f.AllFuncs
 	if f.PackageFunctions != nil {
 		funcs = f.PackageFunctions
@@ -85,6 +88,22 @@ func newMemberSelectionCollector(f *File) *memberSelectionCollector {
 	collector.scope.resolver = &collector.types
 	collector.recorder.resolver = &collector.types
 	return collector
+}
+
+func indexMemberAliases(f *File, classByName map[string]*Class, ifaceByName map[string]*Interface) {
+	aliases := f.PackageTypeAliases
+	if aliases == nil {
+		aliases = util.TypeAliasNames([]*ast.File{f.Syntax})
+	}
+	for alias := range aliases {
+		target := util.ResolveTypeAlias(aliases, alias)
+		if class := classByName[target]; class != nil {
+			classByName[alias] = class
+		}
+		if iface := ifaceByName[target]; iface != nil {
+			ifaceByName[alias] = iface
+		}
+	}
 }
 
 func memberTypeDefs(f *File, classes []*Class) map[string]ast.Expr {
@@ -632,6 +651,7 @@ func lookupMethod(classes map[string]*Class, ifaces map[string]*Interface, typeN
 }
 
 func selectMember(classes map[string]*Class, ifaces map[string]*Interface, typeName, memberName string, visiting map[string]bool) (selectedMember, bool) {
+	typeName = canonicalMemberType(classes, ifaces, typeName)
 	queue := []embeddedMemberSearch{{typeName: typeName}}
 	for len(queue) > 0 {
 		level := selectMemberLevel(classes, ifaces, queue, memberName, visiting)
@@ -661,7 +681,7 @@ func selectMemberLevel(classes map[string]*Class, ifaces map[string]*Interface, 
 			level.selected, level.state = member, selectionFound
 			continue
 		}
-		level.next = appendEmbeddedSearches(classes[node.typeName], node, level.next, nextIndex)
+		level.next = appendEmbeddedSearches(classes, ifaces, node, level.next, nextIndex)
 	}
 	return level
 }
@@ -710,7 +730,8 @@ func memberPath(node embeddedMemberSearch, name string) []MemberKey {
 	return append(path, MemberKey{Type: node.typeName, Name: name})
 }
 
-func appendEmbeddedSearches(class *Class, node embeddedMemberSearch, next []embeddedMemberSearch, index map[string]int) []embeddedMemberSearch {
+func appendEmbeddedSearches(classes map[string]*Class, ifaces map[string]*Interface, node embeddedMemberSearch, next []embeddedMemberSearch, index map[string]int) []embeddedMemberSearch {
+	class := classes[node.typeName]
 	if class == nil {
 		return next
 	}
@@ -718,7 +739,7 @@ func appendEmbeddedSearches(class *Class, node embeddedMemberSearch, next []embe
 		if field.Ident != nil {
 			continue
 		}
-		typeName := memberTypeName(field.TypeExpr)
+		typeName := canonicalMemberType(classes, ifaces, memberTypeName(field.TypeExpr))
 		if pos, ok := index[typeName]; ok {
 			next[pos].multiple = true
 			continue
@@ -727,6 +748,16 @@ func appendEmbeddedSearches(class *Class, node embeddedMemberSearch, next []embe
 		next = append(next, embeddedMemberSearch{typeName: typeName, path: memberPath(node, field.Name), multiple: node.multiple})
 	}
 	return next
+}
+
+func canonicalMemberType(classes map[string]*Class, ifaces map[string]*Interface, name string) string {
+	if class := classes[name]; class != nil {
+		return class.Name
+	}
+	if iface := ifaces[name]; iface != nil {
+		return iface.Name
+	}
+	return name
 }
 
 func (c *memberTypeResolver) classMemberType(typeName, memberName string) memberVarType {

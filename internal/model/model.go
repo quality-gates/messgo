@@ -97,6 +97,8 @@ type PackageScope struct {
 	// It enables member-use resolution for conversions and method expressions
 	// whose type is declared in another file.
 	PackageTypeDefs map[string]ast.Expr
+	// PackageTypeAliases maps local alias names to their named targets.
+	PackageTypeAliases map[string]string
 	// PackageFunctions holds all package-level free functions from every file
 	// in this file's package. It is populated by the runner after parsing,
 	// enabling cross-file call return-type resolution. When nil (file analyzed

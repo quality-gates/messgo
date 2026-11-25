@@ -35,6 +35,57 @@ func SharedSliceElement(h Holder) {
 	)
 }
 
+func TestExplicitnessReportsFieldWritesThroughSliceStructElements(t *testing.T) {
+	source := `package p
+type S struct{ X int }
+type Inner struct{ X int }
+type Outer struct{ I Inner }
+type EmbedInner struct{ X int }
+type WithEmbed struct{ EmbedInner }
+func Basic(s []S) { s[0].X = 1 }
+func Inc(s []S) { s[0].X++ }
+func Compound(s []S) { s[0].X += 1 }
+func Swap(s []S) { s[0].X, s[1].X = s[1].X, s[0].X }
+func Range(s []S) { for i := range s { s[i].X = 1 } }
+func Nested(s []Outer) { s[0].I.X = 1 }
+func Promoted(s []WithEmbed) { s[0].X = 1 }
+func SliceOfArrays(s [][2]S) { s[0][0].X = 1 }
+func Whole(s []S) { s[0] = S{X: 1} }
+func PtrElem(s []*S) { s[0].X = 1 }
+func PtrArray(s *[2]S) { s[0].X = 1 }
+func NestedSlice(s [][]S) { s[0][0].X = 1 }
+func ViaPtr(p *Outer) { p.I.X = 1 }
+func MapSlice(m map[int][]int) { m[0][0] = 1 }
+func MapPtr(m map[int]*S) { m[0].X = 1 }
+var G []S
+func Global() { G[0].X = 1 }
+func Read(s []S) int { return s[0].X }
+func ReadInt(s []int) int { return s[0] }
+`
+	want := []string{
+		"a.go:20 ImplicitOutput MapSlice: write through parameter m",
+		"a.go:21 ImplicitOutput MapPtr: write through parameter m",
+		"a.go:23 ImplicitOutput Global: package variable G",
+		"a.go:7 ImplicitOutput Basic: write through parameter s",
+		"a.go:8 ImplicitOutput Inc: write through parameter s",
+		"a.go:9 ImplicitOutput Compound: write through parameter s",
+		"a.go:10 ImplicitOutput Swap: write through parameter s",
+		"a.go:11 ImplicitOutput Range: write through parameter s",
+		"a.go:12 ImplicitOutput Nested: write through parameter s",
+		"a.go:13 ImplicitOutput Promoted: write through parameter s",
+		"a.go:14 ImplicitOutput SliceOfArrays: write through parameter s",
+		"a.go:15 ImplicitOutput Whole: write through parameter s",
+		"a.go:16 ImplicitOutput PtrElem: write through parameter s",
+		"a.go:17 ImplicitOutput PtrArray: write through parameter s",
+		"a.go:18 ImplicitOutput NestedSlice: write through parameter s",
+		"a.go:19 ImplicitOutput ViaPtr: write through parameter p",
+	}
+	for _, ruleset := range []string{"explicitness", "explicitness-strict"} {
+		_, got := runExplicitness(t, ruleset, map[string]string{"a.go": source})
+		assertFindings(t, got, want...)
+	}
+}
+
 func TestExplicitnessCopiesDereferencedPackageStructWithoutSharingScalars(t *testing.T) {
 	_, got := runExplicitness(t, "explicitness", map[string]string{
 		"state.go": `package p

@@ -253,7 +253,13 @@ func typedSelection(s *scope, parent storage, key string, current state, index b
 		return selected
 	}
 	selected.typ = typ
-	if !parent.outer {
+	if parent.outer {
+		selected.outer = true
+		if len(selected.origins) == 0 {
+			selected.origins = parent.origins
+		}
+		selected.ambient = selected.ambient || parent.ambient
+	} else {
 		sharing := typeStorage(typ, s.fn.File.PackageTypeDefs)
 		selected.outer, selected.reachable = sharing.outer, sharing.reachable
 	}
@@ -263,7 +269,7 @@ func typedSelection(s *scope, parent storage, key string, current state, index b
 func selectedType(s *scope, typ ast.Expr, key string, index bool) ast.Expr {
 	resolved := resolvedType(s, typ)
 	if index {
-		if array, ok := resolved.(*ast.ArrayType); ok && array.Len != nil {
+		if array, ok := resolved.(*ast.ArrayType); ok {
 			return array.Elt
 		}
 		return nil

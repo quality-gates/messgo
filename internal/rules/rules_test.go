@@ -2988,6 +2988,115 @@ func Run() error {
 	})
 }
 
+func TestUnusedPrivateMemberThroughGenericInstantiations(t *testing.T) {
+	t.Run("generic function call result", func(t *testing.T) {
+		src := `
+type Ttt struct {
+	data int
+}
+func (t Ttt) helper() {}
+func Id[T any](v T) T { return v }
+func Run(t Ttt) { Id(t).helper(); println(Id(t).data) }
+`
+		hits := analyze(t, src, "unusedcode")
+		mustNotHave(t, hits, "UnusedPrivateField", "UnusedPrivateMethod")
+	})
+
+	t.Run("generic struct field and method result", func(t *testing.T) {
+		src := `
+type Ttt struct {
+	data int
+}
+func (t Ttt) helper() {}
+type Box[T any] struct {
+	V T
+}
+func (b Box[T]) Get() T { return b.V }
+func Run(b Box[Ttt]) { println(b.V.data); b.Get().helper(); println(b.Get().data) }
+`
+		hits := analyze(t, src, "unusedcode")
+		mustNotHave(t, hits, "UnusedPrivateField", "UnusedPrivateMethod")
+	})
+
+	t.Run("slice map and channel through generic call", func(t *testing.T) {
+		src := `
+type Ttt struct {
+	data int
+}
+func (t Ttt) helper() {}
+func Id[T any](v T) T { return v }
+func Run(ts []Ttt, m map[string]Ttt, cs chan Ttt) {
+	x := Id(ts)
+	println(x[0].data)
+	y := Id(m)
+	println(y["k"].data)
+	for v := range Id(cs) { v.helper() }
+}
+`
+		hits := analyze(t, src, "unusedcode")
+		mustNotHave(t, hits, "UnusedPrivateField", "UnusedPrivateMethod")
+	})
+
+	t.Run("explicit type arguments and generic struct literal", func(t *testing.T) {
+		src := `
+type Ttt struct {
+	data int
+}
+func (t Ttt) helper() {}
+func Id[T any](v T) T { return v }
+type Box[T any] struct {
+	V T
+}
+func Run(t Ttt) { _ = Id[Ttt](t); b := Box[Ttt]{V: t}; b.V.helper(); println(b.V.data) }
+`
+		hits := analyze(t, src, "unusedcode")
+		mustNotHave(t, hits, "UnusedPrivateField", "UnusedPrivateMethod")
+	})
+
+	t.Run("genuinely unused members still flagged", func(t *testing.T) {
+		src := `
+type Ttt struct {
+	used   int
+	unused int
+}
+func (t Ttt) usedHelper() {}
+func (t Ttt) unusedHelper() {}
+func Id[T any](v T) T { return v }
+func Run(t Ttt) { Id(t).usedHelper(); println(Id(t).used) }
+`
+		hits := analyze(t, src, "unusedcode")
+		mustHave(t, hits, "UnusedPrivateField", "UnusedPrivateMethod")
+		for _, h := range hits {
+			if h.rule == "UnusedPrivateField" && h.line != 4 {
+				t.Fatalf("unexpected UnusedPrivateField hit on line %d; hits = %v", h.line, hits)
+			}
+			if h.rule == "UnusedPrivateMethod" && h.line != 7 {
+				t.Fatalf("unexpected UnusedPrivateMethod hit on line %d; hits = %v", h.line, hits)
+			}
+		}
+	})
+
+	t.Run("no credit for unrelated type with same member name", func(t *testing.T) {
+		src := `
+type Ttt struct {
+	data int
+}
+type Other struct {
+	data int
+}
+func Id[T any](v T) T { return v }
+func Run(o Other) { println(Id(o).data) }
+`
+		hits := analyze(t, src, "unusedcode")
+		mustHave(t, hits, "UnusedPrivateField")
+		for _, h := range hits {
+			if h.rule == "UnusedPrivateField" && h.line != 3 {
+				t.Fatalf("unexpected UnusedPrivateField hit on line %d; hits = %v", h.line, hits)
+			}
+		}
+	})
+}
+
 func TestUnusedPrivateMethodOnNonStructNamedTypes(t *testing.T) {
 	src := `
 type StatusCode int

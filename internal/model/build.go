@@ -82,6 +82,7 @@ func (b *fileBuilder) collectTypeSpec(ts *ast.TypeSpec, docGroup *ast.CommentGro
 	case *ast.StructType:
 		c := &Class{
 			Name:       ts.Name.Name,
+			TypeParams: typeParamNamesOf(ts.TypeParams),
 			Line:       b.line(ts.Pos()),
 			EndLine:    b.line(ts.End()),
 			Exported:   ts.Name.IsExported(),
@@ -96,6 +97,7 @@ func (b *fileBuilder) collectTypeSpec(ts *ast.TypeSpec, docGroup *ast.CommentGro
 	case *ast.InterfaceType:
 		i := &Interface{
 			Name:       ts.Name.Name,
+			TypeParams: typeParamNamesOf(ts.TypeParams),
 			Line:       b.line(ts.Pos()),
 			EndLine:    b.line(ts.End()),
 			Exported:   ts.Name.IsExported(),
@@ -189,9 +191,23 @@ func (b *fileBuilder) collectInterfaceMethods(i *Interface, it *ast.InterfaceTyp
 	}
 }
 
+func typeParamNamesOf(list *ast.FieldList) []string {
+	if list == nil {
+		return nil
+	}
+	var names []string
+	for _, field := range list.List {
+		for _, name := range field.Names {
+			names = append(names, name.Name)
+		}
+	}
+	return names
+}
+
 func (b *fileBuilder) buildFunc(fd *ast.FuncDecl) *Function {
 	fn := &Function{
 		Name:       fd.Name.Name,
+		TypeParams: funcTypeParams(fd),
 		Line:       b.line(fd.Pos()),
 		EndLine:    b.line(fd.End()),
 		Exported:   fd.Name.IsExported(),
@@ -289,6 +305,13 @@ func embeddedTypeName(e ast.Expr) string {
 		return exprString(t.X) + "." + t.Sel.Name
 	}
 	return exprString(e)
+}
+
+func funcTypeParams(fd *ast.FuncDecl) []string {
+	if fd.Type == nil {
+		return nil
+	}
+	return typeParamNamesOf(fd.Type.TypeParams)
 }
 
 func docText(groups ...*ast.CommentGroup) string {

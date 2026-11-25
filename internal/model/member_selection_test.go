@@ -221,14 +221,14 @@ func (Root) child() Leaf { return Leaf{} }
 			}
 		})
 	}
-	if path := resolver.promotedMemberPath("Root", "unknown"); path != nil {
+	if path := resolver.promotedMemberPathTyped(memberVarType{name: "Root"}, "unknown"); path != nil {
 		t.Fatalf("promotedMemberPath(Root, unknown) = %v, want nil", path)
 	}
-	if _, _, ok := resolver.lookupMember("Missing", "unknown", map[string]bool{}); ok {
+	if _, _, ok := resolver.lookupMemberTyped(memberVarType{name: "Missing"}, "unknown", map[string]bool{}); ok {
 		t.Fatal("lookupMember(Missing, unknown) = true, want false")
 	}
 	visited := map[string]bool{}
-	if _, _, ok := resolver.lookupMember("Root", "unknown", visited); ok {
+	if _, _, ok := resolver.lookupMemberTyped(memberVarType{name: "Root"}, "unknown", visited); ok {
 		t.Fatal("lookupMember(Root, unknown) = true, want false")
 	}
 	if len(visited) != 1 || !visited["Root"] {
@@ -247,7 +247,7 @@ func TestDiamondMemberAndMethodLookupVisitsEachTypeOnce(t *testing.T) {
 	root := fmt.Sprintf("F%d", levels)
 
 	memberVisited := map[string]bool{}
-	if _, path, ok := collector.types.lookupMember(root, "Missing", memberVisited); ok || path != nil {
+	if _, path, ok := collector.types.lookupMemberTyped(memberVarType{name: root}, "Missing", memberVisited); ok || path != nil {
 		t.Fatalf("lookupMember(%s, Missing) = (path %v, ok %v), want a failed lookup", root, path, ok)
 	}
 	if len(memberVisited) != levels+1 {
@@ -263,7 +263,7 @@ func TestDiamondMemberAndMethodLookupVisitsEachTypeOnce(t *testing.T) {
 	}
 
 	visited := map[string]bool{}
-	if _, path, ok := collector.types.lookupMember(root, "Z", visited); ok || path != nil {
+	if _, path, ok := collector.types.lookupMemberTyped(memberVarType{name: root}, "Z", visited); ok || path != nil {
 		t.Fatalf("lookupMember(%s, Z) = (path %v, ok %v), want an ambiguous lookup", root, path, ok)
 	}
 	if len(visited) != levels+1 {
@@ -577,7 +577,7 @@ func TestMemberVarTypeOfContainerShapes(t *testing.T) {
 			if err != nil {
 				t.Fatalf("ParseExpr: %v", err)
 			}
-			if got := memberVarTypeOf(expr); got != tc.want {
+			if got := memberVarTypeOf(expr); !sameMemberVarType(got, tc.want) {
 				t.Fatalf("memberVarTypeOf(%q) = %+v, want %+v", tc.source, got, tc.want)
 			}
 		})
@@ -1216,5 +1216,301 @@ func run(val any, v a, p g, q h) {
 	}
 	if f.MemberSelectedForType("g", "six") {
 		t.Error("default clause must shadow the outer variable of the same name")
+	}
+}
+
+func TestSelectedMemberUsesThroughGenerics(t *testing.T) {
+	f, err := ParseSource("generics.go", []byte(`package sample
+
+type Ttt struct {
+	data int
+}
+
+func (t Ttt) helper() {}
+
+func Id[T any](v T) T { return v }
+
+func First[T any](s []T) T { return s[0] }
+
+type Box[T any] struct {
+	V T
+}
+
+func (b Box[T]) Get() T { return b.V }
+
+type Pair[A, B any] struct {
+	First  A
+	Second B
+}
+
+func Run(t Ttt, b Box[Ttt], p Pair[Ttt, int], ts []Ttt) {
+	Id(t).helper()
+	println(Id(t).data)
+	println(b.V.data)
+	b.Get().helper()
+	println(b.Get().data)
+	println(Id(b).V.data)
+	println(First(ts).data)
+	println(p.Second)
+	println(Id(p).First.data)
+	_ = Box[Ttt]{V: t}
+	_ = Id[Ttt](t)
+	_ = Id(ts)
+	_ = Id(map[string]Ttt{})
+	x := Id(ts)
+	println(x[0].data)
+	m := Id(map[string]Ttt{})
+	println(m["k"].data)
+}
+
+func RunContainers(cs chan Ttt, out chan Ttt) {
+	println(Id(cs))
+	for v := range Id(cs) {
+		v.helper()
+		out <- v
+	}
+}
+
+type Other struct {
+	data int
+}
+
+func Unused() {
+	_ = Other{}
+}
+`))
+	if err != nil {
+		t.Fatalf("ParseSource: %v", err)
+	}
+	for _, key := range []MemberKey{
+		{"Ttt", "helper"},
+		{"Ttt", "data"},
+		{"Box", "V"},
+		{"Box", "Get"},
+		{"Pair", "First"},
+		{"Pair", "Second"},
+	} {
+		if !f.MemberSelectedForType(key.Type, key.Name) {
+			t.Errorf("use of %v through a generic instantiation not recorded", key)
+		}
+	}
+	if f.MemberSelectedForType("Other", "data") {
+		t.Error("generic instantiation credited an unrelated type with the same member name")
+	}
+}
+
+func TestSelectedMemberUsesThroughGenericShapesIsolated(t *testing.T) {
+	preamble := "package sample\ntype Ttt struct { data int }\nfunc (t Ttt) helper() {}\nfunc Id[T any](v T) T { return v }\ntype Box[T any] struct { V T }\nfunc (b Box[T]) Get() T { return b.V }\ntype Pair[A, B any] struct { First A; Second B }\n"
+	cases := []struct {
+		name, body  string
+		typ, member string
+		want        bool
+	}{
+		{"generic call method", "func Run(t Ttt) { Id(t).helper() }\n", "Ttt", "helper", true},
+		{"generic call field", "func Run(t Ttt) { println(Id(t).data) }\n", "Ttt", "data", true},
+		{"explicit call field", "func Run(t Ttt) { println(Id[Ttt](t).data) }\n", "Ttt", "data", true},
+		{"generic struct field", "func Run(b Box[Ttt]) { println(b.V.data) }\n", "Ttt", "data", true},
+		{"generic struct field itself", "func Run(b Box[Ttt]) { println(b.V.data) }\n", "Box", "V", true},
+		{"generic method result field", "func Run(b Box[Ttt]) { println(b.Get().data) }\n", "Ttt", "data", true},
+		{"generic method itself", "func Run(b Box[Ttt]) { b.Get().helper() }\n", "Box", "Get", true},
+		{"struct through generic call", "func Run(b Box[Ttt]) { println(Id(b).V.data) }\n", "Ttt", "data", true},
+		{"pair first field", "func Run(p Pair[Ttt, int]) { println(p.First.data) }\n", "Ttt", "data", true},
+		{"pair second field", "func Run(p Pair[Ttt, int]) { println(p.Second) }\n", "Pair", "Second", true},
+		{"generic factory", "func Make[T any](v T) Box[T] { return Box[T]{V: v} }\nfunc Run(t Ttt) { println(Make(t).V.data) }\n", "Ttt", "data", true},
+		{"explicit index list", "func Swap[A, B any](a A, b B) Pair[A, B] { return Pair[A, B]{First: a, Second: b} }\nfunc Run(t Ttt) { println(Swap[Ttt, int](t, 1).First.data) }\n", "Ttt", "data", true},
+		{"inferred pair factory", "func Swap[A, B any](a A, b B) Pair[A, B] { return Pair[A, B]{First: a, Second: b} }\nfunc Run(t Ttt) { println(Swap(t, 1).First.data) }\n", "Ttt", "data", true},
+		{"slice param", "func First[T any](s []T) T { return s[0] }\nfunc Run(ts []Ttt) { println(First(ts).data) }\n", "Ttt", "data", true},
+		{"map param pattern", "func Lookup[K comparable, V any](m map[K]V) V { var v V; return v }\nfunc Run(m map[string]Ttt) { println(Lookup(m).data) }\n", "Ttt", "data", true},
+		{"chan param", "func Recv[T any](ch chan T) T { var v T; return v }\nfunc Run(ch chan Ttt) { println(Recv(ch).data) }\n", "Ttt", "data", true},
+		{"star param", "func Deref[T any](p *T) T { return *p }\nfunc Run(t Ttt) { println(Deref(&t).data) }\n", "Ttt", "data", true},
+		{"nested generic param", "func Wrap[T any](b Box[T]) T { return b.V }\nfunc Run(b Box[Ttt]) { println(Wrap(b).data) }\n", "Ttt", "data", true},
+		{"variadic param", "func Collect[T any](vs ...T) T { return vs[0] }\nfunc Run(t Ttt) { println(Collect(t).data) }\n", "Ttt", "data", true},
+		{"variadic slice", "func Collect[T any](vs ...T) T { return vs[0] }\nfunc Run(ts []Ttt) { println(Collect(ts...).data) }\n", "Ttt", "data", true},
+		{"slice through generic call", "func Run(ts []Ttt) { x := Id(ts); println(x[0].data) }\n", "Ttt", "data", true},
+		{"map through generic call", "func Run() { m := Id(map[string]Ttt{}); println(m[\"k\"].data) }\n", "Ttt", "data", true},
+		{"chan through generic call", "func Run(cs chan Ttt) { for v := range Id(cs) { v.helper() } }\n", "Ttt", "helper", true},
+		{"embedded generic", "type Outer struct { Box[Ttt] }\nfunc Run(o Outer) { println(o.V.data) }\n", "Ttt", "data", true},
+		{"embedded generic method", "type Outer struct { Box[Ttt] }\nfunc Run(o Outer) { println(o.Get().data) }\n", "Ttt", "data", true},
+		{"generic interface", "type Getter[T any] interface { Get() T }\nfunc Run(g Getter[Ttt]) { println(g.Get().data) }\n", "Ttt", "data", true},
+		{"conflict drops binding", "func Pick[T any](a T, b T) T { return a }\ntype Other struct { data int }\nfunc Run(t Ttt, o Other) { println(Pick(t, o).data) }\n", "Ttt", "data", false},
+		{"unrelated not credited", "type Other struct { data int }\nfunc Run(o Other) { println(Id(o).data) }\n", "Ttt", "data", false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			f, err := ParseSource("shape.go", []byte(preamble+tc.body))
+			if err != nil {
+				t.Fatalf("ParseSource: %v", err)
+			}
+			if got := f.MemberSelectedForType(tc.typ, tc.member); got != tc.want {
+				t.Errorf("MemberSelectedForType(%q,%q) = %v, want %v", tc.typ, tc.member, got, tc.want)
+			}
+		})
+	}
+}
+
+func TestGenericCallFun(t *testing.T) {
+
+	cases := []struct {
+		expr, wantArgs string
+		wantFun        bool
+	}{
+		{"Id", "", true},
+		{"Id[Ttt]", "Ttt", true},
+		{"pkg.Id[Ttt]", "Ttt", true},
+		{"Swap[Ttt, int]", "Ttt;int", true},
+		{"a[0]", "", true},
+		{"f()", "", false},
+	}
+	for _, tc := range cases {
+		expr, err := parser.ParseExpr(tc.expr)
+		if err != nil {
+			t.Fatal(err)
+		}
+		fun, args := genericCallFun(expr)
+		if args != tc.wantArgs {
+			t.Errorf("genericCallFun(%q) args = %q, want %q", tc.expr, args, tc.wantArgs)
+		}
+		_, isIdent := fun.(*ast.Ident)
+		_, isSel := fun.(*ast.SelectorExpr)
+		if (isIdent || isSel) != tc.wantFun {
+			t.Errorf("genericCallFun(%q) fun = %T, want ident/selector = %v", tc.expr, fun, tc.wantFun)
+		}
+	}
+}
+
+func TestMemberVarTypeOfSubst(t *testing.T) {
+
+	subst := typeBinding{names: []string{"T", "K"}, args: "Ttt;string"}
+	cases := []struct {
+		expr, want string
+	}{
+		{"T", "Ttt"},
+		{"K", "string"},
+		{"Other", "Other"},
+		{"pkg.T", "pkg.T"},
+		{"(T)", "Ttt"},
+		{"*T", "Ttt"},
+		{"Box[T]", "Box[Ttt]"},
+		{"Pair[T, K]", "Pair[Ttt,string]"},
+		{"[]T", "[]Ttt"},
+		{"chan T", "chan Ttt"},
+		{"map[K]T", "map[string]Ttt"},
+		{"func()", ""},
+		{"interface{}", ""},
+	}
+	for _, tc := range cases {
+		var expr ast.Expr
+		if tc.expr == "...T" {
+			expr = &ast.Ellipsis{Elt: ast.NewIdent("T")}
+		} else {
+			var err error
+			expr, err = parser.ParseExpr(tc.expr)
+			if err != nil {
+				t.Fatal(err)
+			}
+		}
+		if got := memberVarTypeOfSubst(expr, subst).canonical(); got != tc.want {
+			t.Errorf("memberVarTypeOfSubst(%q) = %q, want %q", tc.expr, got, tc.want)
+		}
+	}
+}
+
+func TestInferredTypeArg(t *testing.T) {
+
+	parse := func(expr string) ast.Expr {
+		e, err := parser.ParseExpr(expr)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return e
+	}
+	cases := []struct {
+		pattern, actual string
+		want            string
+		conflict        bool
+	}{
+		{"T", "Ttt", "Ttt", false},
+		{"Other", "Ttt", "", false},
+		{"*T", "Ttt", "Ttt", false},
+		{"Box[T]", "Box[Ttt]", "Ttt", false},
+		{"Box[T]", "Other", "", false},
+		{"Pair[T, int]", "Pair[Ttt, int]", "Ttt", false},
+		{"Pair[T, T]", "Pair[Ttt, int]", "", true},
+		{"[]T", "[]Ttt", "Ttt", false},
+		{"[]T", "Ttt", "", false},
+		{"...T", "[]Ttt", "Ttt", false},
+		{"...T", "Ttt", "Ttt", false},
+		{"chan T", "chan Ttt", "Ttt", false},
+		{"chan T", "Ttt", "", false},
+		{"map[string]T", "map[string]Ttt", "Ttt", false},
+		{"map[T]int", "map[string]int", "string", false},
+		{"map[T]T", "map[int]int", "int", false},
+		{"map[T]T", "map[int]string", "", true},
+		{"map[string]T", "Other", "", false},
+	}
+	for _, tc := range cases {
+		var pattern ast.Expr
+		if tc.pattern == "...T" {
+			pattern = &ast.Ellipsis{Elt: ast.NewIdent("T")}
+		} else {
+			pattern = parse(tc.pattern)
+		}
+		got, conflict := inferredTypeArg(pattern, memberVarTypeOf(parse(tc.actual)), "T")
+		if got != tc.want || conflict != tc.conflict {
+			t.Errorf("inferredTypeArg(%q,%q) = (%q,%v), want (%q,%v)", tc.pattern, tc.actual, got, conflict, tc.want, tc.conflict)
+		}
+	}
+}
+
+func TestGenericTypeEncoding(t *testing.T) {
+
+	for _, typ := range []memberVarType{
+		{name: "Ttt"},
+		{name: "Box", args: "Ttt"},
+		{name: "Ttt", kind: containerSequence},
+		{name: "Ttt", kind: containerChannel},
+		{name: "Ttt", kind: containerMap, key: "string"},
+		{name: "Pair", args: "Ttt;int"},
+	} {
+		canon := typ.canonical()
+		back := memberVarTypeFromString(canon)
+		if !sameMemberVarType(back, typ) {
+			t.Errorf("roundtrip %q: got %+v, want %+v", canon, back, typ)
+		}
+	}
+	if got := memberVarTypeFromString(""); !got.empty() {
+		t.Errorf("empty string gave %+v", got)
+	}
+	if got := memberVarTypeFromString("!!!"); !got.empty() {
+		t.Errorf("invalid type gave %+v", got)
+	}
+
+}
+
+func TestGenericConversionAndBinding(t *testing.T) {
+	id := ast.NewIdent("MyType")
+	if got := conversionType(id, "Ttt"); got.name != "MyType" || got.args != "Ttt" {
+		t.Errorf("conversionType with args = %+v", got)
+	}
+	if got := conversionType(id, ""); got.name != "MyType" || got.args != "" {
+		t.Errorf("conversionType without args = %+v", got)
+	}
+
+	classes := map[string]*Class{"Box": {Name: "Box", TypeParams: []string{"T"}}}
+	ifaces := map[string]*Interface{"Getter": {Name: "Getter", TypeParams: []string{"T"}}}
+	if got := bindingForType(classes, ifaces, memberVarType{name: "Box", args: "Ttt"}); got.args != "Ttt" {
+		t.Errorf("class binding = %+v", got)
+	}
+	if got := bindingForType(classes, ifaces, memberVarType{name: "Getter", args: "Ttt"}); got.args != "Ttt" {
+		t.Errorf("iface binding = %+v", got)
+	}
+	if got := bindingForType(classes, ifaces, memberVarType{name: "Nope"}); got.args != "" {
+		t.Errorf("missing binding = %+v", got)
+	}
+	if got := canonicalTypedMember(classes, ifaces, memberVarType{name: "Box", args: "Ttt", key: "k", kind: containerSequence}); got.args != "Ttt" || got.key != "k" || got.kind != containerSequence {
+		t.Errorf("canonicalTypedMember = %+v", got)
+	}
+	if got := canonicalTypedMember(classes, ifaces, memberVarType{}); !got.empty() {
+		t.Errorf("canonicalTypedMember empty = %+v", got)
 	}
 }

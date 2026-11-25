@@ -2,7 +2,9 @@ package model
 
 import (
 	"go/ast"
+	"go/parser"
 	"go/token"
+	"strings"
 
 	"github.com/quality-gates/messgo/internal/util"
 )
@@ -267,13 +269,13 @@ func (c *memberScopeCollector) addRange(stmt *ast.RangeStmt, types map[string]me
 	switch subject.kind {
 	case containerMap:
 		bindRangeVar(stmt.Key, memberVarType{name: subject.key}, types)
-		bindRangeVar(stmt.Value, memberVarType{name: subject.name}, types)
+		bindRangeVar(stmt.Value, elementVarType(subject), types)
 	case containerSequence:
-		bindRangeVar(stmt.Value, memberVarType{name: subject.name}, types)
+		bindRangeVar(stmt.Value, elementVarType(subject), types)
 	case containerChannel:
-		bindRangeVar(stmt.Key, memberVarType{name: subject.name}, types)
+		bindRangeVar(stmt.Key, elementVarType(subject), types)
 	default:
-		bindRangeVar(rangeElementVar(stmt), memberVarType{name: subject.name}, types)
+		bindRangeVar(rangeElementVar(stmt), elementVarType(subject), types)
 	}
 }
 
@@ -355,11 +357,14 @@ func (c *memberScopeCollector) addFuncLiteralParameters(lit *ast.FuncLit, types 
 
 func (c *memberUseRecorder) recordSelector(sel *ast.SelectorExpr, types map[string]memberVarType, uses map[MemberKey]bool) {
 	name := sel.Sel.Name
-	if typeName := c.resolver.expressionType(sel.X, types); typeName != "" {
-		uses[MemberKey{Type: typeName, Name: name}] = true
-		for _, key := range c.resolver.promotedMemberPath(typeName, name) {
-			uses[key] = true
-		}
+	base := c.resolver.resolvedType(sel.X, types)
+	if base.empty() {
+		return
+	}
+	typeName := base.name
+	uses[MemberKey{Type: typeName, Name: name}] = true
+	for _, key := range c.resolver.promotedMemberPathTyped(base, name) {
+		uses[key] = true
 	}
 }
 
@@ -552,15 +557,21 @@ func (c *memberTypeResolver) wrappedExpressionType(expr ast.Expr, types map[stri
 // elementType drops the container shape: indexing a container yields an element,
 // which is no longer that container.
 func elementType(container memberVarType) memberVarType {
-	return memberVarType{name: container.name}
+	return memberVarType{name: container.name, args: container.args}
+}
+
+// elementVarType is the type of an element of a container type, keeping any
+// generic instantiation of the element.
+func elementVarType(container memberVarType) memberVarType {
+	return memberVarType{name: container.name, args: container.args}
 }
 
 func (c *memberTypeResolver) selectorType(sel *ast.SelectorExpr, types map[string]memberVarType) memberVarType {
-	baseType := c.expressionType(sel.X, types)
-	if baseType == "" {
+	baseType := c.resolvedType(sel.X, types)
+	if baseType.empty() {
 		return memberVarType{}
 	}
-	return c.classMemberType(baseType, sel.Sel.Name)
+	return c.classMemberTypeTyped(baseType, sel.Sel.Name)
 }
 
 func (c *memberTypeResolver) callType(call *ast.CallExpr, types map[string]memberVarType) memberVarType {
@@ -575,12 +586,12 @@ func (c *memberTypeResolver) callResultTypes(call *ast.CallExpr, types map[strin
 	if call == nil {
 		return nil
 	}
-	fun := unwrapParen(call.Fun)
+	fun, typeArgs := genericCallFun(unwrapParen(call.Fun))
 	if id, ok := fun.(*ast.Ident); ok {
 		if _, ok := c.typeDefs[id.Name]; ok {
-			return []memberVarType{memberVarTypeOf(id)}
+			return []memberVarType{conversionType(id, typeArgs)}
 		}
-		return resolveIdentCall(c.classes, c.functions, id, call.Args)
+		return resolveIdentCall(c, id, call.Args, typeArgs, types)
 	}
 	if sel, ok := fun.(*ast.SelectorExpr); ok {
 		return resolveSelectorCall(c, sel, types)
@@ -588,44 +599,255 @@ func (c *memberTypeResolver) callResultTypes(call *ast.CallExpr, types map[strin
 	return nil
 }
 
-func resolveIdentCall(classes map[string]*Class, functions map[string]*Function, id *ast.Ident, args []ast.Expr) []memberVarType {
+// genericCallFun unwraps an explicit generic instantiation in call position,
+// Id[T](...) / pkg.Id[T](...), returning the underlying function expression
+// and the explicit type arguments. A plain call returns no type arguments.
+func genericCallFun(fun ast.Expr) (ast.Expr, string) {
+	switch node := unwrapParen(fun).(type) {
+	case *ast.IndexExpr:
+		if underlying := unwrapParen(node.X); isIdentOrSelector(underlying) {
+			return underlying, memberVarTypeOf(node.Index).canonical()
+		}
+	case *ast.IndexListExpr:
+		if underlying := unwrapParen(node.X); isIdentOrSelector(underlying) {
+			return underlying, genericMemberVarType("", node.Indices, typeBinding{}).args
+		}
+	}
+	return fun, ""
+}
+
+func isIdentOrSelector(expr ast.Expr) bool {
+	switch unwrapParen(expr).(type) {
+	case *ast.Ident, *ast.SelectorExpr:
+		return true
+	default:
+		return false
+	}
+}
+
+func conversionType(id *ast.Ident, typeArgs string) memberVarType {
+	if typeArgs != "" {
+		return memberVarType{name: id.Name, args: typeArgs}
+	}
+	return memberVarTypeOf(id)
+}
+
+func resolveIdentCall(c *memberTypeResolver, id *ast.Ident, args []ast.Expr, typeArgs string, types map[string]memberVarType) []memberVarType {
 	if id.Name == "new" && len(args) == 1 {
 		if argType := memberVarTypeOf(args[0]); !argType.empty() {
 			return []memberVarType{argType}
 		}
 		return nil
 	}
-	if _, ok := classes[id.Name]; ok {
-		return []memberVarType{{name: id.Name}}
+	if _, ok := c.classes[id.Name]; ok {
+		return []memberVarType{{name: id.Name, args: typeArgs}}
 	}
-	if fn := functions[id.Name]; fn != nil {
-		return functionResultTypes(fn)
+	if fn := c.functions[id.Name]; fn != nil {
+		subst := genericCallSubst(c, fn, args, typeArgs, types)
+		return functionResultTypesWithSubst(fn, subst)
 	}
 	return nil
 }
 
-func resolveSelectorCall(r *memberTypeResolver, sel *ast.SelectorExpr, types map[string]memberVarType) []memberVarType {
-	baseType := r.expressionType(sel.X, types)
-	if baseType == "" {
+// genericCallSubst binds a generic function's type parameters for one call:
+// from the explicit type arguments when present, otherwise inferred by
+// matching each formal parameter type against the corresponding argument.
+func genericCallSubst(c *memberTypeResolver, fn *Function, args []ast.Expr, typeArgs string, types map[string]memberVarType) typeBinding {
+	names := fn.TypeParams
+	if len(names) == 0 {
+		return typeBinding{}
+	}
+	if typeArgs != "" {
+		return typeBinding{names: names, args: typeArgs}
+	}
+	inferred := ""
+	for _, name := range names {
+		candidate, conflicted := inferredTypeArgFor(c, fn, args, types, name)
+		if conflicted {
+			candidate = ""
+		}
+		if inferred != "" {
+			inferred += ";"
+		}
+		inferred += candidate
+	}
+	return typeBinding{names: names, args: inferred}
+}
+
+func inferredTypeArgFor(c *memberTypeResolver, fn *Function, args []ast.Expr, types map[string]memberVarType, name string) (string, bool) {
+	candidate := ""
+	for i, param := range fn.Params {
+		if i >= len(args) {
+			break
+		}
+		pattern := paramTypeExpr(param)
+		if pattern == nil {
+			continue
+		}
+		actual := c.resolvedType(args[i], types)
+		if actual.empty() {
+			continue
+		}
+		found, conflicted := inferredTypeArg(pattern, actual, name)
+		if conflicted {
+			return "", true
+		}
+		if found == "" {
+			continue
+		}
+		if candidate == "" {
+			candidate = found
+		} else if candidate != found {
+			return "", true
+		}
+	}
+	return candidate, false
+}
+
+func paramTypeExpr(param *Parameter) ast.Expr {
+	if param == nil {
 		return nil
 	}
-	method := lookupMethod(r.classes, r.interfaces, baseType, sel.Sel.Name, map[string]bool{})
+	if param.TypeExpr != nil {
+		return param.TypeExpr
+	}
+	if param.Field != nil {
+		return param.Field.Type
+	}
+	return nil
+}
+
+// inferredTypeArg extracts, from one formal parameter pattern matched
+// against an actual argument type, the type argument implied for the named
+// type parameter. It is read-only: it returns the candidate as a canonical
+// type string, or conflicted when the pattern implies two different types.
+func inferredTypeArg(pattern ast.Expr, actual memberVarType, name string) (string, bool) {
+	switch node := unwrapParen(pattern).(type) {
+	case *ast.Ident:
+		if node.Name == name {
+			return actual.canonical(), false
+		}
+	case *ast.StarExpr:
+		return inferredTypeArg(node.X, actual, name)
+	case *ast.IndexExpr:
+		return inferredGenericArg(memberTypeName(node.X), []ast.Expr{node.Index}, actual, name)
+	case *ast.IndexListExpr:
+		return inferredGenericArg(memberTypeName(node.X), node.Indices, actual, name)
+	default:
+		return inferredNonGenericArg(node, actual, name)
+	}
+	return "", false
+}
+
+func inferredNonGenericArg(pattern ast.Expr, actual memberVarType, name string) (string, bool) {
+	switch node := pattern.(type) {
+	case *ast.ArrayType:
+		return inferredContainerArg(node.Elt, actual, name, containerSequence)
+	case *ast.Ellipsis:
+		return inferredVariadicArg(node.Elt, actual, name)
+	case *ast.ChanType:
+		return inferredContainerArg(node.Value, actual, name, containerChannel)
+	case *ast.MapType:
+		return inferredMapArg(node, actual, name)
+	}
+	return "", false
+}
+
+func inferredContainerArg(elt ast.Expr, actual memberVarType, name string, kind containerKind) (string, bool) {
+	if actual.kind != kind {
+		return "", false
+	}
+	return inferredTypeArg(elt, elementVarType(actual), name)
+}
+
+func inferredVariadicArg(elt ast.Expr, actual memberVarType, name string) (string, bool) {
+	if actual.kind == containerSequence {
+		return inferredTypeArg(elt, elementVarType(actual), name)
+	}
+	return inferredTypeArg(elt, actual, name)
+}
+
+func inferredMapArg(node *ast.MapType, actual memberVarType, name string) (string, bool) {
+	if actual.kind != containerMap {
+		return "", false
+	}
+	keyArg, keyConflict := inferredTypeArg(node.Key, memberVarType{name: actual.key}, name)
+	if keyConflict {
+		return "", true
+	}
+	valueArg, valueConflict := inferredTypeArg(node.Value, elementVarType(actual), name)
+	if valueConflict || (keyArg != "" && valueArg != "" && keyArg != valueArg) {
+		return "", true
+	}
+	if keyArg != "" {
+		return keyArg, false
+	}
+	return valueArg, false
+}
+
+func inferredGenericArg(base string, patterns []ast.Expr, actual memberVarType, name string) (string, bool) {
+	if actual.name != base {
+		return "", false
+	}
+	parts := strings.Split(actual.args, ";")
+	if len(parts) != len(patterns) {
+		return "", false
+	}
+	candidate := ""
+	for i, pattern := range patterns {
+		found, conflicted := inferredTypeArg(pattern, memberVarTypeFromString(parts[i]), name)
+		if conflicted {
+			return "", true
+		}
+		if found == "" {
+			continue
+		}
+		if candidate == "" {
+			candidate = found
+		} else if candidate != found {
+			return "", true
+		}
+	}
+	return candidate, false
+}
+
+func resolveSelectorCall(r *memberTypeResolver, sel *ast.SelectorExpr, types map[string]memberVarType) []memberVarType {
+	baseType := r.resolvedType(sel.X, types)
+	if baseType.empty() {
+		return nil
+	}
+	method, declaring := lookupMethodTyped(r.classes, r.interfaces, baseType, sel.Sel.Name, map[string]bool{})
 	if method == nil {
 		return nil
 	}
-	return functionResultTypes(method)
+	return functionResultTypesWithSubst(method, bindingForType(r.classes, r.interfaces, declaring))
 }
 
 type selectedMember struct {
 	memberType memberVarType
 	method     *Function
 	path       []MemberKey
+	// declaring is the instantiated type that declares the member, so a
+	// generic method's results can be substituted by its callers.
+	declaring memberVarType
 }
 
 type embeddedMemberSearch struct {
 	typeName string
+	// typ is the instantiated type being searched; when empty, typeName alone
+	// is the type. typ.args carries the generic arguments for typ.name.
+	typ      memberVarType
 	path     []MemberKey
 	multiple bool
+}
+
+// effectiveType returns the instantiated type for the search node, falling
+// back to the plain type name when no instantiation was recorded.
+func (n embeddedMemberSearch) effectiveType() memberVarType {
+	if n.typ.name != "" {
+		return n.typ
+	}
+	return memberVarType{name: n.typeName}
 }
 
 type selectionState int
@@ -650,9 +872,21 @@ func lookupMethod(classes map[string]*Class, ifaces map[string]*Interface, typeN
 	return selected.method
 }
 
+func lookupMethodTyped(classes map[string]*Class, ifaces map[string]*Interface, typ memberVarType, methodName string, visiting map[string]bool) (*Function, memberVarType) {
+	selected, ok := selectMemberTyped(classes, ifaces, typ, methodName, visiting)
+	if !ok {
+		return nil, memberVarType{}
+	}
+	return selected.method, selected.declaring
+}
+
 func selectMember(classes map[string]*Class, ifaces map[string]*Interface, typeName, memberName string, visiting map[string]bool) (selectedMember, bool) {
-	typeName = canonicalMemberType(classes, ifaces, typeName)
-	queue := []embeddedMemberSearch{{typeName: typeName}}
+	return selectMemberTyped(classes, ifaces, memberVarType{name: typeName}, memberName, visiting)
+}
+
+func selectMemberTyped(classes map[string]*Class, ifaces map[string]*Interface, typ memberVarType, memberName string, visiting map[string]bool) (selectedMember, bool) {
+	typ = canonicalTypedMember(classes, ifaces, typ)
+	queue := []embeddedMemberSearch{{typeName: typ.name, typ: typ}}
 	for len(queue) > 0 {
 		level := selectMemberLevel(classes, ifaces, queue, memberName, visiting)
 		switch level.state {
@@ -692,20 +926,22 @@ func selectMemberLevel(classes map[string]*Class, ifaces map[string]*Interface, 
 }
 
 func directSelection(classes map[string]*Class, ifaces map[string]*Interface, node embeddedMemberSearch, memberName string) (selectedMember, bool) {
+	declaring := node.effectiveType()
+	subst := bindingForType(classes, ifaces, declaring)
 	if class := classes[node.typeName]; class != nil {
 		for _, field := range class.Fields {
 			if field.Name == memberName {
-				return selectedMember{memberType: memberVarTypeOf(field.TypeExpr), path: memberPath(node, memberName)}, true
+				return selectedMember{memberType: memberVarTypeOfSubst(field.TypeExpr, subst), path: memberPath(node, memberName), declaring: declaring}, true
 			}
 		}
 		for _, method := range class.Methods {
 			if method.Name == memberName {
-				return selectedMember{memberType: functionResultType(method), method: method, path: memberPath(node, memberName)}, true
+				return selectedMember{memberType: functionResultTypeWithSubst(method, subst), method: method, path: memberPath(node, memberName), declaring: declaring}, true
 			}
 		}
 	}
 	if method := interfaceMethod(ifaces, node.typeName, memberName, map[string]bool{}); method != nil {
-		return selectedMember{memberType: functionResultType(method), method: method, path: memberPath(node, memberName)}, true
+		return selectedMember{memberType: functionResultTypeWithSubst(method, subst), method: method, path: memberPath(node, memberName), declaring: declaring}, true
 	}
 	return selectedMember{}, false
 }
@@ -740,17 +976,19 @@ func appendEmbeddedSearches(classes map[string]*Class, ifaces map[string]*Interf
 	if class == nil {
 		return next
 	}
+	subst := bindingForType(classes, ifaces, node.effectiveType())
 	for _, field := range class.Fields {
 		if field.Ident != nil {
 			continue
 		}
-		typeName := canonicalMemberType(classes, ifaces, memberTypeName(field.TypeExpr))
+		typ := canonicalTypedMember(classes, ifaces, memberVarTypeOfSubst(field.TypeExpr, subst))
+		typeName := typ.name
 		if pos, ok := index[typeName]; ok {
 			next[pos].multiple = true
 			continue
 		}
 		index[typeName] = len(next)
-		next = append(next, embeddedMemberSearch{typeName: typeName, path: memberPath(node, field.Name), multiple: node.multiple})
+		next = append(next, embeddedMemberSearch{typeName: typeName, typ: typ, path: memberPath(node, field.Name), multiple: node.multiple})
 	}
 	return next
 }
@@ -765,42 +1003,73 @@ func canonicalMemberType(classes map[string]*Class, ifaces map[string]*Interface
 	return name
 }
 
-func (c *memberTypeResolver) classMemberType(typeName, memberName string) memberVarType {
-	memberType, _, ok := c.lookupMember(typeName, memberName, map[string]bool{})
+// canonicalTypedMember rewrites an instantiated type's name to the canonical
+// declaring type (resolving generic aliases), keeping its type arguments.
+func canonicalTypedMember(classes map[string]*Class, ifaces map[string]*Interface, typ memberVarType) memberVarType {
+	if typ.name == "" {
+		return typ
+	}
+	return memberVarType{name: canonicalMemberType(classes, ifaces, typ.name), key: typ.key, kind: typ.kind, args: typ.args}
+}
+
+// bindingForType binds the type parameters of the named type in typ to
+// typ's type arguments, e.g. Box[Ttt] binds Box's T to Ttt. The names come
+// from the type's precomputed TypeParams, so no per-lookup extraction or
+// map allocation is needed.
+func bindingForType(classes map[string]*Class, ifaces map[string]*Interface, typ memberVarType) typeBinding {
+	if class := classes[typ.name]; class != nil {
+		return typeBinding{names: class.TypeParams, args: typ.args}
+	}
+	if iface := ifaces[typ.name]; iface != nil {
+		return typeBinding{names: iface.TypeParams, args: typ.args}
+	}
+	return typeBinding{}
+}
+
+func (c *memberTypeResolver) classMemberTypeTyped(typ memberVarType, memberName string) memberVarType {
+	memberType, _, ok := c.lookupMemberTyped(typ, memberName, map[string]bool{})
 	if !ok {
 		return memberVarType{}
 	}
 	return memberType
 }
 
-func (c *memberTypeResolver) promotedMemberPath(typeName, memberName string) []MemberKey {
-	_, path, ok := c.lookupMember(typeName, memberName, map[string]bool{})
+func (c *memberTypeResolver) promotedMemberPathTyped(typ memberVarType, memberName string) []MemberKey {
+	_, path, ok := c.lookupMemberTyped(typ, memberName, map[string]bool{})
 	if !ok {
 		return nil
 	}
 	return path
 }
 
-func (c *memberTypeResolver) lookupMember(typeName, memberName string, visiting map[string]bool) (memberVarType, []MemberKey, bool) {
-	selected, ok := selectMember(c.classes, c.interfaces, typeName, memberName, visiting)
+func (c *memberTypeResolver) lookupMemberTyped(typ memberVarType, memberName string, visiting map[string]bool) (memberVarType, []MemberKey, bool) {
+	selected, ok := selectMemberTyped(c.classes, c.interfaces, typ, memberName, visiting)
 	return selected.memberType, selected.path, ok
 }
 
 func functionResultTypes(fn *Function) []memberVarType {
+	return functionResultTypesWithSubst(fn, typeBinding{})
+}
+
+func functionResultTypesWithSubst(fn *Function, subst typeBinding) []memberVarType {
 	if fn == nil || len(fn.Results) == 0 {
 		return nil
 	}
 	results := make([]memberVarType, len(fn.Results))
 	for i, res := range fn.Results {
 		if res.Field != nil {
-			results[i] = memberVarTypeOf(res.Field.Type)
+			results[i] = memberVarTypeOfSubst(res.Field.Type, subst)
 		}
 	}
 	return results
 }
 
 func functionResultType(fn *Function) memberVarType {
-	results := functionResultTypes(fn)
+	return functionResultTypeWithSubst(fn, typeBinding{})
+}
+
+func functionResultTypeWithSubst(fn *Function, subst typeBinding) memberVarType {
+	results := functionResultTypesWithSubst(fn, subst)
 	if len(results) == 1 {
 		return results[0]
 	}
@@ -849,20 +1118,145 @@ const (
 
 // memberVarType is the member-bearing type of an expression. For a container it
 // records the element type in name, plus the shape and, for maps, the key type,
-// so callers can tell a map key from a map value.
+// so callers can tell a map key from a map value. For a generic instantiation
+// it records the type arguments in args, in declared type-parameter order, so
+// a type parameter in a field or result type can be substituted on access.
 type memberVarType struct {
 	name string
 	key  string
 	kind containerKind
+	// args encodes generic type arguments as canonical type strings joined
+	// by ';', in declared type-parameter order. Strings (not slices) keep
+	// member lookup cheap for the explicitness summaries.
+	args string
 }
 
 func (t memberVarType) empty() bool {
 	return t.name == "" && t.key == ""
 }
 
+func sameMemberVarType(a, b memberVarType) bool {
+	return a.name == b.name && a.key == b.key && a.kind == b.kind && a.args == b.args
+}
+
+// canonical returns a type string for t that memberVarTypeOf can read back,
+// e.g. "[]Box[Ttt]" or "map[string]Ttt".
+func (t memberVarType) canonical() string {
+	switch t.kind {
+	case containerSequence:
+		return "[]" + encodeGenericType(t.name, t.args)
+	case containerMap:
+		return "map[" + t.key + "]" + encodeGenericType(t.name, t.args)
+	case containerChannel:
+		return "chan " + encodeGenericType(t.name, t.args)
+	default:
+		return encodeGenericType(t.name, t.args)
+	}
+}
+
+func encodeGenericType(name, args string) string {
+	if args == "" {
+		return name
+	}
+	return name + "[" + strings.ReplaceAll(args, ";", ",") + "]"
+}
+
+// memberVarTypeFromString parses a canonical type string into a member type.
+func memberVarTypeFromString(text string) memberVarType {
+	if text == "" {
+		return memberVarType{}
+	}
+	expr, err := parser.ParseExpr(text)
+	if err != nil {
+		return memberVarType{}
+	}
+	return memberVarTypeOf(expr)
+}
+
+// typeBinding binds type parameter names to concrete types, in declared
+// order. It is a pair of parallel slices rather than a map so that member
+// lookup does not allocate a map on every selection.
+type typeBinding struct {
+	names []string
+	args  string
+}
+
+func (b typeBinding) lookup(name string) (memberVarType, bool) {
+	if b.args == "" {
+		return memberVarType{}, false
+	}
+	parts := strings.Split(b.args, ";")
+	for i, param := range b.names {
+		if param == name && i < len(parts) && parts[i] != "" {
+			return memberVarTypeFromString(parts[i]), true
+		}
+	}
+	return memberVarType{}, false
+}
+
 func memberVarTypeOf(expr ast.Expr) memberVarType {
-	kind, key := containerShape(expr)
-	return memberVarType{name: memberTypeName(expr), key: key, kind: kind}
+	return memberVarTypeOfSubst(expr, typeBinding{})
+}
+
+// memberVarTypeOfSubst renders a type expression, substituting any type
+// parameter bound in subst with its bound type. An empty subst renders the
+// declared type as written.
+func memberVarTypeOfSubst(expr ast.Expr, subst typeBinding) memberVarType {
+	switch node := expr.(type) {
+	case *ast.Ident:
+		if bound, ok := subst.lookup(node.Name); ok {
+			return bound
+		}
+		return memberVarType{name: node.Name}
+	case *ast.SelectorExpr:
+		return memberVarType{name: exprString(node)}
+	case *ast.ParenExpr:
+		return memberVarTypeOfSubst(node.X, subst)
+	case *ast.StarExpr:
+		return memberVarTypeOfSubst(node.X, subst)
+	default:
+		return memberVarTypeOfSubstOther(node, subst)
+	}
+}
+
+func memberVarTypeOfSubstOther(expr ast.Expr, subst typeBinding) memberVarType {
+	switch node := expr.(type) {
+	case *ast.IndexExpr:
+		return genericMemberVarType(memberTypeName(node.X), []ast.Expr{node.Index}, subst)
+	case *ast.IndexListExpr:
+		return genericMemberVarType(memberTypeName(node.X), node.Indices, subst)
+	case *ast.ArrayType:
+		return containerMemberVarType(memberVarTypeOfSubst(node.Elt, subst), containerSequence)
+	case *ast.ChanType:
+		return containerMemberVarType(memberVarTypeOfSubst(node.Value, subst), containerChannel)
+	case *ast.MapType:
+		return mapMemberVarType(node, subst)
+	case *ast.Ellipsis:
+		return containerMemberVarType(memberVarTypeOfSubst(node.Elt, subst), containerSequence)
+	default:
+		return memberVarType{name: containerTypeName(expr)}
+	}
+}
+
+func mapMemberVarType(node *ast.MapType, subst typeBinding) memberVarType {
+	value := memberVarTypeOfSubst(node.Value, subst)
+	key := memberVarTypeOfSubst(node.Key, subst)
+	return memberVarType{name: value.name, key: key.name, args: value.args, kind: containerMap}
+}
+
+func genericMemberVarType(base string, indices []ast.Expr, subst typeBinding) memberVarType {
+	args := ""
+	for _, index := range indices {
+		if args != "" {
+			args += ";"
+		}
+		args += memberVarTypeOfSubst(index, subst).canonical()
+	}
+	return memberVarType{name: base, args: args}
+}
+
+func containerMemberVarType(elt memberVarType, kind containerKind) memberVarType {
+	return memberVarType{name: elt.name, args: elt.args, kind: kind}
 }
 
 // containerShape reports the container shape of a type expression and, for a

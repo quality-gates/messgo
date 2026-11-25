@@ -50,6 +50,9 @@ func TestEquivalentParenthesesPreserveFindings(t *testing.T) {
 		{"channel range", "package p\nfunc drain(ch chan int) { for range %s {} }\n", "ch", "explicitness", "ImplicitInput"},
 		{"stream call", "package p\nimport (\"fmt\"; \"io\")\nfunc write(w io.Writer) { %s(w, \"x\") }\n", "fmt.Fprintf", "explicitness", "ImplicitOutput"},
 		{"recursive call", "package p\nfunc recurse() { %s() }\n", "recurse", cognitive, "CognitiveComplexity"},
+		{"generic call", "package p\ntype Ttt struct { data, unused int }\nfunc (t Ttt) helper() {}\nfunc Id[T any](v T) T { return v }\nfunc Run(t Ttt) { %s(t).helper(); println(Id(t).data) }\n", "Id", "unusedcode", "UnusedPrivateField"},
+		{"generic call with type arguments", "package p\ntype Ttt struct { data, unused int }\nfunc (t Ttt) helper() {}\nfunc Id[T any](v T) T { return v }\nfunc Run(t Ttt) { %s(t).helper(); println(Id(t).data) }\n", "Id[Ttt]", "unusedcode", "UnusedPrivateField"},
+		{"generic struct field", "package p\ntype Ttt struct { data, unused int }\nfunc (t Ttt) helper() {}\ntype Box[T any] struct { V T }\nfunc Run(b Box[Ttt]) { %s.V.helper(); println(b.V.data) }\n", "b", "unusedcode", "UnusedPrivateField"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

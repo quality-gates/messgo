@@ -57,7 +57,7 @@ if [ "$FAIL_COVERAGE" = 1 ]; then
     echo "coverage collection failed" >&2
     exit 1
 fi
-if [ "$timeout" -lt 30 ]; then
+if [ "$timeout" -lt 180 ]; then
     echo "coverage collection timed out" >&2
     exit 1
 fi

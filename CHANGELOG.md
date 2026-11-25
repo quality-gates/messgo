@@ -13,6 +13,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 
 ### Fixed
 - Report caller-visible field writes through slice-of-struct elements (`s[i].Field`) as `ImplicitOutput` in `explicitness` and `explicitness-strict`. Slice indexing now resolves the element type, and an index or field selection through shared storage preserves its outer storage and parameter origin (#331).
+- Allow 180 seconds per test execution in the pre-push mutation check. The CLI explicitness golden test on the model package legitimately takes 68-134 seconds on a shared host, so the previous 30-second timeout made the mandatory hook fail on coverage collection before any mutant ran (follow-up to #331, #316).
 - Resolve member uses through generic function calls and generic struct instantiations, so `UnusedPrivateField` and `UnusedPrivateMethod` no longer report members accessed via type-parameter substitution (#330).
 - Treat calls through unmodelled embedded types as unknown when they could hide or compete with local methods (#319).
 - Resolve promoted methods through same-package generic type aliases, preserving caller-visible effects (#313).

@@ -1,28 +1,28 @@
-build.go:107:107 ImplicitOutput fileBuilder.collectTypeSpec: The method collectTypeSpec() has an implicit output: write through local i. Return it instead.
-build.go:114:114 UnknownEffect fileBuilder.collectFuncs: The method collectFuncs() has an unknown effect: receiver effect. Analyze the callee before classifying it as a calculation.
-build.go:119:119 UnknownEffect fileBuilder.collectFuncs: The method collectFuncs() has an unknown effect: unresolved call. Analyze the callee before classifying it as a calculation.
-build.go:141:141 ImplicitOutput fileBuilder.collectFields: The method collectFields() has an implicit output: write through local c. Return it instead.
-build.go:141:141 ImplicitOutput fileBuilder.collectFields: The method collectFields() has an implicit output: write through parameter c. Return it instead.
-build.go:141:141 ImplicitOutput fileBuilder.collectFields: The method collectFields() has an implicit output: write through parameter st. Return it instead.
-build.go:141:141 UnknownEffect fileBuilder.collectFields: The method collectFields() has an unknown effect: receiver effect. Analyze the callee before classifying it as a calculation.
-build.go:146:146 UnknownEffect fileBuilder.collectFields: The method collectFields() has an unknown effect: unresolved call. Analyze the callee before classifying it as a calculation.
+build.go:109:109 ImplicitOutput fileBuilder.collectTypeSpec: The method collectTypeSpec() has an implicit output: write through local i. Return it instead.
+build.go:116:116 UnknownEffect fileBuilder.collectFuncs: The method collectFuncs() has an unknown effect: receiver effect. Analyze the callee before classifying it as a calculation.
+build.go:121:121 UnknownEffect fileBuilder.collectFuncs: The method collectFuncs() has an unknown effect: unresolved call. Analyze the callee before classifying it as a calculation.
+build.go:143:143 ImplicitOutput fileBuilder.collectFields: The method collectFields() has an implicit output: write through local c. Return it instead.
+build.go:143:143 ImplicitOutput fileBuilder.collectFields: The method collectFields() has an implicit output: write through parameter c. Return it instead.
+build.go:143:143 ImplicitOutput fileBuilder.collectFields: The method collectFields() has an implicit output: write through parameter st. Return it instead.
+build.go:143:143 UnknownEffect fileBuilder.collectFields: The method collectFields() has an unknown effect: receiver effect. Analyze the callee before classifying it as a calculation.
+build.go:148:148 UnknownEffect fileBuilder.collectFields: The method collectFields() has an unknown effect: unresolved call. Analyze the callee before classifying it as a calculation.
 build.go:15:15 ImplicitInput Parse: The function Parse() has an implicit input: os.ReadFile. Pass it in as an argument.
-build.go:170:170 ImplicitOutput fileBuilder.collectInterfaceMethods: The method collectInterfaceMethods() has an implicit output: write through local i. Return it instead.
-build.go:170:170 ImplicitOutput fileBuilder.collectInterfaceMethods: The method collectInterfaceMethods() has an implicit output: write through parameter i. Return it instead.
-build.go:170:170 ImplicitOutput fileBuilder.collectInterfaceMethods: The method collectInterfaceMethods() has an implicit output: write through parameter it. Return it instead.
-build.go:170:170 UnknownEffect fileBuilder.collectInterfaceMethods: The method collectInterfaceMethods() has an unknown effect: receiver effect. Analyze the callee before classifying it as a calculation.
-build.go:178:178 UnknownEffect fileBuilder.collectInterfaceMethods: The method collectInterfaceMethods() has an unknown effect: unresolved call. Analyze the callee before classifying it as a calculation.
-build.go:195:195 UnknownEffect fileBuilder.buildFunc: The method buildFunc() has an unknown effect: receiver effect. Analyze the callee before classifying it as a calculation.
-build.go:195:195 UnknownEffect fileBuilder.buildFunc: The method buildFunc() has an unknown effect: unresolved call. Analyze the callee before classifying it as a calculation.
+build.go:172:172 ImplicitOutput fileBuilder.collectInterfaceMethods: The method collectInterfaceMethods() has an implicit output: write through local i. Return it instead.
+build.go:172:172 ImplicitOutput fileBuilder.collectInterfaceMethods: The method collectInterfaceMethods() has an implicit output: write through parameter i. Return it instead.
+build.go:172:172 ImplicitOutput fileBuilder.collectInterfaceMethods: The method collectInterfaceMethods() has an implicit output: write through parameter it. Return it instead.
+build.go:172:172 UnknownEffect fileBuilder.collectInterfaceMethods: The method collectInterfaceMethods() has an unknown effect: receiver effect. Analyze the callee before classifying it as a calculation.
+build.go:180:180 UnknownEffect fileBuilder.collectInterfaceMethods: The method collectInterfaceMethods() has an unknown effect: unresolved call. Analyze the callee before classifying it as a calculation.
 build.go:19:19 ImplicitOutput Parse: The function Parse() has an implicit output: write through local b. Return it instead.
 build.go:19:19 ImplicitOutput Parse: The function Parse() has an implicit output: write through local c. Return it instead.
 build.go:19:19 ImplicitOutput Parse: The function Parse() has an implicit output: write through local i. Return it instead.
 build.go:19:19 UnknownEffect Parse: The function Parse() has an unknown effect: receiver effect. Analyze the callee before classifying it as a calculation.
 build.go:19:19 UnknownEffect Parse: The function Parse() has an unknown effect: unresolved call. Analyze the callee before classifying it as a calculation.
-build.go:225:225 UnknownEffect fileBuilder.params: The method params() has an unknown effect: receiver effect. Analyze the callee before classifying it as a calculation.
-build.go:225:225 UnknownEffect fileBuilder.params: The method params() has an unknown effect: unresolved call. Analyze the callee before classifying it as a calculation.
+build.go:211:211 UnknownEffect fileBuilder.buildFunc: The method buildFunc() has an unknown effect: receiver effect. Analyze the callee before classifying it as a calculation.
+build.go:211:211 UnknownEffect fileBuilder.buildFunc: The method buildFunc() has an unknown effect: unresolved call. Analyze the callee before classifying it as a calculation.
+build.go:241:241 UnknownEffect fileBuilder.params: The method params() has an unknown effect: receiver effect. Analyze the callee before classifying it as a calculation.
+build.go:241:241 UnknownEffect fileBuilder.params: The method params() has an unknown effect: unresolved call. Analyze the callee before classifying it as a calculation.
 build.go:24:24 UnknownEffect ParseSource: The function ParseSource() has an unknown effect: unresolved call. Analyze the callee before classifying it as a calculation.
-build.go:297:297 UnknownEffect docText: The function docText() has an unknown effect: unresolved call. Analyze the callee before classifying it as a calculation.
+build.go:320:320 UnknownEffect docText: The function docText() has an unknown effect: unresolved call. Analyze the callee before classifying it as a calculation.
 build.go:41:41 ImplicitOutput ParseSource: The function ParseSource() has an implicit output: write through local b. Return it instead.
 build.go:41:41 ImplicitOutput ParseSource: The function ParseSource() has an implicit output: write through local c. Return it instead.
 build.go:41:41 ImplicitOutput ParseSource: The function ParseSource() has an implicit output: write through local i. Return it instead.
@@ -39,11 +39,12 @@ build.go:74:74 ImplicitOutput fileBuilder.collectTypes: The method collectTypes(
 build.go:74:74 ImplicitOutput fileBuilder.collectTypes: The method collectTypes() has an implicit output: write through local i. Return it instead.
 build.go:74:74 UnknownEffect fileBuilder.collectTypes: The method collectTypes() has an unknown effect: unresolved call. Analyze the callee before classifying it as a calculation.
 build.go:80:80 UnknownEffect fileBuilder.collectTypeSpec: The method collectTypeSpec() has an unknown effect: unresolved call. Analyze the callee before classifying it as a calculation.
-build.go:85:85 UnknownEffect fileBuilder.collectTypeSpec: The method collectTypeSpec() has an unknown effect: receiver effect. Analyze the callee before classifying it as a calculation.
-build.go:93:93 ImplicitOutput fileBuilder.collectTypeSpec: The method collectTypeSpec() has an implicit output: write through local c. Return it instead.
-build.go:93:93 ImplicitOutput fileBuilder.collectTypeSpec: The method collectTypeSpec() has an implicit output: write through parameter ts. Return it instead.
+build.go:86:86 UnknownEffect fileBuilder.collectTypeSpec: The method collectTypeSpec() has an unknown effect: receiver effect. Analyze the callee before classifying it as a calculation.
+build.go:94:94 ImplicitOutput fileBuilder.collectTypeSpec: The method collectTypeSpec() has an implicit output: write through local c. Return it instead.
+build.go:94:94 ImplicitOutput fileBuilder.collectTypeSpec: The method collectTypeSpec() has an implicit output: write through parameter ts. Return it instead.
 call_resolution.go:18:18 UnknownEffect ResolveCall: The function ResolveCall() has an unknown effect: receiver effect. Analyze the callee before classifying it as a calculation.
-call_resolution.go:41:41 UnknownEffect lexicalReceiverType: The function lexicalReceiverType() has an unknown effect: receiver effect. Analyze the callee before classifying it as a calculation.
+call_resolution.go:35:35 UnknownEffect lexicalReceiverType: The function lexicalReceiverType() has an unknown effect: receiver effect. Analyze the callee before classifying it as a calculation.
+call_resolution.go:35:35 UnknownEffect lexicalReceiverType: The function lexicalReceiverType() has an unknown effect: unresolved call. Analyze the callee before classifying it as a calculation.
 call_resolution.go:8:8 ImplicitOutput ResolveCall: The function ResolveCall() has an implicit output: write through parameter fn. Return it instead.
 call_resolution.go:8:8 UnknownEffect ResolveCall: The function ResolveCall() has an unknown effect: unresolved call. Analyze the callee before classifying it as a calculation.
 constants.go:17:17 UnknownEffect collectConstants: The function collectConstants() has an unknown effect: unresolved call. Analyze the callee before classifying it as a calculation.
@@ -79,113 +80,189 @@ locals.go:53:53 UnknownEffect UnreadParameters: The function UnreadParameters() 
 locals.go:67:67 UnknownEffect bindingRead: The function bindingRead() has an unknown effect: unresolved call. Analyze the callee before classifying it as a calculation.
 locals.go:82:82 UnknownEffect localCollector.add: The method add() has an unknown effect: receiver effect. Analyze the callee before classifying it as a calculation.
 locals.go:88:88 UnknownEffect localCollector.add: The method add() has an unknown effect: unresolved call. Analyze the callee before classifying it as a calculation.
-member_selection.go:101:101 ImplicitOutput indexMemberAliases: The function indexMemberAliases() has an implicit output: write through parameter classByName. Return it instead.
-member_selection.go:104:104 ImplicitOutput indexMemberAliases: The function indexMemberAliases() has an implicit output: write through parameter ifaceByName. Return it instead.
-member_selection.go:113:113 ImplicitOutput memberTypeDefs: The function memberTypeDefs() has an implicit output: write through parameter classes. Return it instead.
-member_selection.go:113:113 ImplicitOutput memberTypeDefs: The function memberTypeDefs() has an implicit output: write through parameter f. Return it instead.
-member_selection.go:126:126 UnknownEffect memberSelectionCollector.packageTypes: The method packageTypes() has an unknown effect: receiver effect. Analyze the callee before classifying it as a calculation.
-member_selection.go:126:126 UnknownEffect memberSelectionCollector.packageTypes: The method packageTypes() has an unknown effect: unresolved call. Analyze the callee before classifying it as a calculation.
-member_selection.go:135:135 UnknownEffect memberSelectionCollector.collectFunc: The method collectFunc() has an unknown effect: receiver effect. Analyze the callee before classifying it as a calculation.
-member_selection.go:135:135 UnknownEffect memberSelectionCollector.collectFunc: The method collectFunc() has an unknown effect: unresolved call. Analyze the callee before classifying it as a calculation.
-member_selection.go:153:153 ImplicitOutput memberScopeCollector.addFuncParameters: The method addFuncParameters() has an implicit output: write through local types. Return it instead.
-member_selection.go:153:153 ImplicitOutput memberScopeCollector.addFuncParameters: The method addFuncParameters() has an implicit output: write through parameter decl. Return it instead.
-member_selection.go:153:153 ImplicitOutput memberScopeCollector.addFuncParameters: The method addFuncParameters() has an implicit output: write through parameter types. Return it instead.
-member_selection.go:153:153 UnknownEffect memberScopeCollector.addFuncParameters: The method addFuncParameters() has an unknown effect: receiver effect. Analyze the callee before classifying it as a calculation.
-member_selection.go:164:164 UnknownEffect addNamedFieldTypes: The function addNamedFieldTypes() has an unknown effect: receiver effect. Analyze the callee before classifying it as a calculation.
-member_selection.go:168:168 ImplicitOutput addNamedFieldTypes: The function addNamedFieldTypes() has an implicit output: write through local types. Return it instead.
-member_selection.go:168:168 ImplicitOutput addNamedFieldTypes: The function addNamedFieldTypes() has an implicit output: write through parameter fields. Return it instead.
-member_selection.go:168:168 ImplicitOutput addNamedFieldTypes: The function addNamedFieldTypes() has an implicit output: write through parameter types. Return it instead.
-member_selection.go:174:174 UnknownEffect memberScopeCollector.collectLocalTypes: The method collectLocalTypes() has an unknown effect: unresolved call. Analyze the callee before classifying it as a calculation.
-member_selection.go:179:179 ImplicitOutput <lambda>: The function <lambda>() has an implicit output: write through local c. Return it instead.
-member_selection.go:179:179 ImplicitOutput <lambda>: The function <lambda>() has an implicit output: write through local types. Return it instead.
-member_selection.go:179:179 ImplicitOutput <lambda>: The function <lambda>() has an implicit output: write through parameter n. Return it instead.
-member_selection.go:179:179 UnknownEffect <lambda>: The function <lambda>() has an unknown effect: receiver effect. Analyze the callee before classifying it as a calculation.
-member_selection.go:179:179 UnknownEffect <lambda>: The function <lambda>() has an unknown effect: unresolved call. Analyze the callee before classifying it as a calculation.
-member_selection.go:197:197 ImplicitOutput memberScopeCollector.addDeclaration: The method addDeclaration() has an implicit output: write through local types. Return it instead.
-member_selection.go:197:197 ImplicitOutput memberScopeCollector.addDeclaration: The method addDeclaration() has an implicit output: write through parameter stmt. Return it instead.
-member_selection.go:197:197 ImplicitOutput memberScopeCollector.addDeclaration: The method addDeclaration() has an implicit output: write through parameter types. Return it instead.
-member_selection.go:197:197 UnknownEffect memberScopeCollector.addDeclaration: The method addDeclaration() has an unknown effect: receiver effect. Analyze the callee before classifying it as a calculation.
-member_selection.go:197:197 UnknownEffect memberScopeCollector.addDeclaration: The method addDeclaration() has an unknown effect: unresolved call. Analyze the callee before classifying it as a calculation.
-member_selection.go:204:204 UnknownEffect memberScopeCollector.addValueSpec: The method addValueSpec() has an unknown effect: receiver effect. Analyze the callee before classifying it as a calculation.
-member_selection.go:204:204 UnknownEffect memberScopeCollector.addValueSpec: The method addValueSpec() has an unknown effect: unresolved call. Analyze the callee before classifying it as a calculation.
-member_selection.go:210:210 ImplicitOutput memberScopeCollector.addValueSpec: The method addValueSpec() has an implicit output: write through local types. Return it instead.
-member_selection.go:210:210 ImplicitOutput memberScopeCollector.addValueSpec: The method addValueSpec() has an implicit output: write through parameter spec. Return it instead.
-member_selection.go:210:210 ImplicitOutput memberScopeCollector.addValueSpec: The method addValueSpec() has an implicit output: write through parameter types. Return it instead.
-member_selection.go:216:216 UnknownEffect memberScopeCollector.valueSpecRhsTypes: The method valueSpecRhsTypes() has an unknown effect: receiver effect. Analyze the callee before classifying it as a calculation.
-member_selection.go:225:225 UnknownEffect memberScopeCollector.valueSpecRhsTypes: The method valueSpecRhsTypes() has an unknown effect: unresolved call. Analyze the callee before classifying it as a calculation.
-member_selection.go:236:236 UnknownEffect memberScopeCollector.addAssignment: The method addAssignment() has an unknown effect: receiver effect. Analyze the callee before classifying it as a calculation.
-member_selection.go:236:236 UnknownEffect memberScopeCollector.addAssignment: The method addAssignment() has an unknown effect: unresolved call. Analyze the callee before classifying it as a calculation.
-member_selection.go:243:243 ImplicitOutput memberScopeCollector.addAssignment: The method addAssignment() has an implicit output: write through parameter stmt. Return it instead.
-member_selection.go:243:243 ImplicitOutput memberScopeCollector.addAssignment: The method addAssignment() has an implicit output: write through parameter types. Return it instead.
-member_selection.go:251:251 UnknownEffect memberScopeCollector.assignmentRhsTypes: The method assignmentRhsTypes() has an unknown effect: receiver effect. Analyze the callee before classifying it as a calculation.
-member_selection.go:251:251 UnknownEffect memberScopeCollector.assignmentRhsTypes: The method assignmentRhsTypes() has an unknown effect: unresolved call. Analyze the callee before classifying it as a calculation.
-member_selection.go:266:266 UnknownEffect memberScopeCollector.addRange: The method addRange() has an unknown effect: receiver effect. Analyze the callee before classifying it as a calculation.
-member_selection.go:266:266 UnknownEffect memberScopeCollector.addRange: The method addRange() has an unknown effect: unresolved call. Analyze the callee before classifying it as a calculation.
-member_selection.go:269:269 ImplicitOutput memberScopeCollector.addRange: The method addRange() has an implicit output: write through parameter types. Return it instead.
-member_selection.go:291:291 UnknownEffect bindRangeVar: The function bindRangeVar() has an unknown effect: receiver effect. Analyze the callee before classifying it as a calculation.
-member_selection.go:294:294 ImplicitOutput bindRangeVar: The function bindRangeVar() has an implicit output: write through parameter types. Return it instead.
-member_selection.go:298:298 UnknownEffect memberSelectionCollector.collectBody: The method collectBody() has an unknown effect: unresolved call. Analyze the callee before classifying it as a calculation.
-member_selection.go:302:302 ImplicitInput <lambda>: The function <lambda>() has an implicit input: captured variable c. Pass it in as an argument.
-member_selection.go:302:302 UnknownEffect <lambda>: The function <lambda>() has an unknown effect: unresolved call. Analyze the callee before classifying it as a calculation.
-member_selection.go:307:307 UnknownEffect <lambda>: The function <lambda>() has an unknown effect: receiver effect. Analyze the callee before classifying it as a calculation.
-member_selection.go:323:323 UnknownEffect memberSelectionCollector.collectTypeSwitch: The method collectTypeSwitch() has an unknown effect: receiver effect. Analyze the callee before classifying it as a calculation.
-member_selection.go:323:323 UnknownEffect memberSelectionCollector.collectTypeSwitch: The method collectTypeSwitch() has an unknown effect: unresolved call. Analyze the callee before classifying it as a calculation.
-member_selection.go:33:33 ImplicitOutput collectSelectedMemberUses: The function collectSelectedMemberUses() has an implicit output: write through parameter f. Return it instead.
-member_selection.go:33:33 UnknownEffect collectSelectedMemberUses: The function collectSelectedMemberUses() has an unknown effect: unresolved call. Analyze the callee before classifying it as a calculation.
-member_selection.go:34:34 UnknownEffect collectSelectedMemberUses: The function collectSelectedMemberUses() has an unknown effect: receiver effect. Analyze the callee before classifying it as a calculation.
-member_selection.go:353:353 ImplicitOutput memberScopeCollector.addFuncLiteralParameters: The method addFuncLiteralParameters() has an implicit output: write through local types. Return it instead.
-member_selection.go:353:353 ImplicitOutput memberScopeCollector.addFuncLiteralParameters: The method addFuncLiteralParameters() has an implicit output: write through parameter lit. Return it instead.
-member_selection.go:353:353 ImplicitOutput memberScopeCollector.addFuncLiteralParameters: The method addFuncLiteralParameters() has an implicit output: write through parameter types. Return it instead.
-member_selection.go:353:353 UnknownEffect memberScopeCollector.addFuncLiteralParameters: The method addFuncLiteralParameters() has an unknown effect: receiver effect. Analyze the callee before classifying it as a calculation.
-member_selection.go:358:358 UnknownEffect memberUseRecorder.recordSelector: The method recordSelector() has an unknown effect: receiver effect. Analyze the callee before classifying it as a calculation.
-member_selection.go:358:358 UnknownEffect memberUseRecorder.recordSelector: The method recordSelector() has an unknown effect: unresolved call. Analyze the callee before classifying it as a calculation.
-member_selection.go:359:359 ImplicitOutput memberUseRecorder.recordSelector: The method recordSelector() has an implicit output: write through parameter uses. Return it instead.
-member_selection.go:367:367 ImplicitOutput memberUseRecorder.recordComposite: The method recordComposite() has an implicit output: write through parameter uses. Return it instead.
-member_selection.go:367:367 UnknownEffect memberUseRecorder.recordComposite: The method recordComposite() has an unknown effect: receiver effect. Analyze the callee before classifying it as a calculation.
-member_selection.go:372:372 ImplicitOutput memberUseRecorder.recordChildElement: The method recordChildElement() has an implicit output: write through parameter uses. Return it instead.
-member_selection.go:372:372 UnknownEffect memberUseRecorder.recordChildElement: The method recordChildElement() has an unknown effect: receiver effect. Analyze the callee before classifying it as a calculation.
-member_selection.go:377:377 ImplicitOutput memberUseRecorder.recordCompositeWithType: The method recordCompositeWithType() has an implicit output: write through parameter uses. Return it instead.
-member_selection.go:377:377 UnknownEffect memberUseRecorder.recordCompositeWithType: The method recordCompositeWithType() has an unknown effect: receiver effect. Analyze the callee before classifying it as a calculation.
-member_selection.go:391:391 UnknownEffect memberUseRecorder.recordCollection: The method recordCollection() has an unknown effect: receiver effect. Analyze the callee before classifying it as a calculation.
-member_selection.go:393:393 ImplicitOutput memberUseRecorder.recordCollection: The method recordCollection() has an implicit output: write through parameter uses. Return it instead.
-member_selection.go:39:39 UnknownEffect <lambda>: The function <lambda>() has an unknown effect: receiver effect. Analyze the callee before classifying it as a calculation.
-member_selection.go:39:39 UnknownEffect <lambda>: The function <lambda>() has an unknown effect: unresolved call. Analyze the callee before classifying it as a calculation.
-member_selection.go:409:409 UnknownEffect memberUseRecorder.underlyingType: The method underlyingType() has an unknown effect: receiver effect. Analyze the callee before classifying it as a calculation.
-member_selection.go:419:419 ImplicitOutput collectPackageTypeDefs: The function collectPackageTypeDefs() has an implicit output: write through parameter f. Return it instead.
-member_selection.go:422:422 ImplicitOutput collectPackageTypeDefs: The function collectPackageTypeDefs() has an implicit output: write through parameter classes. Return it instead.
-member_selection.go:42:42 ImplicitInput <lambda>: The function <lambda>() has an implicit input: captured variable collector. Pass it in as an argument.
-member_selection.go:436:436 ImplicitOutput collectFromFile: The function collectFromFile() has an implicit output: write through parameter defs. Return it instead.
-member_selection.go:436:436 ImplicitOutput collectFromFile: The function collectFromFile() has an implicit output: write through parameter syntax. Return it instead.
-member_selection.go:448:448 ImplicitOutput memberUseRecorder.recordArrayElements: The method recordArrayElements() has an implicit output: write through parameter uses. Return it instead.
-member_selection.go:448:448 UnknownEffect memberUseRecorder.recordArrayElements: The method recordArrayElements() has an unknown effect: receiver effect. Analyze the callee before classifying it as a calculation.
-member_selection.go:455:455 ImplicitOutput memberUseRecorder.recordMapElements: The method recordMapElements() has an implicit output: write through parameter uses. Return it instead.
-member_selection.go:455:455 UnknownEffect memberUseRecorder.recordMapElements: The method recordMapElements() has an unknown effect: receiver effect. Analyze the callee before classifying it as a calculation.
-member_selection.go:469:469 ImplicitOutput recordKeyedMembers: The function recordKeyedMembers() has an implicit output: write through parameter uses. Return it instead.
-member_selection.go:480:480 ImplicitOutput recordKeyedMember: The function recordKeyedMember() has an implicit output: write through parameter uses. Return it instead.
-member_selection.go:485:485 UnknownEffect memberUseRecorder.recordUnkeyedMembers: The method recordUnkeyedMembers() has an unknown effect: receiver effect. Analyze the callee before classifying it as a calculation.
-member_selection.go:490:490 ImplicitOutput memberUseRecorder.recordUnkeyedMembers: The method recordUnkeyedMembers() has an implicit output: write through parameter uses. Return it instead.
-member_selection.go:497:497 UnknownEffect memberTypeResolver.expressionType: The method expressionType() has an unknown effect: receiver effect. Analyze the callee before classifying it as a calculation.
-member_selection.go:503:503 UnknownEffect memberTypeResolver.resolvedType: The method resolvedType() has an unknown effect: receiver effect. Analyze the callee before classifying it as a calculation.
-member_selection.go:524:524 UnknownEffect memberTypeResolver.identType: The method identType() has an unknown effect: receiver effect. Analyze the callee before classifying it as a calculation.
-member_selection.go:536:536 UnknownEffect memberTypeResolver.wrappedExpressionType: The method wrappedExpressionType() has an unknown effect: receiver effect. Analyze the callee before classifying it as a calculation.
-member_selection.go:559:559 UnknownEffect memberTypeResolver.selectorType: The method selectorType() has an unknown effect: receiver effect. Analyze the callee before classifying it as a calculation.
-member_selection.go:567:567 UnknownEffect memberTypeResolver.callType: The method callType() has an unknown effect: receiver effect. Analyze the callee before classifying it as a calculation.
-member_selection.go:580:580 UnknownEffect memberTypeResolver.callResultTypes: The method callResultTypes() has an unknown effect: receiver effect. Analyze the callee before classifying it as a calculation.
-member_selection.go:593:593 UnknownEffect resolveIdentCall: The function resolveIdentCall() has an unknown effect: receiver effect. Analyze the callee before classifying it as a calculation.
-member_selection.go:608:608 UnknownEffect resolveSelectorCall: The function resolveSelectorCall() has an unknown effect: receiver effect. Analyze the callee before classifying it as a calculation.
-member_selection.go:646:646 ImplicitOutput lookupMethod: The function lookupMethod() has an implicit output: write through parameter visiting. Return it instead.
-member_selection.go:657:657 ImplicitOutput selectMember: The function selectMember() has an implicit output: write through parameter visiting. Return it instead.
-member_selection.go:676:676 ImplicitOutput selectMemberLevel: The function selectMemberLevel() has an implicit output: write through parameter visiting. Return it instead.
-member_selection.go:68:68 UnknownEffect newMemberSelectionCollector: The function newMemberSelectionCollector() has an unknown effect: unresolved call. Analyze the callee before classifying it as a calculation.
-member_selection.go:718:718 ImplicitOutput interfaceMethod: The function interfaceMethod() has an implicit output: write through parameter visiting. Return it instead.
-member_selection.go:752:752 ImplicitOutput appendEmbeddedSearches: The function appendEmbeddedSearches() has an implicit output: write through parameter index. Return it instead.
-member_selection.go:769:769 UnknownEffect memberTypeResolver.classMemberType: The method classMemberType() has an unknown effect: receiver effect. Analyze the callee before classifying it as a calculation.
-member_selection.go:777:777 UnknownEffect memberTypeResolver.promotedMemberPath: The method promotedMemberPath() has an unknown effect: receiver effect. Analyze the callee before classifying it as a calculation.
-member_selection.go:785:785 ImplicitOutput memberTypeResolver.lookupMember: The method lookupMember() has an implicit output: write through parameter visiting. Return it instead.
-member_selection.go:785:785 UnknownEffect memberTypeResolver.lookupMember: The method lookupMember() has an unknown effect: receiver effect. Analyze the callee before classifying it as a calculation.
-member_selection.go:79:79 ImplicitOutput newMemberSelectionCollector: The function newMemberSelectionCollector() has an implicit output: write through parameter f. Return it instead.
-member_selection.go:860:860 UnknownEffect memberVarType.empty: The method empty() has an unknown effect: receiver effect. Analyze the callee before classifying it as a calculation.
-member_selection.go:96:96 UnknownEffect indexMemberAliases: The function indexMemberAliases() has an unknown effect: unresolved call. Analyze the callee before classifying it as a calculation.
+member_selection.go:1030:1030 UnknownEffect memberTypeResolver.classMemberTypeTyped: The method classMemberTypeTyped() has an unknown effect: receiver effect. Analyze the callee before classifying it as a calculation.
+member_selection.go:1030:1030 UnknownEffect memberTypeResolver.classMemberTypeTyped: The method classMemberTypeTyped() has an unknown effect: unresolved call. Analyze the callee before classifying it as a calculation.
+member_selection.go:1038:1038 UnknownEffect memberTypeResolver.promotedMemberPathTyped: The method promotedMemberPathTyped() has an unknown effect: receiver effect. Analyze the callee before classifying it as a calculation.
+member_selection.go:1038:1038 UnknownEffect memberTypeResolver.promotedMemberPathTyped: The method promotedMemberPathTyped() has an unknown effect: unresolved call. Analyze the callee before classifying it as a calculation.
+member_selection.go:103:103 ImplicitOutput indexMemberAliases: The function indexMemberAliases() has an implicit output: write through parameter classByName. Return it instead.
+member_selection.go:1046:1046 ImplicitOutput memberTypeResolver.lookupMemberTyped: The method lookupMemberTyped() has an implicit output: write through parameter visiting. Return it instead.
+member_selection.go:1046:1046 UnknownEffect memberTypeResolver.lookupMemberTyped: The method lookupMemberTyped() has an unknown effect: receiver effect. Analyze the callee before classifying it as a calculation.
+member_selection.go:1046:1046 UnknownEffect memberTypeResolver.lookupMemberTyped: The method lookupMemberTyped() has an unknown effect: unresolved call. Analyze the callee before classifying it as a calculation.
+member_selection.go:1051:1051 UnknownEffect functionResultTypes: The function functionResultTypes() has an unknown effect: receiver effect. Analyze the callee before classifying it as a calculation.
+member_selection.go:1051:1051 UnknownEffect functionResultTypes: The function functionResultTypes() has an unknown effect: unresolved call. Analyze the callee before classifying it as a calculation.
+member_selection.go:1061:1061 UnknownEffect functionResultTypesWithSubst: The function functionResultTypesWithSubst() has an unknown effect: receiver effect. Analyze the callee before classifying it as a calculation.
+member_selection.go:1061:1061 UnknownEffect functionResultTypesWithSubst: The function functionResultTypesWithSubst() has an unknown effect: unresolved call. Analyze the callee before classifying it as a calculation.
+member_selection.go:1068:1068 UnknownEffect functionResultType: The function functionResultType() has an unknown effect: receiver effect. Analyze the callee before classifying it as a calculation.
+member_selection.go:1068:1068 UnknownEffect functionResultType: The function functionResultType() has an unknown effect: unresolved call. Analyze the callee before classifying it as a calculation.
+member_selection.go:106:106 ImplicitOutput indexMemberAliases: The function indexMemberAliases() has an implicit output: write through parameter ifaceByName. Return it instead.
+member_selection.go:1072:1072 UnknownEffect functionResultTypeWithSubst: The function functionResultTypeWithSubst() has an unknown effect: receiver effect. Analyze the callee before classifying it as a calculation.
+member_selection.go:1072:1072 UnknownEffect functionResultTypeWithSubst: The function functionResultTypeWithSubst() has an unknown effect: unresolved call. Analyze the callee before classifying it as a calculation.
+member_selection.go:1135:1135 UnknownEffect memberVarType.empty: The method empty() has an unknown effect: receiver effect. Analyze the callee before classifying it as a calculation.
+member_selection.go:1145:1145 UnknownEffect memberVarType.canonical: The method canonical() has an unknown effect: receiver effect. Analyze the callee before classifying it as a calculation.
+member_selection.go:115:115 ImplicitOutput memberTypeDefs: The function memberTypeDefs() has an implicit output: write through parameter classes. Return it instead.
+member_selection.go:115:115 ImplicitOutput memberTypeDefs: The function memberTypeDefs() has an implicit output: write through parameter f. Return it instead.
+member_selection.go:1169:1169 UnknownEffect memberVarTypeFromString: The function memberVarTypeFromString() has an unknown effect: unresolved call. Analyze the callee before classifying it as a calculation.
+member_selection.go:1173:1173 UnknownEffect memberVarTypeFromString: The function memberVarTypeFromString() has an unknown effect: receiver effect. Analyze the callee before classifying it as a calculation.
+member_selection.go:1185:1185 UnknownEffect typeBinding.lookup: The method lookup() has an unknown effect: receiver effect. Analyze the callee before classifying it as a calculation.
+member_selection.go:1191:1191 UnknownEffect typeBinding.lookup: The method lookup() has an unknown effect: unresolved call. Analyze the callee before classifying it as a calculation.
+member_selection.go:1198:1198 UnknownEffect memberVarTypeOf: The function memberVarTypeOf() has an unknown effect: receiver effect. Analyze the callee before classifying it as a calculation.
+member_selection.go:1198:1198 UnknownEffect memberVarTypeOf: The function memberVarTypeOf() has an unknown effect: unresolved call. Analyze the callee before classifying it as a calculation.
+member_selection.go:1207:1207 UnknownEffect memberVarTypeOfSubst: The function memberVarTypeOfSubst() has an unknown effect: receiver effect. Analyze the callee before classifying it as a calculation.
+member_selection.go:1207:1207 UnknownEffect memberVarTypeOfSubst: The function memberVarTypeOfSubst() has an unknown effect: unresolved call. Analyze the callee before classifying it as a calculation.
+member_selection.go:1225:1225 UnknownEffect memberVarTypeOfSubstOther: The function memberVarTypeOfSubstOther() has an unknown effect: receiver effect. Analyze the callee before classifying it as a calculation.
+member_selection.go:1225:1225 UnknownEffect memberVarTypeOfSubstOther: The function memberVarTypeOfSubstOther() has an unknown effect: unresolved call. Analyze the callee before classifying it as a calculation.
+member_selection.go:1242:1242 UnknownEffect mapMemberVarType: The function mapMemberVarType() has an unknown effect: receiver effect. Analyze the callee before classifying it as a calculation.
+member_selection.go:1242:1242 UnknownEffect mapMemberVarType: The function mapMemberVarType() has an unknown effect: unresolved call. Analyze the callee before classifying it as a calculation.
+member_selection.go:1253:1253 UnknownEffect genericMemberVarType: The function genericMemberVarType() has an unknown effect: receiver effect. Analyze the callee before classifying it as a calculation.
+member_selection.go:1253:1253 UnknownEffect genericMemberVarType: The function genericMemberVarType() has an unknown effect: unresolved call. Analyze the callee before classifying it as a calculation.
+member_selection.go:128:128 UnknownEffect memberSelectionCollector.packageTypes: The method packageTypes() has an unknown effect: receiver effect. Analyze the callee before classifying it as a calculation.
+member_selection.go:128:128 UnknownEffect memberSelectionCollector.packageTypes: The method packageTypes() has an unknown effect: unresolved call. Analyze the callee before classifying it as a calculation.
+member_selection.go:137:137 UnknownEffect memberSelectionCollector.collectFunc: The method collectFunc() has an unknown effect: receiver effect. Analyze the callee before classifying it as a calculation.
+member_selection.go:137:137 UnknownEffect memberSelectionCollector.collectFunc: The method collectFunc() has an unknown effect: unresolved call. Analyze the callee before classifying it as a calculation.
+member_selection.go:155:155 ImplicitOutput memberScopeCollector.addFuncParameters: The method addFuncParameters() has an implicit output: write through local types. Return it instead.
+member_selection.go:155:155 ImplicitOutput memberScopeCollector.addFuncParameters: The method addFuncParameters() has an implicit output: write through parameter decl. Return it instead.
+member_selection.go:155:155 ImplicitOutput memberScopeCollector.addFuncParameters: The method addFuncParameters() has an implicit output: write through parameter types. Return it instead.
+member_selection.go:155:155 UnknownEffect memberScopeCollector.addFuncParameters: The method addFuncParameters() has an unknown effect: receiver effect. Analyze the callee before classifying it as a calculation.
+member_selection.go:155:155 UnknownEffect memberScopeCollector.addFuncParameters: The method addFuncParameters() has an unknown effect: unresolved call. Analyze the callee before classifying it as a calculation.
+member_selection.go:165:165 UnknownEffect addNamedFieldTypes: The function addNamedFieldTypes() has an unknown effect: receiver effect. Analyze the callee before classifying it as a calculation.
+member_selection.go:165:165 UnknownEffect addNamedFieldTypes: The function addNamedFieldTypes() has an unknown effect: unresolved call. Analyze the callee before classifying it as a calculation.
+member_selection.go:170:170 ImplicitOutput addNamedFieldTypes: The function addNamedFieldTypes() has an implicit output: write through local types. Return it instead.
+member_selection.go:170:170 ImplicitOutput addNamedFieldTypes: The function addNamedFieldTypes() has an implicit output: write through parameter fields. Return it instead.
+member_selection.go:170:170 ImplicitOutput addNamedFieldTypes: The function addNamedFieldTypes() has an implicit output: write through parameter types. Return it instead.
+member_selection.go:176:176 UnknownEffect memberScopeCollector.collectLocalTypes: The method collectLocalTypes() has an unknown effect: unresolved call. Analyze the callee before classifying it as a calculation.
+member_selection.go:181:181 ImplicitOutput <lambda>: The function <lambda>() has an implicit output: write through local c. Return it instead.
+member_selection.go:181:181 ImplicitOutput <lambda>: The function <lambda>() has an implicit output: write through local types. Return it instead.
+member_selection.go:181:181 ImplicitOutput <lambda>: The function <lambda>() has an implicit output: write through parameter n. Return it instead.
+member_selection.go:181:181 UnknownEffect <lambda>: The function <lambda>() has an unknown effect: receiver effect. Analyze the callee before classifying it as a calculation.
+member_selection.go:181:181 UnknownEffect <lambda>: The function <lambda>() has an unknown effect: unresolved call. Analyze the callee before classifying it as a calculation.
+member_selection.go:199:199 ImplicitOutput memberScopeCollector.addDeclaration: The method addDeclaration() has an implicit output: write through local types. Return it instead.
+member_selection.go:199:199 ImplicitOutput memberScopeCollector.addDeclaration: The method addDeclaration() has an implicit output: write through parameter stmt. Return it instead.
+member_selection.go:199:199 ImplicitOutput memberScopeCollector.addDeclaration: The method addDeclaration() has an implicit output: write through parameter types. Return it instead.
+member_selection.go:199:199 UnknownEffect memberScopeCollector.addDeclaration: The method addDeclaration() has an unknown effect: receiver effect. Analyze the callee before classifying it as a calculation.
+member_selection.go:199:199 UnknownEffect memberScopeCollector.addDeclaration: The method addDeclaration() has an unknown effect: unresolved call. Analyze the callee before classifying it as a calculation.
+member_selection.go:205:205 UnknownEffect memberScopeCollector.addValueSpec: The method addValueSpec() has an unknown effect: receiver effect. Analyze the callee before classifying it as a calculation.
+member_selection.go:205:205 UnknownEffect memberScopeCollector.addValueSpec: The method addValueSpec() has an unknown effect: unresolved call. Analyze the callee before classifying it as a calculation.
+member_selection.go:212:212 ImplicitOutput memberScopeCollector.addValueSpec: The method addValueSpec() has an implicit output: write through local types. Return it instead.
+member_selection.go:212:212 ImplicitOutput memberScopeCollector.addValueSpec: The method addValueSpec() has an implicit output: write through parameter spec. Return it instead.
+member_selection.go:212:212 ImplicitOutput memberScopeCollector.addValueSpec: The method addValueSpec() has an implicit output: write through parameter types. Return it instead.
+member_selection.go:218:218 UnknownEffect memberScopeCollector.valueSpecRhsTypes: The method valueSpecRhsTypes() has an unknown effect: receiver effect. Analyze the callee before classifying it as a calculation.
+member_selection.go:227:227 UnknownEffect memberScopeCollector.valueSpecRhsTypes: The method valueSpecRhsTypes() has an unknown effect: unresolved call. Analyze the callee before classifying it as a calculation.
+member_selection.go:238:238 UnknownEffect memberScopeCollector.addAssignment: The method addAssignment() has an unknown effect: receiver effect. Analyze the callee before classifying it as a calculation.
+member_selection.go:238:238 UnknownEffect memberScopeCollector.addAssignment: The method addAssignment() has an unknown effect: unresolved call. Analyze the callee before classifying it as a calculation.
+member_selection.go:245:245 ImplicitOutput memberScopeCollector.addAssignment: The method addAssignment() has an implicit output: write through parameter stmt. Return it instead.
+member_selection.go:245:245 ImplicitOutput memberScopeCollector.addAssignment: The method addAssignment() has an implicit output: write through parameter types. Return it instead.
+member_selection.go:253:253 UnknownEffect memberScopeCollector.assignmentRhsTypes: The method assignmentRhsTypes() has an unknown effect: receiver effect. Analyze the callee before classifying it as a calculation.
+member_selection.go:253:253 UnknownEffect memberScopeCollector.assignmentRhsTypes: The method assignmentRhsTypes() has an unknown effect: unresolved call. Analyze the callee before classifying it as a calculation.
+member_selection.go:268:268 UnknownEffect memberScopeCollector.addRange: The method addRange() has an unknown effect: receiver effect. Analyze the callee before classifying it as a calculation.
+member_selection.go:268:268 UnknownEffect memberScopeCollector.addRange: The method addRange() has an unknown effect: unresolved call. Analyze the callee before classifying it as a calculation.
+member_selection.go:271:271 ImplicitOutput memberScopeCollector.addRange: The method addRange() has an implicit output: write through parameter types. Return it instead.
+member_selection.go:293:293 UnknownEffect bindRangeVar: The function bindRangeVar() has an unknown effect: receiver effect. Analyze the callee before classifying it as a calculation.
+member_selection.go:296:296 ImplicitOutput bindRangeVar: The function bindRangeVar() has an implicit output: write through parameter types. Return it instead.
+member_selection.go:300:300 UnknownEffect memberSelectionCollector.collectBody: The method collectBody() has an unknown effect: unresolved call. Analyze the callee before classifying it as a calculation.
+member_selection.go:304:304 ImplicitInput <lambda>: The function <lambda>() has an implicit input: captured variable c. Pass it in as an argument.
+member_selection.go:304:304 UnknownEffect <lambda>: The function <lambda>() has an unknown effect: unresolved call. Analyze the callee before classifying it as a calculation.
+member_selection.go:309:309 UnknownEffect <lambda>: The function <lambda>() has an unknown effect: receiver effect. Analyze the callee before classifying it as a calculation.
+member_selection.go:325:325 UnknownEffect memberSelectionCollector.collectTypeSwitch: The method collectTypeSwitch() has an unknown effect: receiver effect. Analyze the callee before classifying it as a calculation.
+member_selection.go:325:325 UnknownEffect memberSelectionCollector.collectTypeSwitch: The method collectTypeSwitch() has an unknown effect: unresolved call. Analyze the callee before classifying it as a calculation.
+member_selection.go:339:339 UnknownEffect clauseTypes: The function clauseTypes() has an unknown effect: receiver effect. Analyze the callee before classifying it as a calculation.
+member_selection.go:339:339 UnknownEffect clauseTypes: The function clauseTypes() has an unknown effect: unresolved call. Analyze the callee before classifying it as a calculation.
+member_selection.go:355:355 ImplicitOutput memberScopeCollector.addFuncLiteralParameters: The method addFuncLiteralParameters() has an implicit output: write through local types. Return it instead.
+member_selection.go:355:355 ImplicitOutput memberScopeCollector.addFuncLiteralParameters: The method addFuncLiteralParameters() has an implicit output: write through parameter lit. Return it instead.
+member_selection.go:355:355 ImplicitOutput memberScopeCollector.addFuncLiteralParameters: The method addFuncLiteralParameters() has an implicit output: write through parameter types. Return it instead.
+member_selection.go:355:355 UnknownEffect memberScopeCollector.addFuncLiteralParameters: The method addFuncLiteralParameters() has an unknown effect: receiver effect. Analyze the callee before classifying it as a calculation.
+member_selection.go:355:355 UnknownEffect memberScopeCollector.addFuncLiteralParameters: The method addFuncLiteralParameters() has an unknown effect: unresolved call. Analyze the callee before classifying it as a calculation.
+member_selection.go:35:35 ImplicitOutput collectSelectedMemberUses: The function collectSelectedMemberUses() has an implicit output: write through parameter f. Return it instead.
+member_selection.go:35:35 UnknownEffect collectSelectedMemberUses: The function collectSelectedMemberUses() has an unknown effect: unresolved call. Analyze the callee before classifying it as a calculation.
+member_selection.go:360:360 UnknownEffect memberUseRecorder.recordSelector: The method recordSelector() has an unknown effect: receiver effect. Analyze the callee before classifying it as a calculation.
+member_selection.go:360:360 UnknownEffect memberUseRecorder.recordSelector: The method recordSelector() has an unknown effect: unresolved call. Analyze the callee before classifying it as a calculation.
+member_selection.go:365:365 ImplicitOutput memberUseRecorder.recordSelector: The method recordSelector() has an implicit output: write through parameter uses. Return it instead.
+member_selection.go:36:36 UnknownEffect collectSelectedMemberUses: The function collectSelectedMemberUses() has an unknown effect: receiver effect. Analyze the callee before classifying it as a calculation.
+member_selection.go:372:372 ImplicitOutput memberUseRecorder.recordComposite: The method recordComposite() has an implicit output: write through parameter uses. Return it instead.
+member_selection.go:372:372 UnknownEffect memberUseRecorder.recordComposite: The method recordComposite() has an unknown effect: receiver effect. Analyze the callee before classifying it as a calculation.
+member_selection.go:377:377 ImplicitOutput memberUseRecorder.recordChildElement: The method recordChildElement() has an implicit output: write through parameter uses. Return it instead.
+member_selection.go:377:377 UnknownEffect memberUseRecorder.recordChildElement: The method recordChildElement() has an unknown effect: receiver effect. Analyze the callee before classifying it as a calculation.
+member_selection.go:382:382 ImplicitOutput memberUseRecorder.recordCompositeWithType: The method recordCompositeWithType() has an implicit output: write through parameter uses. Return it instead.
+member_selection.go:382:382 UnknownEffect memberUseRecorder.recordCompositeWithType: The method recordCompositeWithType() has an unknown effect: receiver effect. Analyze the callee before classifying it as a calculation.
+member_selection.go:396:396 UnknownEffect memberUseRecorder.recordCollection: The method recordCollection() has an unknown effect: receiver effect. Analyze the callee before classifying it as a calculation.
+member_selection.go:398:398 ImplicitOutput memberUseRecorder.recordCollection: The method recordCollection() has an implicit output: write through parameter uses. Return it instead.
+member_selection.go:414:414 UnknownEffect memberUseRecorder.underlyingType: The method underlyingType() has an unknown effect: receiver effect. Analyze the callee before classifying it as a calculation.
+member_selection.go:41:41 UnknownEffect <lambda>: The function <lambda>() has an unknown effect: receiver effect. Analyze the callee before classifying it as a calculation.
+member_selection.go:41:41 UnknownEffect <lambda>: The function <lambda>() has an unknown effect: unresolved call. Analyze the callee before classifying it as a calculation.
+member_selection.go:424:424 ImplicitOutput collectPackageTypeDefs: The function collectPackageTypeDefs() has an implicit output: write through parameter f. Return it instead.
+member_selection.go:427:427 ImplicitOutput collectPackageTypeDefs: The function collectPackageTypeDefs() has an implicit output: write through parameter classes. Return it instead.
+member_selection.go:441:441 ImplicitOutput collectFromFile: The function collectFromFile() has an implicit output: write through parameter defs. Return it instead.
+member_selection.go:441:441 ImplicitOutput collectFromFile: The function collectFromFile() has an implicit output: write through parameter syntax. Return it instead.
+member_selection.go:44:44 ImplicitInput <lambda>: The function <lambda>() has an implicit input: captured variable collector. Pass it in as an argument.
+member_selection.go:453:453 ImplicitOutput memberUseRecorder.recordArrayElements: The method recordArrayElements() has an implicit output: write through parameter uses. Return it instead.
+member_selection.go:453:453 UnknownEffect memberUseRecorder.recordArrayElements: The method recordArrayElements() has an unknown effect: receiver effect. Analyze the callee before classifying it as a calculation.
+member_selection.go:460:460 ImplicitOutput memberUseRecorder.recordMapElements: The method recordMapElements() has an implicit output: write through parameter uses. Return it instead.
+member_selection.go:460:460 UnknownEffect memberUseRecorder.recordMapElements: The method recordMapElements() has an unknown effect: receiver effect. Analyze the callee before classifying it as a calculation.
+member_selection.go:474:474 ImplicitOutput recordKeyedMembers: The function recordKeyedMembers() has an implicit output: write through parameter uses. Return it instead.
+member_selection.go:485:485 ImplicitOutput recordKeyedMember: The function recordKeyedMember() has an implicit output: write through parameter uses. Return it instead.
+member_selection.go:490:490 UnknownEffect memberUseRecorder.recordUnkeyedMembers: The method recordUnkeyedMembers() has an unknown effect: receiver effect. Analyze the callee before classifying it as a calculation.
+member_selection.go:495:495 ImplicitOutput memberUseRecorder.recordUnkeyedMembers: The method recordUnkeyedMembers() has an implicit output: write through parameter uses. Return it instead.
+member_selection.go:502:502 UnknownEffect memberTypeResolver.expressionType: The method expressionType() has an unknown effect: receiver effect. Analyze the callee before classifying it as a calculation.
+member_selection.go:502:502 UnknownEffect memberTypeResolver.expressionType: The method expressionType() has an unknown effect: unresolved call. Analyze the callee before classifying it as a calculation.
+member_selection.go:508:508 UnknownEffect memberTypeResolver.resolvedType: The method resolvedType() has an unknown effect: receiver effect. Analyze the callee before classifying it as a calculation.
+member_selection.go:510:510 UnknownEffect memberTypeResolver.resolvedType: The method resolvedType() has an unknown effect: unresolved call. Analyze the callee before classifying it as a calculation.
+member_selection.go:529:529 UnknownEffect memberTypeResolver.identType: The method identType() has an unknown effect: receiver effect. Analyze the callee before classifying it as a calculation.
+member_selection.go:541:541 UnknownEffect memberTypeResolver.wrappedExpressionType: The method wrappedExpressionType() has an unknown effect: receiver effect. Analyze the callee before classifying it as a calculation.
+member_selection.go:541:541 UnknownEffect memberTypeResolver.wrappedExpressionType: The method wrappedExpressionType() has an unknown effect: unresolved call. Analyze the callee before classifying it as a calculation.
+member_selection.go:570:570 UnknownEffect memberTypeResolver.selectorType: The method selectorType() has an unknown effect: receiver effect. Analyze the callee before classifying it as a calculation.
+member_selection.go:570:570 UnknownEffect memberTypeResolver.selectorType: The method selectorType() has an unknown effect: unresolved call. Analyze the callee before classifying it as a calculation.
+member_selection.go:578:578 UnknownEffect memberTypeResolver.callType: The method callType() has an unknown effect: receiver effect. Analyze the callee before classifying it as a calculation.
+member_selection.go:578:578 UnknownEffect memberTypeResolver.callType: The method callType() has an unknown effect: unresolved call. Analyze the callee before classifying it as a calculation.
+member_selection.go:589:589 UnknownEffect memberTypeResolver.callResultTypes: The method callResultTypes() has an unknown effect: receiver effect. Analyze the callee before classifying it as a calculation.
+member_selection.go:589:589 UnknownEffect memberTypeResolver.callResultTypes: The method callResultTypes() has an unknown effect: unresolved call. Analyze the callee before classifying it as a calculation.
+member_selection.go:609:609 UnknownEffect genericCallFun: The function genericCallFun() has an unknown effect: receiver effect. Analyze the callee before classifying it as a calculation.
+member_selection.go:609:609 UnknownEffect genericCallFun: The function genericCallFun() has an unknown effect: unresolved call. Analyze the callee before classifying it as a calculation.
+member_selection.go:632:632 UnknownEffect conversionType: The function conversionType() has an unknown effect: receiver effect. Analyze the callee before classifying it as a calculation.
+member_selection.go:632:632 UnknownEffect conversionType: The function conversionType() has an unknown effect: unresolved call. Analyze the callee before classifying it as a calculation.
+member_selection.go:637:637 UnknownEffect resolveIdentCall: The function resolveIdentCall() has an unknown effect: receiver effect. Analyze the callee before classifying it as a calculation.
+member_selection.go:637:637 UnknownEffect resolveIdentCall: The function resolveIdentCall() has an unknown effect: unresolved call. Analyze the callee before classifying it as a calculation.
+member_selection.go:665:665 UnknownEffect genericCallSubst: The function genericCallSubst() has an unknown effect: receiver effect. Analyze the callee before classifying it as a calculation.
+member_selection.go:665:665 UnknownEffect genericCallSubst: The function genericCallSubst() has an unknown effect: unresolved call. Analyze the callee before classifying it as a calculation.
+member_selection.go:687:687 UnknownEffect inferredTypeArgFor: The function inferredTypeArgFor() has an unknown effect: receiver effect. Analyze the callee before classifying it as a calculation.
+member_selection.go:687:687 UnknownEffect inferredTypeArgFor: The function inferredTypeArgFor() has an unknown effect: unresolved call. Analyze the callee before classifying it as a calculation.
+member_selection.go:70:70 UnknownEffect newMemberSelectionCollector: The function newMemberSelectionCollector() has an unknown effect: unresolved call. Analyze the callee before classifying it as a calculation.
+member_selection.go:728:728 UnknownEffect inferredTypeArg: The function inferredTypeArg() has an unknown effect: receiver effect. Analyze the callee before classifying it as a calculation.
+member_selection.go:731:731 UnknownEffect inferredTypeArg: The function inferredTypeArg() has an unknown effect: unresolved call. Analyze the callee before classifying it as a calculation.
+member_selection.go:745:745 UnknownEffect inferredNonGenericArg: The function inferredNonGenericArg() has an unknown effect: receiver effect. Analyze the callee before classifying it as a calculation.
+member_selection.go:745:745 UnknownEffect inferredNonGenericArg: The function inferredNonGenericArg() has an unknown effect: unresolved call. Analyze the callee before classifying it as a calculation.
+member_selection.go:760:760 UnknownEffect inferredContainerArg: The function inferredContainerArg() has an unknown effect: receiver effect. Analyze the callee before classifying it as a calculation.
+member_selection.go:760:760 UnknownEffect inferredContainerArg: The function inferredContainerArg() has an unknown effect: unresolved call. Analyze the callee before classifying it as a calculation.
+member_selection.go:765:765 UnknownEffect inferredVariadicArg: The function inferredVariadicArg() has an unknown effect: receiver effect. Analyze the callee before classifying it as a calculation.
+member_selection.go:765:765 UnknownEffect inferredVariadicArg: The function inferredVariadicArg() has an unknown effect: unresolved call. Analyze the callee before classifying it as a calculation.
+member_selection.go:774:774 UnknownEffect inferredMapArg: The function inferredMapArg() has an unknown effect: receiver effect. Analyze the callee before classifying it as a calculation.
+member_selection.go:774:774 UnknownEffect inferredMapArg: The function inferredMapArg() has an unknown effect: unresolved call. Analyze the callee before classifying it as a calculation.
+member_selection.go:798:798 UnknownEffect inferredGenericArg: The function inferredGenericArg() has an unknown effect: receiver effect. Analyze the callee before classifying it as a calculation.
+member_selection.go:798:798 UnknownEffect inferredGenericArg: The function inferredGenericArg() has an unknown effect: unresolved call. Analyze the callee before classifying it as a calculation.
+member_selection.go:815:815 UnknownEffect resolveSelectorCall: The function resolveSelectorCall() has an unknown effect: receiver effect. Analyze the callee before classifying it as a calculation.
+member_selection.go:815:815 UnknownEffect resolveSelectorCall: The function resolveSelectorCall() has an unknown effect: unresolved call. Analyze the callee before classifying it as a calculation.
+member_selection.go:81:81 ImplicitOutput newMemberSelectionCollector: The function newMemberSelectionCollector() has an implicit output: write through parameter f. Return it instead.
+member_selection.go:847:847 UnknownEffect embeddedMemberSearch.effectiveType: The method effectiveType() has an unknown effect: receiver effect. Analyze the callee before classifying it as a calculation.
+member_selection.go:868:868 ImplicitOutput lookupMethod: The function lookupMethod() has an implicit output: write through parameter visiting. Return it instead.
+member_selection.go:868:868 UnknownEffect lookupMethod: The function lookupMethod() has an unknown effect: receiver effect. Analyze the callee before classifying it as a calculation.
+member_selection.go:868:868 UnknownEffect lookupMethod: The function lookupMethod() has an unknown effect: unresolved call. Analyze the callee before classifying it as a calculation.
+member_selection.go:876:876 ImplicitOutput lookupMethodTyped: The function lookupMethodTyped() has an implicit output: write through parameter visiting. Return it instead.
+member_selection.go:876:876 UnknownEffect lookupMethodTyped: The function lookupMethodTyped() has an unknown effect: receiver effect. Analyze the callee before classifying it as a calculation.
+member_selection.go:876:876 UnknownEffect lookupMethodTyped: The function lookupMethodTyped() has an unknown effect: unresolved call. Analyze the callee before classifying it as a calculation.
+member_selection.go:884:884 ImplicitOutput selectMember: The function selectMember() has an implicit output: write through parameter visiting. Return it instead.
+member_selection.go:884:884 UnknownEffect selectMember: The function selectMember() has an unknown effect: receiver effect. Analyze the callee before classifying it as a calculation.
+member_selection.go:884:884 UnknownEffect selectMember: The function selectMember() has an unknown effect: unresolved call. Analyze the callee before classifying it as a calculation.
+member_selection.go:891:891 ImplicitOutput selectMemberTyped: The function selectMemberTyped() has an implicit output: write through parameter visiting. Return it instead.
+member_selection.go:891:891 UnknownEffect selectMemberTyped: The function selectMemberTyped() has an unknown effect: receiver effect. Analyze the callee before classifying it as a calculation.
+member_selection.go:891:891 UnknownEffect selectMemberTyped: The function selectMemberTyped() has an unknown effect: unresolved call. Analyze the callee before classifying it as a calculation.
+member_selection.go:910:910 ImplicitOutput selectMemberLevel: The function selectMemberLevel() has an implicit output: write through parameter visiting. Return it instead.
+member_selection.go:916:916 UnknownEffect selectMemberLevel: The function selectMemberLevel() has an unknown effect: receiver effect. Analyze the callee before classifying it as a calculation.
+member_selection.go:916:916 UnknownEffect selectMemberLevel: The function selectMemberLevel() has an unknown effect: unresolved call. Analyze the callee before classifying it as a calculation.
+member_selection.go:929:929 UnknownEffect directSelection: The function directSelection() has an unknown effect: receiver effect. Analyze the callee before classifying it as a calculation.
+member_selection.go:934:934 UnknownEffect directSelection: The function directSelection() has an unknown effect: unresolved call. Analyze the callee before classifying it as a calculation.
+member_selection.go:954:954 ImplicitOutput interfaceMethod: The function interfaceMethod() has an implicit output: write through parameter visiting. Return it instead.
+member_selection.go:979:979 UnknownEffect appendEmbeddedSearches: The function appendEmbeddedSearches() has an unknown effect: receiver effect. Analyze the callee before classifying it as a calculation.
+member_selection.go:984:984 UnknownEffect appendEmbeddedSearches: The function appendEmbeddedSearches() has an unknown effect: unresolved call. Analyze the callee before classifying it as a calculation.
+member_selection.go:98:98 UnknownEffect indexMemberAliases: The function indexMemberAliases() has an unknown effect: unresolved call. Analyze the callee before classifying it as a calculation.
+member_selection.go:990:990 ImplicitOutput appendEmbeddedSearches: The function appendEmbeddedSearches() has an implicit output: write through parameter index. Return it instead.
 model.go:129:129 UnknownEffect File.MemberSelectedForType: The method MemberSelectedForType() has an unknown effect: receiver effect. Analyze the callee before classifying it as a calculation.
 model.go:132:132 UnknownEffect File.MemberSelectedForType: The method MemberSelectedForType() has an unknown effect: unresolved call. Analyze the callee before classifying it as a calculation.
 model.go:138:138 UnknownEffect SelectedMemberUses: The function SelectedMemberUses() has an unknown effect: receiver effect. Analyze the callee before classifying it as a calculation.
@@ -227,12 +304,12 @@ model.go:267:267 UnknownEffect File.EffectiveLinesOfCode: The method EffectiveLi
 model.go:268:268 ImplicitInput <lambda>: The function <lambda>() has an implicit input: captured variable f. Pass it in as an argument.
 model.go:268:268 ImplicitOutput <lambda>: The function <lambda>() has an implicit output: captured variable f. Return it instead.
 model.go:268:268 UnknownEffect <lambda>: The function <lambda>() has an unknown effect: unresolved call. Analyze the callee before classifying it as a calculation.
-model.go:325:325 UnknownEffect Function.IsMethod: The method IsMethod() has an unknown effect: receiver effect. Analyze the callee before classifying it as a calculation.
-model.go:334:334 UnknownEffect functionIdentifierReadFacts: The function functionIdentifierReadFacts() has an unknown effect: unresolved call. Analyze the callee before classifying it as a calculation.
-model.go:335:335 ImplicitInput <lambda>: The function <lambda>() has an implicit input: captured variable f. Pass it in as an argument.
-model.go:335:335 ImplicitOutput <lambda>: The function <lambda>() has an implicit output: captured variable cache. Return it instead.
-model.go:335:335 UnknownEffect <lambda>: The function <lambda>() has an unknown effect: unresolved call. Analyze the callee before classifying it as a calculation.
-model.go:341:341 UnknownEffect Function.NodeType: The method NodeType() has an unknown effect: receiver effect. Analyze the callee before classifying it as a calculation.
+model.go:328:328 UnknownEffect Function.IsMethod: The method IsMethod() has an unknown effect: receiver effect. Analyze the callee before classifying it as a calculation.
+model.go:337:337 UnknownEffect functionIdentifierReadFacts: The function functionIdentifierReadFacts() has an unknown effect: unresolved call. Analyze the callee before classifying it as a calculation.
+model.go:338:338 ImplicitInput <lambda>: The function <lambda>() has an implicit input: captured variable f. Pass it in as an argument.
+model.go:338:338 ImplicitOutput <lambda>: The function <lambda>() has an implicit output: captured variable cache. Return it instead.
+model.go:338:338 UnknownEffect <lambda>: The function <lambda>() has an unknown effect: unresolved call. Analyze the callee before classifying it as a calculation.
+model.go:344:344 UnknownEffect Function.NodeType: The method NodeType() has an unknown effect: receiver effect. Analyze the callee before classifying it as a calculation.
 promoted.go:101:101 ImplicitOutput promotedMemberCollector.tryEnqueueIface: The method tryEnqueueIface() has an implicit output: write through parameter queue. Return it instead.
 promoted.go:109:109 UnknownEffect promotedMemberCollector.processClassQueue: The method processClassQueue() has an unknown effect: receiver effect. Analyze the callee before classifying it as a calculation.
 promoted.go:111:111 ImplicitOutput promotedMemberCollector.processClassQueue: The method processClassQueue() has an implicit output: write through parameter ifaceQueue. Return it instead.

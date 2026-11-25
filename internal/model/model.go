@@ -302,10 +302,13 @@ type Constant struct {
 }
 
 // Function represents a free function OR a method (when Receiver != "").
+// TypeParams holds the declared type parameter names for a generic function,
+// in declaration order; it is nil for non-generic functions and methods.
 // PHPMD distinguishes ASTMethod from ASTFunction; we keep one struct and use
 // IsMethod()/Receiver to tell them apart, which keeps rule code uniform.
 type Function struct {
 	Name       string
+	TypeParams []string
 	Receiver   string // empty for free functions; type name (without *) for methods
 	RecvName   string // receiver variable name, e.g. "f" in (f *Foo)
 	Params     []*Parameter
@@ -349,6 +352,7 @@ func (f *Function) NodeType() NodeType {
 // receiver T are attached.
 type Class struct {
 	Name       string
+	TypeParams []string
 	Line       int // physical line in File.Path
 	EndLine    int // physical end line in File.Path
 	Exported   bool
@@ -367,6 +371,7 @@ func (c *Class) NodeType() NodeType { return TypeClass }
 // Interface is a named interface type (analog of a PHP interface).
 type Interface struct {
 	Name       string
+	TypeParams []string
 	Line       int // physical line in File.Path
 	EndLine    int // physical end line in File.Path
 	Exported   bool

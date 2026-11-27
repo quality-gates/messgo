@@ -383,14 +383,30 @@ func (f *flowVisitor) visitCall(call *ast.CallExpr) {
 	switch fun := ast.Unparen(call.Fun).(type) {
 	case *ast.Ident:
 		f.visitBuiltin(fun, call)
+		if name := f.qualifiedDotIdent(fun, knownOperation); name != "" {
+			f.recordCallEffects(name, call)
+		}
 	case *ast.SelectorExpr:
-		name := f.qualified(fun)
-		if i, ok := streamWriters[name]; ok && i < len(call.Args) {
-			f.flow(&f.outputs, call.Args[i], "write to ")
-		}
-		if i, ok := streamReaders[name]; ok && i < len(call.Args) {
-			f.flow(&f.inputs, call.Args[i], "read from ")
-		}
+		f.recordStreamCall(f.qualified(fun), call)
+	}
+}
+
+func (f *flowVisitor) recordStreamCall(name string, call *ast.CallExpr) {
+	if i, ok := streamWriters[name]; ok && i < len(call.Args) {
+		f.flow(&f.outputs, call.Args[i], "write to ")
+	}
+	if i, ok := streamReaders[name]; ok && i < len(call.Args) {
+		f.flow(&f.inputs, call.Args[i], "read from ")
+	}
+}
+
+func (f *flowVisitor) recordCallEffects(name string, call *ast.CallExpr) {
+	f.recordStreamCall(name, call)
+	if ambientInputs[name] {
+		f.inputs = append(f.inputs, f.effect(call, name))
+	}
+	if ambientOutputs[name] {
+		f.outputs = append(f.outputs, f.effect(call, name))
 	}
 }
 

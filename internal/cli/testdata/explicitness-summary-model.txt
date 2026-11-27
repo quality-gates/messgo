@@ -340,50 +340,52 @@ promoted.go:86:86 ImplicitOutput promotedMemberCollector.tryEnqueueClass: The me
 promoted.go:90:90 ImplicitOutput promotedMemberCollector.tryEnqueueClass: The method tryEnqueueClass() has an implicit output: write through parameter ifaceQueue. Return it instead.
 promoted.go:95:95 UnknownEffect promotedMemberCollector.tryEnqueueIface: The method tryEnqueueIface() has an unknown effect: unresolved call. Analyze the callee before classifying it as a calculation.
 promoted.go:96:96 UnknownEffect promotedMemberCollector.tryEnqueueIface: The method tryEnqueueIface() has an unknown effect: receiver effect. Analyze the callee before classifying it as a calculation.
-query.go:121:121 UnknownEffect ImportedPackagePath: The function ImportedPackagePath() has an unknown effect: unresolved call. Analyze the callee before classifying it as a calculation.
-query.go:135:135 UnknownEffect LoopConditionCalls: The function LoopConditionCalls() has an unknown effect: unresolved call. Analyze the callee before classifying it as a calculation.
-query.go:140:140 UnknownEffect <lambda>: The function <lambda>() has an unknown effect: unresolved call. Analyze the callee before classifying it as a calculation.
-query.go:146:146 ImplicitInput <lambda>: The function <lambda>() has an implicit input: captured variable names. Pass it in as an argument.
-query.go:147:147 ImplicitInput <lambda>: The function <lambda>() has an implicit input: captured variable f. Pass it in as an argument.
-query.go:147:147 ImplicitInput <lambda>: The function <lambda>() has an implicit input: captured variable out. Pass it in as an argument.
-query.go:147:147 ImplicitOutput <lambda>: The function <lambda>() has an implicit output: captured variable out. Return it instead.
-query.go:147:147 UnknownEffect <lambda>: The function <lambda>() has an unknown effect: receiver effect. Analyze the callee before classifying it as a calculation.
-query.go:147:147 UnknownEffect <lambda>: The function <lambda>() has an unknown effect: unresolved call. Analyze the callee before classifying it as a calculation.
-query.go:163:163 UnknownEffect EmptyNilCheckBlockLines: The function EmptyNilCheckBlockLines() has an unknown effect: unresolved call. Analyze the callee before classifying it as a calculation.
-query.go:168:168 UnknownEffect <lambda>: The function <lambda>() has an unknown effect: unresolved call. Analyze the callee before classifying it as a calculation.
-query.go:169:169 ImplicitInput <lambda>: The function <lambda>() has an implicit input: captured variable f. Pass it in as an argument.
-query.go:169:169 ImplicitInput <lambda>: The function <lambda>() has an implicit input: captured variable lines. Pass it in as an argument.
-query.go:169:169 ImplicitOutput <lambda>: The function <lambda>() has an implicit output: captured variable lines. Return it instead.
-query.go:169:169 UnknownEffect <lambda>: The function <lambda>() has an unknown effect: receiver effect. Analyze the callee before classifying it as a calculation.
-query.go:183:183 UnknownEffect ElseBlockLines: The function ElseBlockLines() has an unknown effect: unresolved call. Analyze the callee before classifying it as a calculation.
-query.go:185:185 UnknownEffect ElseBlockLines: The function ElseBlockLines() has an unknown effect: receiver effect. Analyze the callee before classifying it as a calculation.
-query.go:198:198 UnknownEffect IfAssignmentInitPositions: The function IfAssignmentInitPositions() has an unknown effect: unresolved call. Analyze the callee before classifying it as a calculation.
-query.go:205:205 ImplicitInput <lambda>: The function <lambda>() has an implicit input: captured variable f. Pass it in as an argument.
-query.go:205:205 UnknownEffect <lambda>: The function <lambda>() has an unknown effect: receiver effect. Analyze the callee before classifying it as a calculation.
-query.go:205:205 UnknownEffect <lambda>: The function <lambda>() has an unknown effect: unresolved call. Analyze the callee before classifying it as a calculation.
-query.go:206:206 ImplicitInput <lambda>: The function <lambda>() has an implicit input: captured variable positions. Pass it in as an argument.
-query.go:206:206 ImplicitOutput <lambda>: The function <lambda>() has an implicit output: captured variable positions. Return it instead.
-query.go:218:218 UnknownEffect DuplicateLiteralKeys: The function DuplicateLiteralKeys() has an unknown effect: unresolved call. Analyze the callee before classifying it as a calculation.
-query.go:225:225 UnknownEffect File.PackageDuplicateLiteralKeys: The method PackageDuplicateLiteralKeys() has an unknown effect: receiver effect. Analyze the callee before classifying it as a calculation.
-query.go:230:230 UnknownEffect File.PackageDuplicateLiteralKeys: The method PackageDuplicateLiteralKeys() has an unknown effect: unresolved call. Analyze the callee before classifying it as a calculation.
-query.go:237:237 UnknownEffect duplicateLiteralKeys: The function duplicateLiteralKeys() has an unknown effect: unresolved call. Analyze the callee before classifying it as a calculation.
-query.go:242:242 ImplicitInput <lambda>: The function <lambda>() has an implicit input: captured variable out. Pass it in as an argument.
-query.go:242:242 ImplicitOutput <lambda>: The function <lambda>() has an implicit output: captured variable out. Return it instead.
-query.go:242:242 UnknownEffect <lambda>: The function <lambda>() has an unknown effect: unresolved call. Analyze the callee before classifying it as a calculation.
+query.go:131:131 UnknownEffect ImportedPackagePath: The function ImportedPackagePath() has an unknown effect: unresolved call. Analyze the callee before classifying it as a calculation.
+query.go:139:139 UnknownEffect resolvableDotImportCallee: The function resolvableDotImportCallee() has an unknown effect: unresolved call. Analyze the callee before classifying it as a calculation.
+query.go:148:148 UnknownEffect DotImportedPaths: The function DotImportedPaths() has an unknown effect: unresolved call. Analyze the callee before classifying it as a calculation.
+query.go:158:158 UnknownEffect LoopConditionCalls: The function LoopConditionCalls() has an unknown effect: unresolved call. Analyze the callee before classifying it as a calculation.
+query.go:163:163 UnknownEffect <lambda>: The function <lambda>() has an unknown effect: unresolved call. Analyze the callee before classifying it as a calculation.
+query.go:169:169 ImplicitInput <lambda>: The function <lambda>() has an implicit input: captured variable names. Pass it in as an argument.
+query.go:170:170 ImplicitInput <lambda>: The function <lambda>() has an implicit input: captured variable f. Pass it in as an argument.
+query.go:170:170 ImplicitInput <lambda>: The function <lambda>() has an implicit input: captured variable out. Pass it in as an argument.
+query.go:170:170 ImplicitOutput <lambda>: The function <lambda>() has an implicit output: captured variable out. Return it instead.
+query.go:170:170 UnknownEffect <lambda>: The function <lambda>() has an unknown effect: receiver effect. Analyze the callee before classifying it as a calculation.
+query.go:170:170 UnknownEffect <lambda>: The function <lambda>() has an unknown effect: unresolved call. Analyze the callee before classifying it as a calculation.
+query.go:186:186 UnknownEffect EmptyNilCheckBlockLines: The function EmptyNilCheckBlockLines() has an unknown effect: unresolved call. Analyze the callee before classifying it as a calculation.
+query.go:191:191 UnknownEffect <lambda>: The function <lambda>() has an unknown effect: unresolved call. Analyze the callee before classifying it as a calculation.
+query.go:192:192 ImplicitInput <lambda>: The function <lambda>() has an implicit input: captured variable f. Pass it in as an argument.
+query.go:192:192 ImplicitInput <lambda>: The function <lambda>() has an implicit input: captured variable lines. Pass it in as an argument.
+query.go:192:192 ImplicitOutput <lambda>: The function <lambda>() has an implicit output: captured variable lines. Return it instead.
+query.go:192:192 UnknownEffect <lambda>: The function <lambda>() has an unknown effect: receiver effect. Analyze the callee before classifying it as a calculation.
+query.go:206:206 UnknownEffect ElseBlockLines: The function ElseBlockLines() has an unknown effect: unresolved call. Analyze the callee before classifying it as a calculation.
+query.go:208:208 UnknownEffect ElseBlockLines: The function ElseBlockLines() has an unknown effect: receiver effect. Analyze the callee before classifying it as a calculation.
+query.go:221:221 UnknownEffect IfAssignmentInitPositions: The function IfAssignmentInitPositions() has an unknown effect: unresolved call. Analyze the callee before classifying it as a calculation.
+query.go:228:228 ImplicitInput <lambda>: The function <lambda>() has an implicit input: captured variable f. Pass it in as an argument.
+query.go:228:228 UnknownEffect <lambda>: The function <lambda>() has an unknown effect: receiver effect. Analyze the callee before classifying it as a calculation.
+query.go:228:228 UnknownEffect <lambda>: The function <lambda>() has an unknown effect: unresolved call. Analyze the callee before classifying it as a calculation.
+query.go:229:229 ImplicitInput <lambda>: The function <lambda>() has an implicit input: captured variable positions. Pass it in as an argument.
+query.go:229:229 ImplicitOutput <lambda>: The function <lambda>() has an implicit output: captured variable positions. Return it instead.
+query.go:241:241 UnknownEffect DuplicateLiteralKeys: The function DuplicateLiteralKeys() has an unknown effect: unresolved call. Analyze the callee before classifying it as a calculation.
+query.go:248:248 UnknownEffect File.PackageDuplicateLiteralKeys: The method PackageDuplicateLiteralKeys() has an unknown effect: receiver effect. Analyze the callee before classifying it as a calculation.
 query.go:24:24 UnknownEffect Call.QualifiedName: The method QualifiedName() has an unknown effect: receiver effect. Analyze the callee before classifying it as a calculation.
-query.go:256:256 UnknownEffect duplicateKeysInLiteral: The function duplicateKeysInLiteral() has an unknown effect: unresolved call. Analyze the callee before classifying it as a calculation.
-query.go:278:278 UnknownEffect File.PackageVars: The method PackageVars() has an unknown effect: receiver effect. Analyze the callee before classifying it as a calculation.
-query.go:292:292 UnknownEffect File.PackageVars: The method PackageVars() has an unknown effect: unresolved call. Analyze the callee before classifying it as a calculation.
-query.go:303:303 UnknownEffect File.MutatedPackageGlobals: The method MutatedPackageGlobals() has an unknown effect: receiver effect. Analyze the callee before classifying it as a calculation.
-query.go:306:306 UnknownEffect File.MutatedPackageGlobals: The method MutatedPackageGlobals() has an unknown effect: unresolved call. Analyze the callee before classifying it as a calculation.
-query.go:311:311 UnknownEffect conditionChecksNil: The function conditionChecksNil() has an unknown effect: unresolved call. Analyze the callee before classifying it as a calculation.
-query.go:317:317 ImplicitOutput <lambda>: The function <lambda>() has an implicit output: captured variable found. Return it instead.
-query.go:332:332 UnknownEffect literalKey: The function literalKey() has an unknown effect: unresolved call. Analyze the callee before classifying it as a calculation.
-query.go:353:353 UnknownEffect callLiteralKey: The function callLiteralKey() has an unknown effect: unresolved call. Analyze the callee before classifying it as a calculation.
-query.go:374:374 UnknownEffect basicLitKey: The function basicLitKey() has an unknown effect: unresolved call. Analyze the callee before classifying it as a calculation.
-query.go:389:389 UnknownEffect unaryLitKey: The function unaryLitKey() has an unknown effect: unresolved call. Analyze the callee before classifying it as a calculation.
-query.go:395:395 UnknownEffect displayKey: The function displayKey() has an unknown effect: unresolved call. Analyze the callee before classifying it as a calculation.
-query.go:418:418 UnknownEffect displayCallKey: The function displayCallKey() has an unknown effect: unresolved call. Analyze the callee before classifying it as a calculation.
+query.go:253:253 UnknownEffect File.PackageDuplicateLiteralKeys: The method PackageDuplicateLiteralKeys() has an unknown effect: unresolved call. Analyze the callee before classifying it as a calculation.
+query.go:260:260 UnknownEffect duplicateLiteralKeys: The function duplicateLiteralKeys() has an unknown effect: unresolved call. Analyze the callee before classifying it as a calculation.
+query.go:265:265 ImplicitInput <lambda>: The function <lambda>() has an implicit input: captured variable out. Pass it in as an argument.
+query.go:265:265 ImplicitOutput <lambda>: The function <lambda>() has an implicit output: captured variable out. Return it instead.
+query.go:265:265 UnknownEffect <lambda>: The function <lambda>() has an unknown effect: unresolved call. Analyze the callee before classifying it as a calculation.
+query.go:279:279 UnknownEffect duplicateKeysInLiteral: The function duplicateKeysInLiteral() has an unknown effect: unresolved call. Analyze the callee before classifying it as a calculation.
+query.go:301:301 UnknownEffect File.PackageVars: The method PackageVars() has an unknown effect: receiver effect. Analyze the callee before classifying it as a calculation.
+query.go:315:315 UnknownEffect File.PackageVars: The method PackageVars() has an unknown effect: unresolved call. Analyze the callee before classifying it as a calculation.
+query.go:326:326 UnknownEffect File.MutatedPackageGlobals: The method MutatedPackageGlobals() has an unknown effect: receiver effect. Analyze the callee before classifying it as a calculation.
+query.go:329:329 UnknownEffect File.MutatedPackageGlobals: The method MutatedPackageGlobals() has an unknown effect: unresolved call. Analyze the callee before classifying it as a calculation.
+query.go:334:334 UnknownEffect conditionChecksNil: The function conditionChecksNil() has an unknown effect: unresolved call. Analyze the callee before classifying it as a calculation.
+query.go:340:340 ImplicitOutput <lambda>: The function <lambda>() has an implicit output: captured variable found. Return it instead.
+query.go:355:355 UnknownEffect literalKey: The function literalKey() has an unknown effect: unresolved call. Analyze the callee before classifying it as a calculation.
+query.go:376:376 UnknownEffect callLiteralKey: The function callLiteralKey() has an unknown effect: unresolved call. Analyze the callee before classifying it as a calculation.
+query.go:397:397 UnknownEffect basicLitKey: The function basicLitKey() has an unknown effect: unresolved call. Analyze the callee before classifying it as a calculation.
+query.go:412:412 UnknownEffect unaryLitKey: The function unaryLitKey() has an unknown effect: unresolved call. Analyze the callee before classifying it as a calculation.
+query.go:418:418 UnknownEffect displayKey: The function displayKey() has an unknown effect: unresolved call. Analyze the callee before classifying it as a calculation.
+query.go:441:441 UnknownEffect displayCallKey: The function displayCallKey() has an unknown effect: unresolved call. Analyze the callee before classifying it as a calculation.
 query.go:55:55 UnknownEffect HasGoto: The function HasGoto() has an unknown effect: unresolved call. Analyze the callee before classifying it as a calculation.
 query.go:57:57 ImplicitOutput <lambda>: The function <lambda>() has an implicit output: captured variable found. Return it instead.
 query.go:71:71 UnknownEffect Calls: The function Calls() has an unknown effect: unresolved call. Analyze the callee before classifying it as a calculation.

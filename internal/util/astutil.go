@@ -84,6 +84,23 @@ func ImportedPath(f *ast.File, name string) string {
 	return ""
 }
 
+// DotImportedPaths returns the import paths of packages that f dot-imports
+// (`import . "pkg"`), in source order.
+func DotImportedPaths(f *ast.File) []string {
+	if f == nil {
+		return nil
+	}
+	var paths []string
+	for _, spec := range f.Imports {
+		if spec.Name != nil && spec.Name.Name == "." {
+			if p, ok := importPath(spec); ok {
+				paths = append(paths, p)
+			}
+		}
+	}
+	return paths
+}
+
 func importMatchesQualifier(spec *ast.ImportSpec, importPath, qualifierName string) bool {
 	localName := path.Base(importPath)
 	if spec.Name != nil {

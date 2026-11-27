@@ -2739,6 +2739,62 @@ func stop(target target) {
 	target.Exit(1)
 }`,
 		},
+		{
+			name: "dot-imported os",
+			src: `import . "os"
+
+func stop() {
+	Exit(1)
+}`,
+			wantLines: []int{4},
+		},
+		{
+			name: "dot-imported syscall",
+			src: `import . "syscall"
+
+func stop() {
+	Exit(1)
+}`,
+			wantLines: []int{4},
+		},
+		{
+			name: "parenthesized dot-imported os",
+			src: `import . "os"
+
+func stop() {
+	(Exit)(1)
+}`,
+			wantLines: []int{4},
+		},
+		{
+			name: "multiple dot imports with os",
+			src: `import (
+	. "fmt"
+	. "os"
+)
+
+func stop() {
+	Println("bye")
+	Exit(1)
+}`,
+			wantLines: []int{8},
+		},
+		{
+			name: "dot-imported wrong package",
+			src: `import . "github.com/acme/os"
+
+func stop() {
+	Exit(1)
+}`,
+		},
+		{
+			name: "dot-imported os shadowed by parameter",
+			src: `import . "os"
+
+func stop(Exit func(int)) {
+	Exit(1)
+}`,
+		},
 	}
 
 	for _, tc := range tests {

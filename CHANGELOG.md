@@ -12,6 +12,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). This pr
 - A verification skill checks bounded promoted selectors against Go's type checker.
 
 ### Fixed
+- Resolve dot-imported package calls (`import . "os"`, `import . "syscall"`, `import . "fmt"`) in `model.Calls`, `ExitExpression`, and `explicitness` so bare exported calls like `Exit(1)` and `Println(1)` are detected just like qualified calls (#332).
 - Report caller-visible field writes through slice-of-struct elements (`s[i].Field`) as `ImplicitOutput` in `explicitness` and `explicitness-strict`. Slice indexing now resolves the element type, and an index or field selection through shared storage preserves its outer storage and parameter origin (#331).
 - Allow 180 seconds per test execution in the pre-push mutation check. The CLI explicitness golden test on the model package legitimately takes 68-134 seconds on a shared host, so the previous 30-second timeout made the mandatory hook fail on coverage collection before any mutant ran (follow-up to #331, #316).
 - Resolve member uses through generic function calls and generic struct instantiations, so `UnusedPrivateField` and `UnusedPrivateMethod` no longer report members accessed via type-parameter substitution (#330).

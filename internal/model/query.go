@@ -82,6 +82,16 @@ func callDetails(file *File, ce *ast.CallExpr) Call {
 	if selector, ok := calledSelector(ce.Fun); ok {
 		call.Selector = selector.Sel.Name
 		call.PackagePath = ImportedPackagePath(file, packageQualifier(selector.X))
+		return call
+	}
+	if id := packageQualifier(ce.Fun); resolvableDotImportCallee(file, id) {
+		dotPaths := DotImportedPaths(file)
+		if len(dotPaths) > 0 {
+			call.Selector = id.Name
+		}
+		if len(dotPaths) == 1 {
+			call.PackagePath = dotPaths[0]
+		}
 	}
 	return call
 }
@@ -123,6 +133,19 @@ func ImportedPackagePath(file *File, qualifier *ast.Ident) string {
 
 func resolvableImportQualifier(file *File, qualifier *ast.Ident) bool {
 	return file != nil && file.Syntax != nil && qualifier != nil && qualifier.Obj == nil
+}
+
+func resolvableDotImportCallee(file *File, id *ast.Ident) bool {
+	return resolvableImportQualifier(file, id) && ast.IsExported(id.Name)
+}
+
+// DotImportedPaths returns the import paths of packages that file dot-imports
+// (`import . "pkg"`), in source order.
+func DotImportedPaths(file *File) []string {
+	if file == nil {
+		return nil
+	}
+	return util.DotImportedPaths(file.Syntax)
 }
 
 // LoopConditionCalls returns calls to selected names found in for-loop

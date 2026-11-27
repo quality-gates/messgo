@@ -1038,3 +1038,27 @@ func TestExplicitnessHonorsPerRuleIncludeReceiver(t *testing.T) {
 		t.Errorf("custom strict receiver facts missing: %q", got)
 	}
 }
+
+func TestExplicitnessResolvesDotImportedCalls(t *testing.T) {
+	code, got := runExplicitness(t, "explicitness", map[string]string{
+		"a.go": `package p
+
+import (
+	. "fmt"
+	. "os"
+)
+
+func logAndExit() {
+	Println(1)
+	Exit(1)
+}
+`,
+	})
+	if code != ExitViolation {
+		t.Errorf("exit = %d, want %d", code, ExitViolation)
+	}
+	assertFindings(t, got,
+		"a.go:9 ImplicitOutput logAndExit: fmt.Println",
+		"a.go:10 ImplicitOutput logAndExit: os.Exit",
+	)
+}

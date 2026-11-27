@@ -141,6 +141,76 @@ func stop(os target) {
 	}
 }
 
+func TestFunctionCallsResolveDotImportedPackages(t *testing.T) {
+	src := []byte(`package sample
+
+import . "os"
+
+func stop(Shadow func(int)) {
+	Exit(1)
+	(Exit)(2)
+	Shadow(3)
+	helper(4)
+}
+`)
+	f, err := ParseSource("dot.go", src)
+	if err != nil {
+		t.Fatalf("ParseSource: %v", err)
+	}
+	calls := Calls(f.Functions[0])
+	want := []Call{
+		{Name: "Exit", Selector: "Exit", PackagePath: "os", Line: 6},
+		{Name: "Exit", Selector: "Exit", PackagePath: "os", Line: 7},
+		{Name: "Shadow", Line: 8},
+		{Name: "helper", Line: 9},
+	}
+	if len(calls) != len(want) {
+		t.Fatalf("Calls() = %+v, want %+v", calls, want)
+	}
+	for i := range want {
+		if calls[i] != want[i] {
+			t.Fatalf("Calls()[%d] = %+v, want %+v", i, calls[i], want[i])
+		}
+	}
+
+	multi := []byte(`package sample
+
+import (
+	. "fmt"
+	. "os"
+)
+
+func stop() {
+	Exit(1)
+}
+`)
+	mf, err := ParseSource("multi.go", multi)
+	if err != nil {
+		t.Fatalf("ParseSource: %v", err)
+	}
+	mcalls := Calls(mf.Functions[0])
+	mwant := []Call{{Name: "Exit", Selector: "Exit", Line: 9}}
+	if !slices.Equal(mcalls, mwant) {
+		t.Fatalf("Calls() = %+v, want %+v", mcalls, mwant)
+	}
+
+	noDot := []byte(`package sample
+
+func stop() {
+	External()
+}
+`)
+	nf, err := ParseSource("nodot.go", noDot)
+	if err != nil {
+		t.Fatalf("ParseSource: %v", err)
+	}
+	ncalls := Calls(nf.Functions[0])
+	nwant := []Call{{Name: "External", Line: 4}}
+	if !slices.Equal(ncalls, nwant) {
+		t.Fatalf("Calls() = %+v, want %+v", ncalls, nwant)
+	}
+}
+
 func TestCallMetadataHelpers(t *testing.T) {
 	qualifier := ast.NewIdent("o")
 	selector := &ast.SelectorExpr{X: qualifier, Sel: ast.NewIdent("Exit")}

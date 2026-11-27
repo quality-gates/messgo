@@ -869,7 +869,10 @@ func establishedCall(s *scope, call *ast.CallExpr) bool {
 		if fun.Obj != nil {
 			return fun.Obj.Kind == ast.Typ
 		}
-		return pureBuiltins[fun.Name] || s.fn.File.PackageTypeDefs[fun.Name] != nil
+		if pureBuiltins[fun.Name] || s.fn.File.PackageTypeDefs[fun.Name] != nil {
+			return true
+		}
+		return knownOperation(s.qualifiedDotIdent(fun, knownOperation))
 	case *ast.ArrayType, *ast.MapType, *ast.ChanType, *ast.StarExpr:
 		return true
 	case *ast.SelectorExpr:

@@ -4,6 +4,7 @@
 package design
 
 import (
+	"slices"
 	"strings"
 
 	"github.com/quality-gates/messgo/internal/model"
@@ -70,11 +71,25 @@ type ExitExpression struct{ *rule.Base }
 
 func (r *ExitExpression) check(c *rule.Context, fn *model.Function) {
 	for _, call := range model.Calls(fn) {
-		if (call.PackagePath == "os" || call.PackagePath == "syscall") && call.Selector == "Exit" {
+		if isExitCall(fn.File, call) {
 			c.ReportFuncAt(fn, call.Line, call.Line, string(fn.NodeType()), fn.Name)
 			return
 		}
 	}
+}
+
+func isExitCall(file *model.File, call model.Call) bool {
+	if call.Selector != "Exit" {
+		return false
+	}
+	if call.PackagePath == "os" || call.PackagePath == "syscall" {
+		return true
+	}
+	if call.PackagePath != "" {
+		return false
+	}
+	dotPaths := model.DotImportedPaths(file)
+	return slices.Contains(dotPaths, "os") || slices.Contains(dotPaths, "syscall")
 }
 func (r *ExitExpression) ApplyFunc(c *rule.Context, fn *model.Function) { r.check(c, fn) }
 

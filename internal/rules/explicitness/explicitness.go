@@ -323,6 +323,38 @@ func (s *scope) qualified(sel *ast.SelectorExpr) string {
 	return pkg + "." + sel.Sel.Name
 }
 
+// qualifiedDotIdent resolves an unshadowed exported identifier against
+// dot-imported packages in the file. When multiple dot imports are present, it
+// returns the unique candidate accepted by match, or "" if ambiguous.
+func (s *scope) qualifiedDotIdent(id *ast.Ident, match func(string) bool) string {
+	if id == nil || id.Obj != nil || !ast.IsExported(id.Name) {
+		return ""
+	}
+	dotPaths := model.DotImportedPaths(s.fn.File)
+	if len(dotPaths) == 1 {
+		return dotPaths[0] + "." + id.Name
+	}
+	if len(dotPaths) == 0 || match == nil {
+		return ""
+	}
+	return uniqueMatchingDotImport(dotPaths, id.Name, match)
+}
+
+func uniqueMatchingDotImport(dotPaths []string, name string, match func(string) bool) string {
+	matched := ""
+	for _, pkg := range dotPaths {
+		candidate := pkg + "." + name
+		if !match(candidate) {
+			continue
+		}
+		if matched != "" {
+			return ""
+		}
+		matched = candidate
+	}
+	return matched
+}
+
 // syntax returns the syntax tree of the file of the function, or nil.
 func (s *scope) syntax() *ast.File {
 	if s.fn.File == nil {
